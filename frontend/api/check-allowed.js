@@ -11,19 +11,16 @@ export default async function handler(req, res) {
 
   const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
-
   const supabase = createClient(supabaseUrl, supabaseKey);
 
   const { data: { user }, error: authError } = await supabase.auth.getUser(token);
   if (authError || !user) return res.status(401).json({ error: 'Invalid token' });
 
-  const { data: allRows, error: dbError } = await supabase
+  const { data } = await supabase
     .from('allowed_users')
-    .select('*');
+    .select('is_active')
+    .eq('email', user.email.trim())
+    .maybeSingle();
 
-  return res.json({
-    email: user.email,
-    allRows,
-    error: dbError?.message,
-  });
+  return res.json({ allowed: data?.is_active === true });
 }
