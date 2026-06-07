@@ -1,15 +1,23 @@
-import { createClient } from '@supabase/supabase-js';
+const { createClient } = require('@supabase/supabase-js');
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
-
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   try {
     if (req.method !== 'GET') {
       return res.status(405).json({ error: 'Method not allowed' });
     }
+
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (!supabaseUrl) {
+      return res.status(500).json({ error: 'Missing SUPABASE_URL' });
+    }
+
+    if (!supabaseKey) {
+      return res.status(500).json({ error: 'Missing SUPABASE_SERVICE_ROLE_KEY' });
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
     const page = Number(req.query.page || 1);
     const pageSize = 20;
@@ -23,7 +31,10 @@ export default async function handler(req, res) {
       .range(from, to);
 
     if (error) {
-      return res.status(500).json({ error: error.message });
+      return res.status(500).json({
+        error: 'Supabase query failed',
+        details: error.message,
+      });
     }
 
     return res.status(200).json({
@@ -33,6 +44,9 @@ export default async function handler(req, res) {
       totalPages: Math.max(1, Math.ceil((count || 0) / pageSize)),
     });
   } catch (err) {
-    return res.status(500).json({ error: err.message || 'Server error' });
+    return res.status(500).json({
+      error: 'Server error',
+      details: err.message || String(err),
+    });
   }
-}
+};
