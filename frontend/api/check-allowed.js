@@ -14,16 +14,19 @@ export default async function handler(req, res) {
     process.env.SUPABASE_SERVICE_ROLE_KEY
   );
 
-  // Verify the token is genuine
-  const { data: { user }, error } = await supabase.auth.getUser(token);
-  if (error || !user) return res.status(401).json({ error: 'Invalid token' });
+  const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+  if (authError || !user) return res.status(401).json({ error: 'Invalid token' });
 
-  // Check allowlist using service role (bypasses RLS)
-  const { data, error } = await supabase
+  const { data, error: dbError } = await supabase
     .from('allowed_users')
     .select('email, is_active')
     .ilike('email', user.email.trim())
     .maybeSingle();
 
-  return res.json({ allowed: data?.is_active === true, email: user.email, data, error: error?.message });
+  return res.json({
+    allowed: data?.is_active === true,
+    email: user.email,
+    data,
+    error: dbError?.message,
+  });
 }
