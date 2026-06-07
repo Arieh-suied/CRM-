@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import styles from './App.module.css';
 import NavTabs from './components/NavTabs/NavTabs.jsx';
+import LoginScreen from './components/LoginScreen/LoginScreen.jsx';
+import AccessDenied from './components/AccessDenied/AccessDenied.jsx';
+import { useAuth } from './contexts/AuthContext.jsx';
 import SummaryCards from './components/SummaryCards/SummaryCards.jsx';
 import FiltersBar from './components/FiltersBar/FiltersBar.jsx';
 import SearchBar from './components/SearchBar/SearchBar.jsx';
@@ -19,6 +22,19 @@ const EMPTY_FILTERS = {
 const DEFAULT_SORT = { sort_by: 'transaction_time_iso', sort_dir: 'desc' };
 
 export default function App() {
+  const { user, isAllowed, loading, signOut } = useAuth();
+
+  if (loading) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-bg)' }}>
+        <span style={{ color: 'var(--color-text-muted)', fontSize: 14 }}>טוען...</span>
+      </div>
+    );
+  }
+
+  if (!user) return <LoginScreen />;
+  if (!isAllowed) return <AccessDenied />;
+
   const [activeTab, setActiveTab] = useState('transactions');
   const [filters, setFilters]     = useState(EMPTY_FILTERS);
   const [sort, setSort]           = useState(DEFAULT_SORT);
@@ -53,6 +69,10 @@ export default function App() {
     <div className={styles.layout}>
       <header className={styles.header}>
         <h1 className={styles.title}>לוח עסקאות</h1>
+        <div className={styles.headerRight}>
+          <span className={styles.userEmail}>{user.email}</span>
+          <button className={styles.signOutBtn} onClick={signOut}>התנתק</button>
+        </div>
       </header>
 
       <main className={styles.main}>
