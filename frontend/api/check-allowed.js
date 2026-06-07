@@ -19,11 +19,11 @@ export default async function handler(req, res) {
   if (error || !user) return res.status(401).json({ error: 'Invalid token' });
 
   // Check allowlist using service role (bypasses RLS)
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('allowed_users')
-    .select('is_active')
+    .select('email, is_active')
     .ilike('email', user.email.trim())
     .maybeSingle();
 
-  return res.json({ allowed: data?.is_active === true, email: user.email });
+  return res.json({ allowed: data?.is_active === true, email: user.email, data, error: error?.message });
 }
