@@ -13,8 +13,10 @@ async function checkAllowed(accessToken) {
       },
     });
     const data = await res.json();
+    console.log('[checkAllowed]', data);
     return data?.allowed === true;
-  } catch {
+  } catch (err) {
+    console.error('[checkAllowed] error:', err);
     return false;
   }
 }
