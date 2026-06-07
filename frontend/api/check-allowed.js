@@ -22,8 +22,8 @@ export default async function handler(req, res) {
   const { data } = await supabase
     .from('allowed_users')
     .select('is_active')
-    .eq('email', user.email)
-    .single();
+    .ilike('email', user.email.trim())
+    .maybeSingle();
 
-  return res.json({ allowed: data?.is_active === true });
+  return res.json({ allowed: data?.is_active === true, email: user.email });
 }
