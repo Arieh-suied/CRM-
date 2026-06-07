@@ -3,25 +3,32 @@ import { supabase } from '../lib/supabase.js';
 
 const AuthContext = createContext(null);
 
-async function checkAllowed(email) {
-  const { data } = await supabase
-    .from('allowed_users')
-    .select('is_active')
-    .eq('email', email)
-    .single();
-  return data?.is_active === true;
+async function checkAllowed(accessToken) {
+  try {
+    const res = await fetch('/api/check-allowed', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+      },
+    });
+    const data = await res.json();
+    return data?.allowed === true;
+  } catch {
+    return false;
+  }
 }
 
 export function AuthProvider({ children }) {
-  const [user, setUser]         = useState(null);
+  const [user, setUser]           = useState(null);
   const [isAllowed, setIsAllowed] = useState(false);
-  const [loading, setLoading]   = useState(true);
+  const [loading, setLoading]     = useState(true);
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
         setUser(session.user);
-        setIsAllowed(await checkAllowed(session.user.email));
+        setIsAllowed(await checkAllowed(session.access_token));
       }
       setLoading(false);
     });
@@ -29,7 +36,7 @@ export function AuthProvider({ children }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
         setUser(session.user);
-        setIsAllowed(await checkAllowed(session.user.email));
+        setIsAllowed(await checkAllowed(session.access_token));
       } else {
         setUser(null);
         setIsAllowed(false);
