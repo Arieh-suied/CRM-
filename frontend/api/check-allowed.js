@@ -17,16 +17,13 @@ export default async function handler(req, res) {
   const { data: { user }, error: authError } = await supabase.auth.getUser(token);
   if (authError || !user) return res.status(401).json({ error: 'Invalid token' });
 
-  const { data, error: dbError } = await supabase
+  const { data: allRows, error: dbError } = await supabase
     .from('allowed_users')
-    .select('email, is_active')
-    .ilike('email', user.email.trim())
-    .maybeSingle();
+    .select('*');
 
   return res.json({
-    allowed: data?.is_active === true,
     email: user.email,
-    data,
+    allRows,
     error: dbError?.message,
   });
 }
