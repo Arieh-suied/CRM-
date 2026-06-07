@@ -81,7 +81,7 @@ export default function PaymentFailures() {
             </span>
           )}
           <button className={styles.syncBtn} onClick={handleSync} disabled={syncing}>
-            {syncing ? 'מסנכרן...' : 'סנכרן מג׳ימייל'}
+            {syncing ? 'מסנכרן...' : 'סנכרן'}
           </button>
         </div>
       </div>
