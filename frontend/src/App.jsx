@@ -21,20 +21,7 @@ const EMPTY_FILTERS = {
 
 const DEFAULT_SORT = { sort_by: 'transaction_time_iso', sort_dir: 'desc' };
 
-export default function App() {
-  const { user, isAllowed, loading, signOut } = useAuth();
-
-  if (loading) {
-    return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-bg)' }}>
-        <span style={{ color: 'var(--color-text-muted)', fontSize: 14 }}>טוען...</span>
-      </div>
-    );
-  }
-
-  if (!user) return <LoginScreen />;
-  if (!isAllowed) return <AccessDenied />;
-
+function Dashboard({ user, signOut }) {
   const [activeTab, setActiveTab] = useState('transactions');
   const [filters, setFilters]     = useState(EMPTY_FILTERS);
   const [sort, setSort]           = useState(DEFAULT_SORT);
@@ -108,11 +95,26 @@ export default function App() {
         )}
 
         {activeTab === 'stripe' && <StripeDonations />}
-
         {activeTab === 'bank' && <BankTransfers institutions={institutions} />}
-
         {activeTab === 'failures' && <PaymentFailures />}
       </main>
     </div>
   );
+}
+
+export default function App() {
+  const { user, isAllowed, loading, signOut } = useAuth();
+
+  if (loading) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-bg)' }}>
+        <span style={{ color: 'var(--color-text-muted)', fontSize: 14 }}>טוען...</span>
+      </div>
+    );
+  }
+
+  if (!user) return <LoginScreen />;
+  if (!isAllowed) return <AccessDenied />;
+
+  return <Dashboard user={user} signOut={signOut} />;
 }
