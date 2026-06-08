@@ -12,6 +12,8 @@ export default async function handler(req, res) {
 }
 
 async function handleGet(req, res) {
+  if (req.query.view === 'subscriptions') return handleSubscriptions(req, res);
+
   try {
     const { page = 1, search, sort_by = 'paid_at', sort_dir = 'desc' } = req.query;
     const offset = (parseInt(page) - 1) * PAGE_SIZE;
@@ -31,6 +33,70 @@ async function handleGet(req, res) {
     const { data, error, count } = await query;
     if (error) return res.status(500).json({ error: error.message });
     res.json({ data, total: count, page: parseInt(page), totalPages: Math.ceil(count / PAGE_SIZE) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+async function handleSubscriptions(req, res) {
+  try {
+    const supabase = getSupabase();
+    const { search } = req.query;
+
+    let query = supabase
+      .from('stripe_subscriptions')
+      .select(`
+        stripe_subscription_id,
+        stripe_customer_id,
+        status,
+        price_id,
+        current_period_start,
+        current_period_end,
+        cancel_at_period_end,
+        raw_subscription,
+        stripe_customers ( name, email, phone )
+      `)
+      .in('status', ['active', 'trialing'])
+      .order('current_period_end', { ascending: true });
+
+    if (search) {
+      query = query.or(
+        `stripe_customer_id.ilike.%${search}%`,
+        { foreignTable: 'stripe_customers', filter: `name.ilike.%${search}%,email.ilike.%${search}%` }
+      );
+    }
+
+    const { data, error } = await query;
+    if (error) return res.status(500).json({ error: error.message });
+
+    const rows = (data ?? []).map(s => {
+      const raw  = s.raw_subscription ?? {};
+      const item = raw.items?.data?.[0];
+      const price = item?.price ?? {};
+      const amount   = price.unit_amount ? price.unit_amount / 100 : null;
+      const currency = (price.currency ?? 'ILS').toUpperCase();
+      const interval = price.recurring?.interval ?? null;
+      // remaining charges from subscription_schedule phases or metadata
+      const metadata = raw.metadata ?? {};
+      const totalCycles    = raw.billing_cycle_count ?? metadata.total_charges ?? null;
+      const completedCycles = raw.billing_cycle_anchor ? null : null; // not available without schedule
+      return {
+        id:                   s.stripe_subscription_id,
+        customer_id:          s.stripe_customer_id,
+        name:                 s.stripe_customers?.name  ?? null,
+        email:                s.stripe_customers?.email ?? null,
+        phone:                s.stripe_customers?.phone ?? null,
+        status:               s.status,
+        amount,
+        currency,
+        interval,
+        next_billing:         s.current_period_end,
+        cancel_at_period_end: s.cancel_at_period_end,
+        total_cycles:         totalCycles,
+      };
+    });
+
+    res.json({ data: rows, total: rows.length });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
