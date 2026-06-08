@@ -135,6 +135,14 @@ export default async function handler(req, res) {
       const rawDate        = firstTransferDate || null;
       const issueDateIso   = toIso(rawDate);
 
+      // Lookup mosad_number for this branch
+      const { data: instRow } = await supabase
+        .from('institutions')
+        .select('mosad_number')
+        .eq('mosad_name', branch)
+        .maybeSingle();
+      const mosadNumber = instRow?.mosad_number ?? null;
+
       // Insert into bank_transfers — appears in the "העברות בנקאיות" tab
       const { error: btErr } = await supabase.from('bank_transfers').insert({
         customer_name:       customerName.trim(),
@@ -150,6 +158,7 @@ export default async function handler(req, res) {
         document_date_raw:   rawDate,
         document_note:       notes || null,
         receipt_id:          receiptId,
+        mosad_number:        mosadNumber,
       });
       if (btErr) console.error('bank_transfers insert error:', btErr.message);
 
