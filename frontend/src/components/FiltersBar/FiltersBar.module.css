@@ -219,3 +219,12 @@
   background: rgba(242, 92, 92, 0.14);
   border-color: var(--color-danger);
 }
+
+@media (max-width: 640px) {
+  .bar { padding: 14px 16px; gap: 12px; }
+  .field { min-width: 100%; }
+  .select { height: 44px; }
+  .dateRange { height: 44px; }
+  .quickBtn { padding: 8px 14px; min-height: 38px; }
+  .reset { width: 100%; text-align: center; padding: 10px 16px; min-height: 44px; }
+}

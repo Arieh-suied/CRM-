@@ -143,3 +143,11 @@
 }
 
 .pageBtn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+@media (max-width: 640px) {
+  .toolbar { padding: 12px 14px; gap: 8px; }
+  .searchWrap { max-width: 100%; flex: 1 1 100%; }
+  .syncBtn { min-height: 44px; }
+  .pageBtn { padding: 10px 16px; min-height: 44px; }
+  .pagination { flex-wrap: wrap; gap: 8px; }
+}

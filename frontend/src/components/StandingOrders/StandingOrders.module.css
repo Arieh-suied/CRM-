@@ -453,3 +453,21 @@
   font-size: 12px;
   font-family: inherit;
 }
+
+@media (max-width: 640px) {
+  .toolbar { padding: 12px 14px; gap: 8px; }
+  .select { height: 44px; flex: 1; }
+  .typeTabs { overflow-x: auto; scrollbar-width: none; flex-wrap: nowrap; }
+  .typeTabs::-webkit-scrollbar { display: none; }
+  .typeTab { flex-shrink: 0; min-height: 40px; padding: 8px 14px; }
+  .summaryBar { flex-wrap: wrap; gap: 12px; }
+  .pageBtn { padding: 10px 16px; min-height: 44px; }
+  .pagination { flex-wrap: wrap; gap: 8px; }
+  .infoGrid { grid-template-columns: 1fr; }
+  .formGrid { grid-template-columns: 1fr; }
+  .modal { padding: 20px 16px; margin: 16px; width: calc(100% - 32px); }
+  .modalOverlay { padding: 16px; }
+  .fieldInput { height: 44px; }
+  .actionBtn, .dangerBtn { min-height: 40px; padding: 8px 14px; }
+  .saveBtn { width: 100%; min-height: 44px; }
+}

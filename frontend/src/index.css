@@ -45,8 +45,30 @@ body {
 button {
   cursor: pointer;
   font-family: inherit;
+  touch-action: manipulation;
 }
 
-input, select {
+input, select, textarea {
   font-family: inherit;
+  touch-action: manipulation;
+}
+
+/* Fixed background is slow on mobile — disable it */
+@media (max-width: 768px) {
+  body { background-attachment: scroll; }
+}
+
+/* Thin scrollbars on webkit */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(130, 150, 190, 0.3); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(79, 126, 248, 0.4); }
+
+/* Prevent iOS auto-zoom on focus (requires >= 16px) */
+@media (max-width: 768px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
 }

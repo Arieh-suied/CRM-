@@ -646,4 +646,16 @@
   .formGrid { grid-template-columns: 1fr; }
   .paymentGrid { grid-template-columns: 1fr; }
   .bankGrid { grid-template-columns: 1fr 1fr; }
+  .fieldInput, .fieldSelect { height: 44px; }
+  .card { padding: 16px; }
+  .btn { min-height: 48px; font-size: 15px; }
+  .btnAddPayment { min-height: 40px; }
+  .subNav { gap: 4px; overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
+  .subNav::-webkit-scrollbar { display: none; }
+  .subNavBtn { flex-shrink: 0; min-height: 38px; white-space: nowrap; }
+  .toolbar { padding: 10px 14px; }
+  .filterBtns { overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
+  .filterBtns::-webkit-scrollbar { display: none; }
+  .filterBtn { flex-shrink: 0; min-height: 36px; padding: 6px 14px; }
+  .statCards { grid-template-columns: 1fr 1fr; }
 }

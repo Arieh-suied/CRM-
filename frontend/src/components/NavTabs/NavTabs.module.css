@@ -8,6 +8,25 @@
   border-radius: var(--radius-lg);
   padding: 5px;
   width: fit-content;
+  max-width: 100%;
+}
+
+@media (max-width: 768px) {
+  .tabs {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex-wrap: nowrap;
+    border-radius: var(--radius);
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab {
+    padding: 9px 14px;
+    font-size: 13px;
+    flex-shrink: 0;
+    min-height: 40px;
+  }
 }
 
 .tab {
