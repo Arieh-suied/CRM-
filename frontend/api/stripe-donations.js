@@ -3,11 +3,16 @@ import { getSupabase } from './_supabase.js';
 const PAGE_SIZE = 50;
 const ALLOWED_SORT = new Set(['resolved_name', 'donor_email', 'amount', 'paid_at', 'stripe_customer_id']);
 
-// GET  → paginated list from stripe_donations_enriched view
-// POST → sync customer names/emails from Stripe API into stripe_customers table
+// GET                          → paginated donations list
+// GET ?view=subscriptions       → active subscriptions list
+// POST                          → sync customer names from Stripe
+// POST ?action=subscriptions    → sync active subscriptions from Stripe
 export default async function handler(req, res) {
-  if (req.method === 'GET') return handleGet(req, res);
-  if (req.method === 'POST') return handleSync(req, res);
+  if (req.method === 'GET')  return handleGet(req, res);
+  if (req.method === 'POST') {
+    if (req.query.action === 'subscriptions') return handleSyncSubscriptions(req, res);
+    return handleSync(req, res);
+  }
   return res.status(405).json({ error: 'Method not allowed' });
 }
 
@@ -41,55 +46,46 @@ async function handleGet(req, res) {
 async function handleSubscriptions(req, res) {
   try {
     const supabase = getSupabase();
-    const { search } = req.query;
 
-    let query = supabase
+    // Step 1: fetch active subscriptions
+    const { data: subs, error: subsErr } = await supabase
       .from('stripe_subscriptions')
-      .select(`
-        stripe_subscription_id,
-        stripe_customer_id,
-        status,
-        price_id,
-        current_period_start,
-        current_period_end,
-        cancel_at_period_end,
-        raw_subscription,
-        stripe_customers ( name, email, phone )
-      `)
+      .select('*')
       .in('status', ['active', 'trialing'])
       .order('current_period_end', { ascending: true });
 
-    if (search) {
-      query = query.or(
-        `stripe_customer_id.ilike.%${search}%`,
-        { foreignTable: 'stripe_customers', filter: `name.ilike.%${search}%,email.ilike.%${search}%` }
-      );
+    if (subsErr) return res.status(500).json({ error: subsErr.message });
+    if (!subs?.length) return res.json({ data: [], total: 0 });
+
+    // Step 2: fetch customer names for those IDs
+    const cids = [...new Set(subs.map(s => s.stripe_customer_id).filter(Boolean))];
+    let customerMap = {};
+    if (cids.length) {
+      const { data: customers } = await supabase
+        .from('stripe_customers')
+        .select('stripe_customer_id, name, email, phone')
+        .in('stripe_customer_id', cids);
+      customerMap = Object.fromEntries((customers ?? []).map(c => [c.stripe_customer_id, c]));
     }
 
-    const { data, error } = await query;
-    if (error) return res.status(500).json({ error: error.message });
-
-    const rows = (data ?? []).map(s => {
-      const raw  = s.raw_subscription ?? {};
-      const item = raw.items?.data?.[0];
+    const rows = subs.map(s => {
+      const c     = customerMap[s.stripe_customer_id] ?? {};
+      const raw   = s.raw_subscription ?? {};
+      const item  = raw.items?.data?.[0];
       const price = item?.price ?? {};
       const amount   = price.unit_amount ? price.unit_amount / 100 : null;
       const currency = (price.currency ?? 'ILS').toUpperCase();
       const interval = price.recurring?.interval ?? null;
-      // remaining charges from subscription_schedule phases or metadata
       const metadata = raw.metadata ?? {};
-      const totalCycles    = raw.billing_cycle_count ?? metadata.total_charges ?? null;
-      const completedCycles = raw.billing_cycle_anchor ? null : null; // not available without schedule
+      const totalCycles = raw.billing_cycle_count ?? metadata.total_charges ?? null;
       return {
         id:                   s.stripe_subscription_id,
         customer_id:          s.stripe_customer_id,
-        name:                 s.stripe_customers?.name  ?? null,
-        email:                s.stripe_customers?.email ?? null,
-        phone:                s.stripe_customers?.phone ?? null,
+        name:                 c.name  ?? null,
+        email:                c.email ?? null,
+        phone:                c.phone ?? null,
         status:               s.status,
-        amount,
-        currency,
-        interval,
+        amount, currency, interval,
         next_billing:         s.current_period_end,
         cancel_at_period_end: s.cancel_at_period_end,
         total_cycles:         totalCycles,
@@ -169,6 +165,81 @@ async function handleSync(req, res) {
     }
 
     res.json({ updated, errors, message: `עודכנו ${updated} רשומות` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+async function handleSyncSubscriptions(req, res) {
+  const stripeKey = process.env.STRIPE_SECRET_KEY;
+  if (!stripeKey) return res.status(503).json({ error: 'STRIPE_SECRET_KEY לא מוגדר ב-Vercel' });
+
+  try {
+    const supabase = getSupabase();
+    const auth = { Authorization: `Bearer ${stripeKey}` };
+    let synced = 0;
+    let errors = 0;
+
+    // Fetch all active + trialing subscriptions with expanded customer
+    const allSubs = [];
+    for (const status of ['active', 'trialing']) {
+      let startingAfter;
+      while (true) {
+        const url = new URL('https://api.stripe.com/v1/subscriptions');
+        url.searchParams.set('status', status);
+        url.searchParams.set('limit', '100');
+        url.searchParams.append('expand[]', 'data.customer');
+        if (startingAfter) url.searchParams.set('starting_after', startingAfter);
+
+        const r = await fetch(url.toString(), { headers: auth });
+        if (!r.ok) break;
+        const page = await r.json();
+        allSubs.push(...(page.data ?? []));
+        if (!page.has_more) break;
+        startingAfter = page.data.at(-1)?.id;
+      }
+    }
+
+    for (const sub of allSubs) {
+      try {
+        const customer = sub.customer;
+        const customerId = typeof customer === 'string' ? customer : customer?.id ?? null;
+
+        // Upsert customer
+        if (customer && typeof customer === 'object' && !customer.deleted) {
+          await supabase.from('stripe_customers').upsert({
+            stripe_customer_id: customer.id,
+            name:  customer.name  || null,
+            email: customer.email || null,
+            phone: customer.phone || null,
+            is_active: true,
+            customer_status: sub.status,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'stripe_customer_id' });
+        }
+
+        // Upsert subscription
+        const item      = sub.items?.data?.[0];
+        const productId = item?.price?.product;
+        const { error } = await supabase.from('stripe_subscriptions').upsert({
+          stripe_subscription_id: sub.id,
+          stripe_customer_id:     customerId,
+          status:                 sub.status,
+          price_id:               item?.price?.id ?? null,
+          product_id:             typeof productId === 'string' ? productId : productId?.id ?? null,
+          current_period_start:   new Date(sub.current_period_start * 1000).toISOString(),
+          current_period_end:     new Date(sub.current_period_end   * 1000).toISOString(),
+          cancel_at_period_end:   sub.cancel_at_period_end,
+          raw_subscription:       sub,
+          updated_at:             new Date().toISOString(),
+        }, { onConflict: 'stripe_subscription_id' });
+
+        if (!error) synced++;
+        else errors++;
+      } catch { errors++; }
+    }
+
+    res.json({ synced, total: allSubs.length, errors, message: `סונכרנו ${synced} מנויים` });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

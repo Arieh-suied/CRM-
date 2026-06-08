@@ -140,6 +140,8 @@ function SubscriptionsView() {
   const [data, setData]       = useState([]);
   const [total, setTotal]     = useState(0);
   const [loading, setLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState('');
   const [search, setSearch]   = useState('');
   const [sort, setSort]       = useState({ col: 'next_billing', dir: 'asc' });
 
@@ -159,6 +161,18 @@ function SubscriptionsView() {
   }, [search]);
 
   useEffect(() => { load(); }, [load]);
+
+  const syncSubs = async () => {
+    setSyncing(true); setSyncMsg('');
+    try {
+      const res  = await fetch('/api/stripe-donations?action=subscriptions', { method: 'POST' });
+      const json = await res.json();
+      if (!res.ok) { setSyncMsg(`שגיאה: ${json.error}`); return; }
+      setSyncMsg(json.message ?? `סונכרנו ${json.synced} מנויים`);
+      load();
+    } catch { setSyncMsg('שגיאת רשת'); }
+    finally { setSyncing(false); }
+  };
 
   // Client-side sort (data is already fully loaded — no pagination here)
   const sorted = [...data].sort((a, b) => {
@@ -186,6 +200,12 @@ function SubscriptionsView() {
           {search && <button className={styles.clearBtn} onClick={() => setSearch('')}>✕</button>}
         </div>
         <span className={styles.count}>{total} מנויים פעילים</span>
+        <div className={styles.syncArea}>
+          <button className={styles.syncBtn} onClick={syncSubs} disabled={syncing}>
+            {syncing ? 'מסנכרן...' : '⟳ סנכרן מנויים'}
+          </button>
+          {syncMsg && <span className={syncMsg.startsWith('שגיאה') ? styles.syncError : styles.syncSuccess}>{syncMsg}</span>}
+        </div>
       </div>
 
       <div className={styles.tableWrap}>
