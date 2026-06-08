@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import styles from './StandingOrders.module.css';
 import { fetchStandingOrders } from '../../services/api.js';
 
@@ -10,9 +10,31 @@ const fmt = (n, currency = 'ILS') => {
 
 function parseExpiry(raw) {
   if (!raw || raw.length < 4) return raw ?? '—';
-  const month = raw.slice(0, 2);
-  const year  = raw.slice(2, 4);
-  return `${month}/${year}`;
+  return `${raw.slice(0, 2)}/${raw.slice(2, 4)}`;
+}
+
+function sortRows(rows, col, dir) {
+  if (!col) return rows;
+  return [...rows].sort((a, b) => {
+    const av = a[col] ?? '';
+    const bv = b[col] ?? '';
+    const an = parseFloat(av);
+    const bn = parseFloat(bv);
+    const cmp = (!isNaN(an) && !isNaN(bn)) ? an - bn : String(av).localeCompare(String(bv), 'he');
+    return dir === 'asc' ? cmp : -cmp;
+  });
+}
+
+function SortTh({ label, col, sort, onSort }) {
+  const active = sort.col === col;
+  return (
+    <th className={styles.sortable} onClick={() => onSort(col)}>
+      {label}
+      <span className={styles.sortIcon}>
+        {active ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ' ⇅'}
+      </span>
+    </th>
+  );
 }
 
 function SummaryBar({ totalMonth, totalYear }) {
@@ -31,26 +53,37 @@ function SummaryBar({ totalMonth, totalYear }) {
 }
 
 function CreditTable({ rows }) {
+  const [sort, setSort] = useState({ col: null, dir: 'asc' });
+
+  const handleSort = useCallback((col) => {
+    setSort((prev) => prev.col === col
+      ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
+      : { col, dir: 'asc' });
+  }, []);
+
   if (!rows?.length) return <p className={styles.empty}>אין הוראות קבע אשראי</p>;
+
+  const sorted = sortRows(rows, sort.col, sort.dir);
+
   return (
     <div className={styles.tableWrap}>
       <table className={styles.table}>
         <thead>
           <tr>
-            <th>#</th>
-            <th>שם מלא</th>
-            <th>סכום</th>
-            <th>קטגוריה</th>
-            <th>חיוב הבא</th>
-            <th>יתרת חיובים</th>
-            <th>חיובים בוצעו</th>
-            <th>4 ספרות כרטיס</th>
-            <th>תוקף</th>
-            <th>שגיאה</th>
+            <SortTh label="#"               col="DT_RowId" sort={sort} onSort={handleSort} />
+            <SortTh label="שם מלא"          col="2"        sort={sort} onSort={handleSort} />
+            <SortTh label="סכום"            col="4"        sort={sort} onSort={handleSort} />
+            <SortTh label="קטגוריה"         col="5"        sort={sort} onSort={handleSort} />
+            <SortTh label="חיוב הבא"        col="9"        sort={sort} onSort={handleSort} />
+            <SortTh label="יתרת חיובים"     col="7"        sort={sort} onSort={handleSort} />
+            <SortTh label="חיובים בוצעו"    col="8"        sort={sort} onSort={handleSort} />
+            <SortTh label="4 ספרות כרטיס"  col="11"       sort={sort} onSort={handleSort} />
+            <SortTh label="תוקף"            col="12"       sort={sort} onSort={handleSort} />
+            <SortTh label="סטטוס"           col="10"       sort={sort} onSort={handleSort} />
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
+          {sorted.map((row) => (
             <tr key={row.DT_RowId}>
               <td className={styles.muted}>{row.DT_RowId}</td>
               <td className={styles.name}>{row['2'] ?? '—'}</td>
@@ -61,7 +94,7 @@ function CreditTable({ rows }) {
               <td className={styles.muted}>{row['8'] ?? '—'}</td>
               <td className={styles.muted}>{row['11'] ? `****${row['11']}` : '—'}</td>
               <td className={styles.muted}>{parseExpiry(row['12'])}</td>
-              <td className={row['10'] ? styles.error : styles.muted}>{row['10'] || '—'}</td>
+              <td className={row['10'] ? styles.error : styles.active}>{row['10'] || 'פעיל'}</td>
             </tr>
           ))}
         </tbody>
@@ -71,24 +104,35 @@ function CreditTable({ rows }) {
 }
 
 function BankTable({ rows }) {
+  const [sort, setSort] = useState({ col: null, dir: 'asc' });
+
+  const handleSort = useCallback((col) => {
+    setSort((prev) => prev.col === col
+      ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
+      : { col, dir: 'asc' });
+  }, []);
+
   if (!rows?.length) return <p className={styles.empty}>אין הוראות קבע בנקאיות</p>;
+
+  const sorted = sortRows(rows, sort.col, sort.dir);
+
   return (
     <div className={styles.tableWrap}>
       <table className={styles.table}>
         <thead>
           <tr>
-            <th>#</th>
-            <th>שם לקוח</th>
-            <th>פרטי חשבון</th>
-            <th>סכום חודשי</th>
-            <th>חיוב הבא</th>
-            <th>יתרת חיובים</th>
-            <th>קטגוריה</th>
-            <th>הערה</th>
+            <SortTh label="#"              col="DT_RowId" sort={sort} onSort={handleSort} />
+            <SortTh label="שם לקוח"        col="2"        sort={sort} onSort={handleSort} />
+            <SortTh label="פרטי חשבון"     col="3"        sort={sort} onSort={handleSort} />
+            <SortTh label="סכום חודשי"     col="6"        sort={sort} onSort={handleSort} />
+            <SortTh label="חיוב הבא"       col="4"        sort={sort} onSort={handleSort} />
+            <SortTh label="יתרת חיובים"    col="5"        sort={sort} onSort={handleSort} />
+            <SortTh label="קטגוריה"        col="7"        sort={sort} onSort={handleSort} />
+            <SortTh label="הערה"           col="8"        sort={sort} onSort={handleSort} />
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
+          {sorted.map((row) => (
             <tr key={row.DT_RowId}>
               <td className={styles.muted}>{row.DT_RowId}</td>
               <td className={styles.name}>{row['2'] ?? '—'}</td>
@@ -164,12 +208,8 @@ export default function StandingOrders({ institutions }) {
         )}
       </div>
 
-      {!mosadFilter && (
-        <p className={styles.placeholder}>בחר מוסד כדי לטעון הוראות קבע</p>
-      )}
-
+      {!mosadFilter && <p className={styles.placeholder}>בחר מוסד כדי לטעון הוראות קבע</p>}
       {loading && <p className={styles.placeholder}>טוען...</p>}
-
       {errorMsg && <p className={styles.errorMsg}>{errorMsg}</p>}
 
       {!loading && mosadFilter && activeType === 'credit' && (
