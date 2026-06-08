@@ -54,10 +54,28 @@ export default function QuickReceipt() {
 
   const searchCustomers = useCallback(async (q) => {
     if (q.length < 2) { setSuggestions([]); setShowSugg(false); return; }
-    const { data } = await supabase.from('customers').select('*').ilike('name', `%${q}%`).limit(5);
+    const { data } = await supabase.from('customers')
+      .select('*')
+      .or(`name.ilike.%${q}%,bank_account.ilike.%${q}%,id_number.ilike.%${q}%`)
+      .limit(6);
     if (data?.length) { setSuggestions(data); setShowSugg(true); }
     else { setSuggestions([]); setShowSugg(false); }
   }, []);
+
+  const lookupByAccount = useCallback(async (account) => {
+    if (!account || account.length < 4 || name.trim()) return;
+    const { data } = await supabase.from('customers')
+      .select('*')
+      .ilike('bank_account', `%${account}%`)
+      .limit(3);
+    if (data?.length === 1) {
+      selectCustomer(data[0]);
+    } else if (data?.length > 1) {
+      setSuggestions(data);
+      setShowSugg(true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [name]);
 
   const selectCustomer = (c) => {
     setName(c.name);
@@ -200,7 +218,7 @@ export default function QuickReceipt() {
                       <div key={c.id} className={styles.autocompleteItem} onClick={() => selectCustomer(c)}>
                         <div className={styles.autocompleteItemName}>{c.name}</div>
                         <div className={styles.autocompleteItemSub}>
-                          {[c.email, c.phone].filter(Boolean).join(' · ')}
+                          {[c.id_number, c.bank_account, c.email].filter(Boolean).join(' · ')}
                         </div>
                       </div>
                     ))}
@@ -287,7 +305,14 @@ export default function QuickReceipt() {
                   </div>
                   <div className={styles.fieldGroup}>
                     <label className={styles.fieldLabel}>חשבון</label>
-                    <input className={styles.fieldInput} value={p.bankAccount} onChange={e => updatePayment(p.id, 'bankAccount', e.target.value)} placeholder="חשבון" dir="ltr" />
+                    <input
+                      className={styles.fieldInput}
+                      value={p.bankAccount}
+                      onChange={e => updatePayment(p.id, 'bankAccount', e.target.value)}
+                      onBlur={e => lookupByAccount(e.target.value)}
+                      placeholder="חשבון"
+                      dir="ltr"
+                    />
                   </div>
                 </div>
               )}
@@ -344,7 +369,7 @@ export default function QuickReceipt() {
           style={{ width: '100%', justifyContent: 'center', padding: '12px 24px', fontSize: 14 }}
           disabled={loading}
         >
-          {loading ? 'מפיק קבלה...' : '📄 הפק קבלה ושלח לטלגרם'}
+          {loading ? 'מפיק קבלה...' : '📄 הפק קבלה'}
         </button>
       </form>
     </div>
