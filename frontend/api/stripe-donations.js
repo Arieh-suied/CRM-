@@ -42,46 +42,67 @@ async function handleSync(req, res) {
 
   try {
     const supabase = getSupabase();
+    const auth = { Authorization: `Bearer ${stripeKey}` };
+    let updated = 0;
+    let errors  = 0;
 
-    // Get all unique customer IDs that are missing names
-    const { data: rows, error } = await supabase
+    // ── 1. Backfill from Stripe customers table ──────────────────────────
+    const { data: withCustomer } = await supabase
       .from('stripe_donations')
       .select('stripe_customer_id')
-      .not('stripe_customer_id', 'is', null);
+      .not('stripe_customer_id', 'is', null)
+      .is('donor_name', null);
 
-    if (error) return res.status(500).json({ error: error.message });
+    const customerIds = [...new Set((withCustomer ?? []).map(r => r.stripe_customer_id).filter(Boolean))];
 
-    const ids = [...new Set((rows ?? []).map(r => r.stripe_customer_id).filter(Boolean))];
-    if (!ids.length) return res.json({ updated: 0, message: 'אין לקוחות לסנכרן' });
-
-    let updated = 0;
-    const errors = [];
-
-    for (const customerId of ids) {
+    for (const cid of customerIds) {
       try {
-        const stripeRes = await fetch(`https://api.stripe.com/v1/customers/${customerId}`, {
-          headers: { Authorization: `Bearer ${stripeKey}` },
-        });
-        if (!stripeRes.ok) { errors.push(customerId); continue; }
-        const customer = await stripeRes.json();
-
-        const { error: upsertErr } = await supabase
-          .from('stripe_customers')
-          .upsert({
-            stripe_customer_id: customerId,
-            name:  customer.name  || null,
-            email: customer.email || null,
-            phone: customer.phone || null,
-          }, { onConflict: 'stripe_customer_id' });
-
-        if (!upsertErr) updated++;
-        else errors.push(customerId);
-      } catch {
-        errors.push(customerId);
-      }
+        const r = await fetch(`https://api.stripe.com/v1/customers/${cid}`, { headers: auth });
+        if (!r.ok) { errors++; continue; }
+        const c = await r.json();
+        if (!c.name && !c.email) continue;
+        await supabase.from('stripe_customers').upsert(
+          { stripe_customer_id: cid, name: c.name || null, email: c.email || null, phone: c.phone || null },
+          { onConflict: 'stripe_customer_id' }
+        );
+        updated++;
+      } catch { errors++; }
     }
 
-    res.json({ updated, total: ids.length, errors: errors.length });
+    // ── 2. Backfill via payment intent billing_details (no customer ID) ──
+    const { data: missing } = await supabase
+      .from('stripe_donations')
+      .select('id, stripe_payment_intent_id')
+      .is('donor_name', null)
+      .not('stripe_payment_intent_id', 'is', null);
+
+    for (const row of (missing ?? [])) {
+      try {
+        const r = await fetch(
+          `https://api.stripe.com/v1/payment_intents/${row.stripe_payment_intent_id}?expand[]=charges`,
+          { headers: auth }
+        );
+        if (!r.ok) { errors++; continue; }
+        const pi = await r.json();
+
+        const charge = pi.charges?.data?.[0];
+        const name   = pi.metadata?.donor_name  ?? charge?.billing_details?.name  ?? null;
+        const email  = pi.receipt_email          ?? charge?.billing_details?.email ?? pi.metadata?.donor_email ?? null;
+        const phone  = pi.metadata?.donor_phone  ?? charge?.billing_details?.phone ?? null;
+
+        if (!name && !email) continue;
+
+        const { error: upErr } = await supabase
+          .from('stripe_donations')
+          .update({ donor_name: name || null, donor_email: email || null, donor_phone: phone || null })
+          .eq('id', row.id);
+
+        if (!upErr) updated++;
+        else errors++;
+      } catch { errors++; }
+    }
+
+    res.json({ updated, errors, message: `עודכנו ${updated} רשומות` });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
