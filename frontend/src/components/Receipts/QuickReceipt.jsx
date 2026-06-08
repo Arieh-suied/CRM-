@@ -44,10 +44,6 @@ export default function QuickReceipt() {
   const [showSugg, setShowSugg]       = useState(false);
   const suggRef = useRef(null);
 
-  // Image parse (BankTransferUpload)
-  const fileRef = useRef(null);
-  const [parsing, setParsing]   = useState(false);
-
   useEffect(() => {
     const handler = (e) => {
       if (suggRef.current && !suggRef.current.contains(e.target)) setShowSugg(false);
@@ -76,40 +72,6 @@ export default function QuickReceipt() {
       return updated;
     });
     setShowSugg(false);
-  };
-
-  const handleImageFile = async (file) => {
-    if (!file) return;
-    setParsing(true);
-    setMsg({ text: '', ok: false });
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await fetch('/api/parse-transfer', { method: 'POST', body: formData });
-      const data = await res.json();
-      if (!data?.success || !data?.data) throw new Error(data?.error || 'ניתוח נכשל');
-      const d = data.data;
-      if (d.receiver_name) setName(d.receiver_name);
-      setPayments(prev => {
-        const updated = [...prev];
-        const p = { ...updated[0] };
-        if (d.amount)           p.amount      = d.amount;
-        if (d.bank_name)        p.bankName    = d.bank_name;
-        if (d.branch_number)    p.bankBranch  = d.branch_number;
-        if (d.account_number)   p.bankAccount = d.account_number;
-        if (d.reference_number) p.checkNumber = d.reference_number;
-        if (d.transfer_date)    p.date        = d.transfer_date;
-        p.method = '4';
-        updated[0] = p;
-        return updated;
-      });
-      setMsg({ text: 'פרטי העברה זוהו בהצלחה', ok: true });
-    } catch (e) {
-      setMsg({ text: `שגיאה בניתוח: ${e.message}`, ok: false });
-    } finally {
-      setParsing(false);
-      if (fileRef.current) fileRef.current.value = '';
-    }
   };
 
   const updatePayment = (id, field, val) =>
@@ -154,7 +116,6 @@ export default function QuickReceipt() {
           transferDate: p.date       || undefined,
         })),
         notes: notes.trim() || undefined,
-        telegramRecipient: '1',
       };
 
       const res = await fetch('/api/receipts', {
@@ -218,26 +179,6 @@ export default function QuickReceipt() {
               </select>
             </div>
 
-            {/* Image upload for auto-fill */}
-            <div className={styles.fieldGroup}>
-              <label className={styles.fieldLabel}>סרוק העברה בנקאית (אוטומטי)</label>
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/*"
-                style={{ display: 'none' }}
-                onChange={e => handleImageFile(e.target.files?.[0])}
-              />
-              <button
-                type="button"
-                className={`${styles.btn} ${styles.btnGhost}`}
-                style={{ width: '100%', justifyContent: 'center' }}
-                onClick={() => fileRef.current?.click()}
-                disabled={parsing}
-              >
-                {parsing ? 'מנתח...' : '📷 העלה תמונת העברה'}
-              </button>
-            </div>
           </div>
 
           {/* Customer */}
