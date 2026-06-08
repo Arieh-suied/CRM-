@@ -1,6 +1,7 @@
 import { getSupabase } from './_supabase.js';
 
 const PAGE_SIZE = 50;
+const ALLOWED_SORT = new Set(['resolved_name', 'donor_email', 'amount', 'paid_at', 'stripe_customer_id']);
 
 // GET  → paginated list from stripe_donations_enriched view
 // POST → sync customer names/emails from Stripe API into stripe_customers table
@@ -12,14 +13,17 @@ export default async function handler(req, res) {
 
 async function handleGet(req, res) {
   try {
-    const { page = 1, search } = req.query;
+    const { page = 1, search, sort_by = 'paid_at', sort_dir = 'desc' } = req.query;
     const offset = (parseInt(page) - 1) * PAGE_SIZE;
     const supabase = getSupabase();
+
+    const col = ALLOWED_SORT.has(sort_by) ? sort_by : 'paid_at';
+    const asc = sort_dir === 'asc';
 
     let query = supabase
       .from('stripe_donations_enriched')
       .select('*', { count: 'exact' })
-      .order('paid_at', { ascending: false })
+      .order(col, { ascending: asc, nullsLast: true })
       .range(offset, offset + PAGE_SIZE - 1);
 
     if (search) query = query.or(`donor_name.ilike.%${search}%,donor_email.ilike.%${search}%,stripe_customer_id.ilike.%${search}%,stripe_payment_intent_id.ilike.%${search}%`);

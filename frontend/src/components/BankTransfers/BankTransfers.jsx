@@ -8,6 +8,22 @@ const fmt = (n, currency = 'ILS') => {
   } catch { return `${n ?? 0} ${currency}`; }
 };
 
+function SortTh({ label, col, sort, onSort, className }) {
+  const active = sort.col === col;
+  return (
+    <th
+      className={`${styles.sortable} ${className ?? ''}`}
+      onClick={() => onSort(col)}
+      style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+    >
+      {label}
+      <span className={styles.sortIcon} style={{ marginRight: 4, opacity: active ? 1 : 0.35, fontSize: 10 }}>
+        {active ? (sort.dir === 'asc' ? '▲' : '▼') : '⇅'}
+      </span>
+    </th>
+  );
+}
+
 export default function BankTransfers({ institutions }) {
   const [data, setData]           = useState([]);
   const [total, setTotal]         = useState(0);
@@ -17,15 +33,24 @@ export default function BankTransfers({ institutions }) {
   const [query, setQuery]         = useState('');
   const [mosadFilter, setMosadFilter] = useState('');
   const [loading, setLoading]     = useState(false);
-  const [receipt, setReceipt]     = useState(null); // { url, title }
+  const [receipt, setReceipt]     = useState(null);
+  const [sort, setSort]           = useState({ col: 'document_date', dir: 'desc' });
 
   const institutionMap = Object.fromEntries(
     (institutions ?? []).map((i) => [i.mosad_number, i.mosad_name])
   );
 
+  const handleSort = useCallback((col) => {
+    setSort(prev =>
+      prev.col === col
+        ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
+        : { col, dir: 'asc' }
+    );
+  }, []);
+
   const load = useCallback(async (p = 1) => {
     setLoading(true);
-    const params = { page: p };
+    const params = { page: p, sort_by: sort.col, sort_dir: sort.dir };
     if (query)       params.search       = query;
     if (mosadFilter) params.mosad_number = mosadFilter;
     const qs = new URLSearchParams(params).toString();
@@ -36,9 +61,11 @@ export default function BankTransfers({ institutions }) {
     setTotalPages(json.totalPages ?? 1);
     setPage(p);
     setLoading(false);
-  }, [query, mosadFilter]);
+  }, [query, mosadFilter, sort]);
 
   useEffect(() => { load(1); }, [load]);
+
+  const s = { col: sort.col, dir: sort.dir };
 
   return (
     <>
@@ -79,16 +106,16 @@ export default function BankTransfers({ institutions }) {
         <table className={styles.table}>
           <thead>
             <tr>
-              <th>תאריך</th>
-              <th>שם לקוח</th>
-              <th>ת"ז</th>
-              <th>מייל</th>
-              <th>סכום</th>
-              <th>בנק</th>
-              <th>סניף</th>
-              <th>חשבון</th>
-              <th>מוסד</th>
-              <th>מסמך</th>
+              <SortTh label="תאריך"   col="document_date"      sort={s} onSort={handleSort} />
+              <SortTh label="שם לקוח" col="customer_name"      sort={s} onSort={handleSort} />
+              <SortTh label='ת"ז'     col="customer_id_number" sort={s} onSort={handleSort} />
+              <SortTh label="מייל"    col="customer_email"     sort={s} onSort={handleSort} />
+              <SortTh label="סכום"    col="transfer_amount"    sort={s} onSort={handleSort} />
+              <SortTh label="בנק"     col="bank_name"          sort={s} onSort={handleSort} />
+              <SortTh label="סניף"    col="bank_branch"        sort={s} onSort={handleSort} />
+              <SortTh label="חשבון"   col="bank_account"       sort={s} onSort={handleSort} />
+              <SortTh label="מוסד"    col="mosad_number"       sort={s} onSort={handleSort} />
+              <SortTh label="מסמך"    col="document_number"    sort={s} onSort={handleSort} />
               <th>הערה</th>
               <th>קבלה</th>
             </tr>

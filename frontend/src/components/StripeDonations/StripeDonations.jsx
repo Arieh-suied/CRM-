@@ -9,6 +9,21 @@ function formatDate(iso) {
   return new Date(iso).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+function SortTh({ label, col, sort, onSort }) {
+  const active = sort.col === col;
+  return (
+    <th
+      onClick={() => onSort(col)}
+      style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+    >
+      {label}
+      <span style={{ marginRight: 4, opacity: active ? 1 : 0.35, fontSize: 10 }}>
+        {active ? (sort.dir === 'asc' ? '▲' : '▼') : '⇅'}
+      </span>
+    </th>
+  );
+}
+
 export default function StripeDonations() {
   const [data, setData]           = useState([]);
   const [total, setTotal]         = useState(0);
@@ -19,10 +34,21 @@ export default function StripeDonations() {
   const [loading, setLoading]     = useState(false);
   const [syncing, setSyncing]     = useState(false);
   const [syncMsg, setSyncMsg]     = useState('');
+  const [sort, setSort]           = useState({ col: 'paid_at', dir: 'desc' });
+
+  const handleSort = useCallback((col) => {
+    setSort(prev =>
+      prev.col === col
+        ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
+        : { col, dir: 'asc' }
+    );
+  }, []);
 
   const load = useCallback(async (p = 1) => {
     setLoading(true);
-    const qs = new URLSearchParams({ page: p, ...(query && { search: query }) }).toString();
+    const params = { page: p, sort_by: sort.col, sort_dir: sort.dir };
+    if (query) params.search = query;
+    const qs = new URLSearchParams(params).toString();
     const res = await fetch(`/api/stripe-donations?${qs}`);
     const json = await res.json();
     setData(json.data ?? []);
@@ -30,7 +56,7 @@ export default function StripeDonations() {
     setTotalPages(json.totalPages ?? 1);
     setPage(p);
     setLoading(false);
-  }, [query]);
+  }, [query, sort]);
 
   useEffect(() => { load(1); }, [load]);
 
@@ -43,12 +69,14 @@ export default function StripeDonations() {
       if (!res.ok) { setSyncMsg(`שגיאה: ${json.error}`); return; }
       setSyncMsg(`עודכנו ${json.updated} מתוך ${json.total} לקוחות`);
       load(1);
-    } catch (e) {
+    } catch {
       setSyncMsg('שגיאת רשת');
     } finally {
       setSyncing(false);
     }
   };
+
+  const s = sort;
 
   return (
     <div className={styles.wrapper}>
@@ -82,11 +110,11 @@ export default function StripeDonations() {
         <table className={styles.table}>
           <thead>
             <tr>
-              <th>שם תורם</th>
-              <th>מייל</th>
-              <th>סכום</th>
-              <th>תאריך</th>
-              <th>ID תורם</th>
+              <SortTh label="שם תורם"  col="resolved_name"      sort={s} onSort={handleSort} />
+              <SortTh label="מייל"     col="donor_email"        sort={s} onSort={handleSort} />
+              <SortTh label="סכום"     col="amount"             sort={s} onSort={handleSort} />
+              <SortTh label="תאריך"    col="paid_at"            sort={s} onSort={handleSort} />
+              <SortTh label="ID תורם"  col="stripe_customer_id" sort={s} onSort={handleSort} />
             </tr>
           </thead>
           <tbody>
