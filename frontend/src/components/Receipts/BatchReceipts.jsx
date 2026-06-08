@@ -79,19 +79,16 @@ export default function BatchReceipts() {
   const [loading, setLoading]         = useState(true);
   const [sendingId, setSendingId]     = useState(null);
   const [batchSending, setBatchSending] = useState(false);
-  const [uploadingCount, setUploadingCount] = useState(0);
   const [errorIds, setErrorIds]       = useState(new Set());
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [idFilter, setIdFilter]       = useState('all');
   const [sortBy, setSortBy]           = useState('name');
-  const [imageDrafts, setImageDrafts] = useState([]);
 
   // Checkpoint
   const [checkpoint, setCheckpoint]   = useState(null);
   const [showCpForm, setShowCpForm]   = useState(false);
   const [cpDraft, setCpDraft]         = useState({ customer_name: '', amount: '', reference_number: '', bank_account: '' });
 
-  const imgRef  = useRef(null);
   const xlsxRef = useRef(null);
 
   const fetchEntries = useCallback(async () => {
@@ -152,39 +149,6 @@ export default function BatchReceipts() {
   const clearCheckpoint = async () => {
     setCheckpoint(null);
     if (user) await supabase.from('manual_checkpoints').delete().eq('user_id', user.id);
-  };
-
-  // Image upload → parse-transfer proxy
-  const handleImages = async (files) => {
-    if (!files.length) return;
-    setUploadingCount(files.length);
-    const results = await Promise.allSettled(files.map(async (file) => {
-      const previewUrl = URL.createObjectURL(file);
-      try {
-        const formData = new FormData();
-        formData.append('file', file);
-        const res = await fetch('/api/parse-transfer', { method: 'POST', body: formData });
-        const json = await res.json();
-        if (!json?.success || !json?.data) throw new Error('No data');
-        const d = json.data;
-        return { id: Math.random().toString(36).slice(2), fileName: file.name, previewUrl, customer_name: d.receiver_name || '', amount: d.amount || '', bank_name: d.bank_name || '', bank_branch: d.branch_number || '', bank_account: d.account_number || '', reference_number: d.reference_number || '', transfer_date: d.transfer_date || '', branch: '', error: null };
-      } catch (err) {
-        return { id: Math.random().toString(36).slice(2), fileName: file.name, previewUrl, customer_name: '', amount: '', bank_name: '', bank_branch: '', bank_account: '', reference_number: '', transfer_date: '', branch: '', error: err.message };
-      }
-    }));
-    const drafts = results.map(r => r.status === 'fulfilled' ? r.value : null).filter(Boolean);
-    setImageDrafts(prev => [...prev, ...drafts]);
-    setUploadingCount(0);
-    if (imgRef.current) imgRef.current.value = '';
-  };
-
-  const confirmImageDrafts = async () => {
-    if (!user) return;
-    const valid = imageDrafts.filter(d => !d.error);
-    if (!valid.length) return;
-    const rows = valid.map(d => ({ user_id: user.id, customer_name: d.customer_name || null, amount: d.amount ? parseFloat(d.amount) : null, bank_name: d.bank_name || null, bank_branch: d.bank_branch || null, bank_account: d.bank_account || null, reference_number: d.reference_number || null, transfer_date: d.transfer_date || null, branch: d.branch || '', status: 'pending' }));
-    const { error } = await supabase.from('pending_receipts').insert(rows);
-    if (!error) { setImageDrafts([]); fetchEntries(); }
   };
 
   // Excel upload
@@ -372,65 +336,6 @@ export default function BatchReceipts() {
     <div>
       <h3 className={styles.sectionTitle}>העלאת העברות בנקאיות</h3>
 
-      {/* Image upload */}
-      <div className={styles.card}>
-        <input ref={imgRef} type="file" accept="image/*" multiple style={{ display: 'none' }}
-          onChange={e => handleImages(Array.from(e.target.files || []))} />
-        <div className={styles.uploadZone} onClick={() => uploadingCount === 0 && imgRef.current?.click()}>
-          {uploadingCount > 0
-            ? <div>מנתח {uploadingCount} תמונות...</div>
-            : <>
-                <div className={styles.uploadIcon}>📷</div>
-                <div className={styles.uploadLabel}>לחץ להעלאת תמונות של העברות בנקאיות</div>
-                <div className={styles.uploadSub}>ניתן לבחור מספר תמונות בו-זמנית</div>
-              </>
-          }
-        </div>
-      </div>
-
-      {/* Image drafts preview */}
-      {imageDrafts.length > 0 && (
-        <div className={styles.card}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <strong style={{ fontSize: 13 }}>{imageDrafts.length} תמונות ממתינות לאישור</strong>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`} onClick={() => setImageDrafts([])}>ביטול</button>
-              <button className={`${styles.btn} ${styles.btnPrimary} ${styles.btnSm}`} onClick={confirmImageDrafts} disabled={imageDrafts.every(d => d.error)}>
-                שמור {imageDrafts.filter(d => !d.error).length} תקינות
-              </button>
-            </div>
-          </div>
-          {imageDrafts.map(d => (
-            <div key={d.id} className={`${styles.entryCard} ${d.error ? styles.entryCardError : ''}`} style={{ marginBottom: 8 }}>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                <img src={d.previewUrl} alt={d.fileName} style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }} />
-                <div style={{ flex: 1, fontSize: 12 }}>
-                  <div style={{ fontWeight: 600, marginBottom: 4 }}>{d.fileName}</div>
-                  {d.error
-                    ? <span className={`${styles.badge} ${styles.badgeError}`}>{d.error}</span>
-                    : <div style={{ color: 'var(--color-text-muted)' }}>
-                        {d.customer_name && <span>{d.customer_name} </span>}
-                        {d.amount && <span>₪{d.amount} </span>}
-                        {d.transfer_date && <span>{d.transfer_date}</span>}
-                      </div>
-                  }
-                  <select
-                    className={styles.fieldSelect}
-                    style={{ marginTop: 6, height: 28, fontSize: 11 }}
-                    value={d.branch}
-                    onChange={e => setImageDrafts(prev => prev.map(x => x.id === d.id ? { ...x, branch: e.target.value } : x))}
-                  >
-                    <option value="">בחר מוסד</option>
-                    {BRANCHES.map(b => <option key={b} value={b}>{b}</option>)}
-                  </select>
-                </div>
-                <button className={styles.btnIconDanger} onClick={() => setImageDrafts(prev => prev.filter(x => x.id !== d.id))}>✕</button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
       {/* Excel upload */}
       <div className={styles.card}>
         <input ref={xlsxRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }}
@@ -487,7 +392,7 @@ export default function BatchReceipts() {
       {loading ? (
         <div className={styles.placeholder}>טוען...</div>
       ) : entries.length === 0 ? (
-        <div className={styles.empty}>אין העברות ממתינות. העלה תמונות או קובץ אקסל.</div>
+        <div className={styles.empty}>אין העברות ממתינות. העלה קובץ אקסל.</div>
       ) : (
         <>
           {/* Toolbar */}
