@@ -261,3 +261,195 @@
   color: var(--color-text);
   margin: 0 0 12px;
 }
+
+/* Modal tabs */
+.modalTabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 0;
+}
+
+.modalTab {
+  padding: 8px 16px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  margin-bottom: -1px;
+  transition: all 0.15s;
+}
+
+.modalTab:hover { color: var(--color-text); }
+
+.modalTabActive {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
+
+/* Modal header actions */
+.modalHeaderRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.actionBtn {
+  padding: 6px 14px;
+  border: var(--glass-border);
+  border-radius: var(--radius);
+  background: rgba(79,126,248,0.08);
+  color: var(--color-primary);
+  font-size: 12px;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.actionBtn:hover { background: rgba(79,126,248,0.15); }
+
+.dangerBtn {
+  padding: 6px 14px;
+  border: 1px solid rgba(229,62,62,0.3);
+  border-radius: var(--radius);
+  background: rgba(229,62,62,0.08);
+  color: #c53030;
+  font-size: 12px;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.dangerBtn:hover { background: rgba(229,62,62,0.15); }
+
+/* Forms */
+.editSection { padding: 4px 0; }
+
+.formGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 20px;
+  margin-bottom: 20px;
+}
+
+.fieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fieldLabel {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.fieldInput {
+  height: 34px;
+  padding: 0 10px;
+  border: var(--glass-border);
+  border-radius: var(--radius);
+  background: rgba(255,255,255,0.7);
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--color-text);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.fieldInput:focus {
+  outline: none;
+  border-color: rgba(79,126,248,0.5);
+  background: #fff;
+}
+
+.saveBtn {
+  padding: 9px 24px;
+  background: var(--color-primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.saveBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+.saveBtn:not(:disabled):hover { opacity: 0.85; }
+
+.successMsg {
+  text-align: center;
+  padding: 10px 16px;
+  color: #276749;
+  background: rgba(56,161,105,0.1);
+  border-radius: var(--radius);
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+
+.chargeNote {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin-bottom: 16px;
+  padding: 10px;
+  background: rgba(238,240,247,0.6);
+  border-radius: var(--radius);
+}
+
+/* Export menu */
+.exportMenu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  background: #fff;
+  border: var(--glass-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  z-index: 100;
+  min-width: 200px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.exportMenu button {
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--color-text);
+  cursor: pointer;
+  text-align: right;
+  transition: background 0.1s;
+}
+.exportMenu button:hover { background: rgba(79,126,248,0.06); }
+
+.exportDateRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+
+.dateInput {
+  height: 28px;
+  padding: 0 6px;
+  border: var(--glass-border);
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: inherit;
+}
