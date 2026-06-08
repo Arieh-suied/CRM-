@@ -53,3 +53,7 @@ export function fetchPaymentFailures(params = {}) {
 export function fetchStandingOrders(mosadNumber) {
   return request(`/standing-orders?mosad_number=${encodeURIComponent(mosadNumber)}`);
 }
+
+export function fetchStandingOrderDetail(mosadNumber, kevaId) {
+  return request(`/standing-order-detail?mosad_number=${encodeURIComponent(mosadNumber)}&keva_id=${encodeURIComponent(kevaId)}`);
+}
