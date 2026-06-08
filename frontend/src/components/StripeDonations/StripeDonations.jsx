@@ -17,6 +17,8 @@ export default function StripeDonations() {
   const [search, setSearch]       = useState('');
   const [query, setQuery]         = useState('');
   const [loading, setLoading]     = useState(false);
+  const [syncing, setSyncing]     = useState(false);
+  const [syncMsg, setSyncMsg]     = useState('');
 
   const load = useCallback(async (p = 1) => {
     setLoading(true);
@@ -31,6 +33,22 @@ export default function StripeDonations() {
   }, [query]);
 
   useEffect(() => { load(1); }, [load]);
+
+  const syncCustomers = async () => {
+    setSyncing(true);
+    setSyncMsg('');
+    try {
+      const res = await fetch('/api/stripe-donations', { method: 'POST' });
+      const json = await res.json();
+      if (!res.ok) { setSyncMsg(`שגיאה: ${json.error}`); return; }
+      setSyncMsg(`עודכנו ${json.updated} מתוך ${json.total} לקוחות`);
+      load(1);
+    } catch (e) {
+      setSyncMsg('שגיאת רשת');
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   return (
     <div className={styles.wrapper}>
@@ -52,6 +70,12 @@ export default function StripeDonations() {
           )}
         </div>
         <span className={styles.count}>סה"כ {total.toLocaleString('he-IL')} תרומות</span>
+        <div className={styles.syncArea}>
+          <button className={styles.syncBtn} onClick={syncCustomers} disabled={syncing}>
+            {syncing ? 'מסנכרן...' : '⟳ סנכרן שמות'}
+          </button>
+          {syncMsg && <span className={syncMsg.startsWith('שגיאה') ? styles.syncError : styles.syncSuccess}>{syncMsg}</span>}
+        </div>
       </div>
 
       <div className={styles.tableWrap}>
