@@ -13,6 +13,7 @@ import BankTransfers from './components/BankTransfers/BankTransfers.jsx';
 import { useTransactions } from './hooks/useTransactions.js';
 import { fetchInstitutions, fetchFilterOptions } from './services/api.js';
 import PaymentFailures from './components/PaymentFailures/PaymentFailures.jsx';
+import StandingOrders from './components/StandingOrders/StandingOrders.jsx';
 
 const EMPTY_FILTERS = {
   mosad_number: '', transaction_type: '', group_name: '',
@@ -97,6 +98,7 @@ function Dashboard({ user, signOut }) {
         {activeTab === 'stripe' && <StripeDonations />}
         {activeTab === 'bank' && <BankTransfers institutions={institutions} />}
         {activeTab === 'failures' && <PaymentFailures />}
+        {activeTab === 'keva' && <StandingOrders institutions={institutions} />}
       </main>
     </div>
   );

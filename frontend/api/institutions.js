@@ -4,9 +4,16 @@ export default async function handler(req, res) {
   const supabase = getSupabase();
   try {
     if (req.method === 'GET') {
-      const { data, error } = await supabase.from('institutions').select('*').order('mosad_name', { ascending: true });
+      const { data, error } = await supabase
+        .from('institutions')
+        .select('id, mosad_number, mosad_name, created_at, api_password')
+        .order('mosad_name', { ascending: true });
       if (error) return res.status(500).json({ error: error.message });
-      return res.json(data);
+      const safe = (data ?? []).map(({ api_password, ...rest }) => ({
+        ...rest,
+        has_api_password: Boolean(api_password),
+      }));
+      return res.json(safe);
     }
     if (req.method === 'POST') {
       const { mosad_number, mosad_name } = req.body;

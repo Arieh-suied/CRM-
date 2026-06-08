@@ -5,6 +5,7 @@ const TABS = [
   { id: 'stripe',       label: 'Stripe' },
   { id: 'bank',         label: 'העברות בנקאיות' },
   { id: 'failures',     label: 'סירובים' },
+  { id: 'keva',         label: 'הוראות קבע' },
 ];
 
 export default function NavTabs({ active, onChange }) {

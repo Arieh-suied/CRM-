@@ -49,3 +49,7 @@ export function fetchPaymentFailures(params = {}) {
   ).toString();
   return request(`/payment-failures${qs ? '?' + qs : ''}`);
 }
+
+export function fetchStandingOrders(mosadNumber) {
+  return request(`/standing-orders?mosad_number=${encodeURIComponent(mosadNumber)}`);
+}
