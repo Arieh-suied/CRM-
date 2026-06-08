@@ -12,7 +12,6 @@ import StripeDonations from './components/StripeDonations/StripeDonations.jsx';
 import BankTransfers from './components/BankTransfers/BankTransfers.jsx';
 import { useTransactions } from './hooks/useTransactions.js';
 import { fetchInstitutions, fetchFilterOptions } from './services/api.js';
-import PaymentFailures from './components/PaymentFailures/PaymentFailures.jsx';
 import StandingOrders from './components/StandingOrders/StandingOrders.jsx';
 import Receipts from './components/Receipts/Receipts.jsx';
 
@@ -98,7 +97,6 @@ function Dashboard({ user, signOut }) {
 
         {activeTab === 'stripe' && <StripeDonations />}
         {activeTab === 'bank' && <BankTransfers institutions={institutions} />}
-        {activeTab === 'failures' && <PaymentFailures />}
         {activeTab === 'keva' && <StandingOrders institutions={institutions} />}
         {activeTab === 'receipts' && <Receipts />}
       </main>
