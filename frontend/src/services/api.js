@@ -50,28 +50,41 @@ export function fetchPaymentFailures(params = {}) {
   return request(`/payment-failures${qs ? '?' + qs : ''}`);
 }
 
-export function fetchStandingOrders(mosadNumber) {
-  return request(`/standing-orders?mosad_number=${encodeURIComponent(mosadNumber)}`);
+const postJson = (path, body) =>
+  request(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+
+// Standing orders — credit + bank list (fetched in parallel)
+export async function fetchStandingOrders(mosadNumber) {
+  const enc = encodeURIComponent(mosadNumber);
+  const [c, b] = await Promise.allSettled([
+    request(`/standing-orders?mosad_number=${enc}`),
+    request(`/bank-orders?mosad_number=${enc}`),
+  ]);
+  return {
+    credit: c.status === 'fulfilled' ? c.value : { error: c.reason?.message },
+    bank:   b.status === 'fulfilled' ? b.value : { error: b.reason?.message },
+  };
 }
 
+// Credit operations — all go through /standing-orders
 export function fetchStandingOrderDetail(mosadNumber, kevaId) {
-  return request(`/standing-order-detail?mosad_number=${encodeURIComponent(mosadNumber)}&keva_id=${encodeURIComponent(kevaId)}`);
+  return request(`/standing-orders?mosad_number=${encodeURIComponent(mosadNumber)}&keva_id=${encodeURIComponent(kevaId)}`);
 }
 
 export function updateCreditOrder(mosadNumber, kevaId, fields) {
-  return request('/standing-order-update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mosad_number: mosadNumber, KevaId: kevaId, ...fields }) });
+  return postJson('/standing-orders', { action: 'update', mosad_number: mosadNumber, KevaId: kevaId, ...fields });
 }
 
 export function creditOrderAction(mosadNumber, kevaId, action) {
-  return request('/standing-order-action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mosad_number: mosadNumber, keva_id: kevaId, action }) });
+  return postJson('/standing-orders', { action, mosad_number: mosadNumber, keva_id: kevaId });
 }
 
 export function chargeCreditOrder(mosadNumber, params) {
-  return request('/standing-order-charge', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mosad_number: mosadNumber, ...params }) });
+  return postJson('/standing-orders', { action: 'charge', mosad_number: mosadNumber, ...params });
 }
 
 export async function exportCreditOrders(mosadNumber, type) {
-  const res = await fetch(`/api/standing-order-export?mosad_number=${encodeURIComponent(mosadNumber)}&type=${type}`);
+  const res = await fetch(`/api/standing-orders?mosad_number=${encodeURIComponent(mosadNumber)}&export=${type}`);
   if (!res.ok) throw new Error('Export failed');
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
@@ -80,26 +93,27 @@ export async function exportCreditOrders(mosadNumber, type) {
   URL.revokeObjectURL(url);
 }
 
+// Bank operations — all go through /bank-orders
 export function fetchBankOrderDetail(mosadNumber, masavId) {
-  return request(`/bank-order-detail?mosad_number=${encodeURIComponent(mosadNumber)}&masav_id=${encodeURIComponent(masavId)}`);
+  return request(`/bank-orders?mosad_number=${encodeURIComponent(mosadNumber)}&masav_id=${encodeURIComponent(masavId)}`);
 }
 
 export function updateBankOrder(mosadNumber, kevaId, fields) {
-  return request('/bank-order-update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mosad_number: mosadNumber, KevaId: kevaId, ...fields }) });
+  return postJson('/bank-orders', { action: 'update', mosad_number: mosadNumber, KevaId: kevaId, ...fields });
 }
 
 export function setBankStatus(mosadNumber, masavId, statusNumber, comments) {
-  return request('/bank-order-status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mosad_number: mosadNumber, masav_id: masavId, status_number: statusNumber, comments }) });
+  return postJson('/bank-orders', { action: 'status', mosad_number: mosadNumber, masav_id: masavId, status_number: statusNumber, comments });
 }
 
 export function chargeBankOrder(mosadNumber, masavId, amount, date) {
-  return request('/bank-order-charge', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mosad_number: mosadNumber, masav_id: masavId, amount, date }) });
+  return postJson('/bank-orders', { action: 'charge', mosad_number: mosadNumber, masav_id: masavId, amount, date });
 }
 
 export async function exportBankOrders(mosadNumber, type, from, to) {
-  let url = `/api/bank-order-export?mosad_number=${encodeURIComponent(mosadNumber)}&type=${type}`;
+  let url = `/api/bank-orders?mosad_number=${encodeURIComponent(mosadNumber)}&export=${type}`;
   if (from) url += `&from=${encodeURIComponent(from)}`;
-  if (to) url += `&to=${encodeURIComponent(to)}`;
+  if (to)   url += `&to=${encodeURIComponent(to)}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error('Export failed');
   const blob = await res.blob();

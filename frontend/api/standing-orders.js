@@ -1,42 +1,76 @@
 import { getSupabase } from './_supabase.js';
 
 const CREDIT_URL = 'https://matara.pro/nedarimplus/Reports/Manage3.aspx';
-const BANK_URL   = 'https://matara.pro/nedarimplus/Reports/Masav3.aspx';
 
-async function fetchFromNedarim(url, action, mosadNumber, apiPassword) {
-  const body = new URLSearchParams({ Action: action, MosadNumber: mosadNumber, ApiPassword: apiPassword });
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: body.toString(),
-  });
-  if (!res.ok) throw new Error(`nedarim HTTP ${res.status}`);
-  return res.json();
+async function getInst(mosad_number) {
+  const { data } = await getSupabase().from('institutions').select('mosad_number, api_password').eq('mosad_number', mosad_number).single();
+  if (!data?.api_password) throw new Error('No API password configured');
+  return data;
+}
+
+async function callNedarim(params) {
+  const body = new URLSearchParams(params);
+  return fetch(CREDIT_URL, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body.toString() });
 }
 
 export default async function handler(req, res) {
-  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
-
-  const { mosad_number } = req.query;
+  const { mosad_number, keva_id, export: exportType } = req.query;
   if (!mosad_number) return res.status(400).json({ error: 'mosad_number is required' });
 
-  const supabase = getSupabase();
-  const { data: inst, error } = await supabase
-    .from('institutions')
-    .select('mosad_number, mosad_name, api_password')
-    .eq('mosad_number', mosad_number)
-    .single();
+  let inst;
+  try { inst = await getInst(mosad_number); } catch (e) { return res.status(400).json({ error: e.message }); }
 
-  if (error || !inst) return res.status(404).json({ error: 'Institution not found' });
-  if (!inst.api_password) return res.status(400).json({ error: 'No API password configured for this institution' });
+  if (req.method === 'GET') {
+    if (exportType) {
+      const TYPE_MAP = { orders: 'GetKevaCSV', business: 'GetKevaCSVAsakim', refusals: 'GetErrorLogsCSV' };
+      const action = TYPE_MAP[exportType];
+      if (!action) return res.status(400).json({ error: 'Invalid export type' });
+      const r = await callNedarim({ Action: action, MosadNumber: inst.mosad_number, ApiPassword: inst.api_password, ToMail: '0' });
+      const buffer = Buffer.from(await r.arrayBuffer());
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="credit-${exportType}-${mosad_number}.csv"`);
+      return res.send(buffer);
+    }
+    if (keva_id) {
+      const r = await callNedarim({ Action: 'GetKevaId', MosadId: inst.mosad_number, ApiPassword: inst.api_password, KevaId: keva_id });
+      return res.json(await r.json());
+    }
+    const r = await callNedarim({ Action: 'GetKevaNew', MosadNumber: inst.mosad_number, ApiPassword: inst.api_password });
+    return res.json(await r.json());
+  }
 
-  const [creditResult, bankResult] = await Promise.allSettled([
-    fetchFromNedarim(CREDIT_URL, 'GetKevaNew',      inst.mosad_number, inst.api_password),
-    fetchFromNedarim(BANK_URL,   'GetMasavKevaNew', inst.mosad_number, inst.api_password),
-  ]);
+  if (req.method === 'POST') {
+    const { action, ...fields } = req.body;
 
-  res.json({
-    credit: creditResult.status === 'fulfilled' ? creditResult.value : { error: creditResult.reason?.message },
-    bank:   bankResult.status   === 'fulfilled' ? bankResult.value   : { error: bankResult.reason?.message },
-  });
+    if (action === 'update') {
+      const { KevaId, ...rest } = fields;
+      const params = { Action: 'UpdateKevaNew', MosadNumber: inst.mosad_number, ApiPassword: inst.api_password, KevaId };
+      Object.entries(rest).forEach(([k, v]) => { if (v !== undefined && v !== '') params[k] = v; });
+      const r = await callNedarim(params);
+      return res.json(await r.json());
+    }
+
+    const ACTION_MAP = { disable: 'DisableKeva', enable: 'EnableKevaNew', delete: 'DeleteKeva' };
+    if (ACTION_MAP[action]) {
+      const r = await callNedarim({ Action: ACTION_MAP[action], MosadNumber: inst.mosad_number, ApiPassword: inst.api_password, KevaId: fields.keva_id });
+      const text = await r.text();
+      try { return res.json(JSON.parse(text)); }
+      catch { return res.json({ Result: text.trim().startsWith('OK') ? 'OK' : 'Error', Message: text.trim() }); }
+    }
+
+    if (action === 'charge') {
+      const { KevaId, Currency, Amount, Tashloumim, Groupe, Comments, JoinToKevaId } = fields;
+      const params = { Action: 'TashlumBodedNew', MosadNumber: inst.mosad_number, ApiPassword: inst.api_password, KevaId, Currency: Currency || '1', Amount };
+      if (Tashloumim) params.Tashloumim = Tashloumim;
+      if (Groupe) params.Groupe = Groupe;
+      if (Comments) params.Comments = Comments;
+      if (JoinToKevaId) params.JoinToKevaId = JoinToKevaId;
+      const r = await callNedarim(params);
+      return res.json(await r.json());
+    }
+
+    return res.status(400).json({ error: 'Unknown action' });
+  }
+
+  res.status(405).json({ error: 'Method not allowed' });
 }
