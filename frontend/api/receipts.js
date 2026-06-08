@@ -159,6 +159,7 @@ export default async function handler(req, res) {
         document_note:       notes || null,
         receipt_id:          receiptId,
         mosad_number:        mosadNumber,
+        institution_name:    branch,
       });
       if (btErr) console.error('bank_transfers insert error:', btErr.message);
 
