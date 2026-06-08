@@ -1,0 +1,649 @@
+/* ── Shared layout ───────────────────────────────────────────────── */
+.wrapper {
+  background: rgba(255,255,255,0.7);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border: var(--glass-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.subNav {
+  display: flex;
+  gap: 6px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--color-border);
+  background: rgba(238,240,247,0.4);
+  flex-wrap: wrap;
+}
+
+.subNavBtn {
+  padding: 7px 18px;
+  border: var(--glass-border);
+  border-radius: 20px;
+  background: rgba(255,255,255,0.5);
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.subNavBtn:hover { color: var(--color-text); }
+
+.subNavActive {
+  background: rgba(79,126,248,0.12);
+  color: var(--color-primary);
+  border-color: rgba(79,126,248,0.3);
+}
+
+/* ── Card / Section ──────────────────────────────────────────────── */
+.card {
+  background: rgba(255,255,255,0.85);
+  border: var(--glass-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 24px;
+  margin-bottom: 16px;
+}
+
+.sectionTitle {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0 0 16px;
+}
+
+/* ── Form Grid ───────────────────────────────────────────────────── */
+.formGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 20px;
+}
+
+.formGridFull { grid-column: 1 / -1; }
+
+.fieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  position: relative;
+}
+
+.fieldLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.fieldInput,
+.fieldSelect,
+.fieldTextarea {
+  height: 36px;
+  padding: 0 10px;
+  border: var(--glass-border);
+  border-radius: var(--radius);
+  background: rgba(255,255,255,0.7);
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--color-text);
+  width: 100%;
+  box-sizing: border-box;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.fieldTextarea {
+  height: auto;
+  padding: 8px 10px;
+  resize: vertical;
+  min-height: 60px;
+}
+
+.fieldInput:focus,
+.fieldSelect:focus,
+.fieldTextarea:focus {
+  outline: none;
+  border-color: rgba(79,126,248,0.5);
+  background: #fff;
+}
+
+/* ── Payment row ─────────────────────────────────────────────────── */
+.paymentCard {
+  border: var(--glass-border);
+  border-radius: var(--radius);
+  background: rgba(238,240,247,0.35);
+  padding: 14px;
+  position: relative;
+}
+
+.paymentCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.paymentGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.bankGrid {
+  display: grid;
+  grid-template-columns: 1fr 80px 100px;
+  gap: 8px;
+}
+
+.paymentTotal {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: rgba(79,126,248,0.06);
+  border-radius: var(--radius);
+  border: 1px solid rgba(79,126,248,0.15);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-top: 8px;
+}
+
+.paymentTotalAmount {
+  color: var(--color-primary);
+  font-size: 17px;
+  font-weight: 800;
+}
+
+/* ── Autocomplete dropdown ───────────────────────────────────────── */
+.autocompleteDropdown {
+  position: absolute;
+  top: calc(100% + 2px);
+  right: 0;
+  left: 0;
+  z-index: 200;
+  background: #fff;
+  border: var(--glass-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.autocompleteItem {
+  padding: 10px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--color-border);
+  transition: background 0.1s;
+}
+
+.autocompleteItem:last-child { border-bottom: none; }
+.autocompleteItem:hover { background: rgba(79,126,248,0.05); }
+
+.autocompleteItemName {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.autocompleteItemSub {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
+/* ── Upload area ─────────────────────────────────────────────────── */
+.uploadZone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius);
+  background: rgba(238,240,247,0.3);
+  padding: 32px 16px;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+}
+
+.uploadZone:hover {
+  border-color: rgba(79,126,248,0.4);
+  background: rgba(79,126,248,0.04);
+}
+
+.uploadIcon {
+  font-size: 28px;
+  margin-bottom: 8px;
+  opacity: 0.5;
+}
+
+.uploadLabel {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.uploadSub {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+}
+
+/* ── Toolbar / filters ───────────────────────────────────────────── */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--color-border);
+  flex-wrap: wrap;
+}
+
+.toolbarRight {
+  margin-right: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.filterBtns {
+  display: flex;
+  gap: 4px;
+}
+
+.filterBtn {
+  padding: 5px 12px;
+  border: var(--glass-border);
+  border-radius: 16px;
+  background: rgba(255,255,255,0.5);
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.filterBtnActive {
+  background: rgba(79,126,248,0.12);
+  color: var(--color-primary);
+  border-color: rgba(79,126,248,0.3);
+}
+
+/* ── Table ───────────────────────────────────────────────────────── */
+.tableWrap { overflow-x: auto; }
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.table thead {
+  background: rgba(238,240,247,0.6);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.table th {
+  padding: 10px 14px;
+  text-align: right;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(200,210,230,0.3);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.table tbody tr:last-child td { border-bottom: none; }
+.table tbody tr:hover { background: rgba(79,126,248,0.03); }
+
+/* ── Entry card (pending receipts) ──────────────────────────────── */
+.entryCard {
+  border: var(--glass-border);
+  border-radius: var(--radius);
+  background: rgba(255,255,255,0.9);
+  padding: 14px;
+  margin-bottom: 10px;
+  animation: fadeIn 0.2s ease;
+}
+
+.entryCardError { border-color: rgba(229,62,62,0.4); }
+
+.entryRow {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.entryActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.entryMeta {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  margin-bottom: 4px;
+  display: flex;
+  justify-content: space-between;
+}
+
+/* ── Inline editable input ───────────────────────────────────────── */
+.inlineInput {
+  height: 32px;
+  padding: 0 8px;
+  border: var(--glass-border);
+  border-radius: 6px;
+  background: rgba(238,240,247,0.4);
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--color-text);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.inlineInput:focus {
+  outline: none;
+  border-color: rgba(79,126,248,0.5);
+  background: #fff;
+}
+
+.inlineInputError {
+  border-color: rgba(229,62,62,0.6);
+  background: rgba(229,62,62,0.05);
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.btnPrimary {
+  background: var(--color-primary);
+  color: #fff;
+}
+.btnPrimary:hover:not(:disabled) { opacity: 0.85; }
+
+.btnDanger {
+  background: rgba(229,62,62,0.1);
+  color: #c53030;
+  border: 1px solid rgba(229,62,62,0.25);
+}
+.btnDanger:hover:not(:disabled) { background: rgba(229,62,62,0.18); }
+
+.btnGhost {
+  background: transparent;
+  color: var(--color-text-muted);
+  border: var(--glass-border);
+}
+.btnGhost:hover:not(:disabled) { color: var(--color-text); background: rgba(238,240,247,0.5); }
+
+.btnSm { padding: 5px 12px; font-size: 12px; }
+
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.btnAddPayment {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 14px;
+  border: 1px dashed rgba(79,126,248,0.4);
+  border-radius: var(--radius);
+  background: rgba(79,126,248,0.05);
+  color: var(--color-primary);
+  font-size: 12px;
+  font-family: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.btnAddPayment:hover { background: rgba(79,126,248,0.1); }
+
+.btnIconDanger {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: all 0.12s;
+}
+.btnIconDanger:hover { background: rgba(229,62,62,0.1); color: #c53030; }
+
+/* ── Messages ────────────────────────────────────────────────────── */
+.successMsg {
+  padding: 10px 16px;
+  background: rgba(56,161,105,0.1);
+  color: #276749;
+  border-radius: var(--radius);
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+
+.errorMsg {
+  padding: 10px 16px;
+  background: rgba(229,62,62,0.08);
+  color: #c53030;
+  border-radius: var(--radius);
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+
+.placeholder {
+  text-align: center;
+  padding: 48px;
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+.empty {
+  text-align: center;
+  padding: 32px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+/* ── Badges ──────────────────────────────────────────────────────── */
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.badgeError { background: rgba(229,62,62,0.1); color: #c53030; }
+.badgePending { background: rgba(214,158,46,0.15); color: #744210; }
+.badgeSuccess { background: rgba(56,161,105,0.12); color: #276749; }
+.badgeMatched { background: rgba(79,126,248,0.12); color: #2b5ea7; }
+
+/* ── Checkpoint bar ──────────────────────────────────────────────── */
+.checkpointBar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: rgba(238,240,247,0.4);
+  border-radius: var(--radius);
+  font-size: 11px;
+  color: var(--color-text-muted);
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.checkpointBarLabel { font-weight: 600; color: var(--color-text); }
+
+/* ── Checkbox ────────────────────────────────────────────────────── */
+.checkbox {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+/* ── Select-all bar ──────────────────────────────────────────────── */
+.selectBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: rgba(255,255,255,0.8);
+  border: var(--glass-border);
+  border-radius: var(--radius);
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: var(--color-text);
+}
+
+/* ── Masav / Reconciliation ──────────────────────────────────────── */
+.reconTabs {
+  display: flex;
+  gap: 4px;
+  padding: 14px 18px 0;
+}
+
+.reconTab {
+  padding: 7px 16px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  margin-bottom: -1px;
+  transition: all 0.12s;
+}
+
+.reconTab:hover { color: var(--color-text); }
+
+.reconTabActive {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
+
+.statCards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.statCard {
+  background: rgba(255,255,255,0.8);
+  border: var(--glass-border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  text-align: center;
+}
+
+.statValue {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--color-text);
+  line-height: 1.2;
+}
+
+.statLabel {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin-top: 3px;
+}
+
+/* ── Last receipt bar ────────────────────────────────────────────── */
+.lastReceiptBar {
+  background: rgba(238,240,247,0.5);
+  border: var(--glass-border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.lastReceiptLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+/* ── Receipt success block ───────────────────────────────────────── */
+.receiptSuccess {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 16px;
+  background: rgba(56,161,105,0.08);
+  border: 1px solid rgba(56,161,105,0.25);
+  border-radius: var(--radius-lg);
+  margin-top: 16px;
+}
+
+.receiptSuccessIcon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.receiptSuccessLink {
+  font-size: 13px;
+  color: var(--color-primary);
+  text-decoration: none;
+  font-weight: 500;
+}
+.receiptSuccessLink:hover { text-decoration: underline; }
+
+/* ── Amount field highlight ──────────────────────────────────────── */
+.amountInput {
+  font-weight: 700;
+  color: var(--color-success);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Responsive ──────────────────────────────────────────────────── */
+@media (max-width: 600px) {
+  .formGrid { grid-template-columns: 1fr; }
+  .paymentGrid { grid-template-columns: 1fr; }
+  .bankGrid { grid-template-columns: 1fr 1fr; }
+}

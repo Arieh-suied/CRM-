@@ -6,6 +6,7 @@ const TABS = [
   { id: 'bank',         label: 'העברות בנקאיות' },
   { id: 'failures',     label: 'סירובים' },
   { id: 'keva',         label: 'הוראות קבע' },
+  { id: 'receipts',     label: 'קבלות' },
 ];
 
 export default function NavTabs({ active, onChange }) {
