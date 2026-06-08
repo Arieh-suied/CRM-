@@ -4,11 +4,11 @@
 import { getSupabase } from './_supabase.js';
 
 const BRANCH_CONFIG = {
-  'סומך נופלים':           { envKey: 'EZCOUNT_API_KEY',            docType: 405, itemDetails: 'תרומה' },
-  'אור אפרים':             { envKey: 'EZCOUNT_API_KEY_OR_EFRAIM',   docType: 405, itemDetails: 'תרומה' },
-  'אור אפרים שכ"ל':       { envKey: 'EZCOUNT_API_KEY_OR_EFRAIM',   docType: 400, itemDetails: 'שכר לימוד' },
-  'חכמי ירושלים':          { envKey: 'EZCOUNT_API_KEY_CHACHMEI',    docType: 405, itemDetails: 'תרומה' },
-  'חכמי ירושלים שכ"ל':    { envKey: 'EZCOUNT_API_KEY_CHACHMEI',    docType: 400, itemDetails: 'שכר לימוד' },
+  'סומך נופלים':           { envKey: 'EZCOUNT_API_KEY',            docType: 405, itemDetails: 'תרומה',      mosadNumber: '7001671' },
+  'אור אפרים':             { envKey: 'EZCOUNT_API_KEY_OR_EFRAIM',   docType: 405, itemDetails: 'תרומה',      mosadNumber: '7001725' },
+  'אור אפרים שכ"ל':       { envKey: 'EZCOUNT_API_KEY_OR_EFRAIM',   docType: 400, itemDetails: 'שכר לימוד', mosadNumber: '7003860' },
+  'חכמי ירושלים':          { envKey: 'EZCOUNT_API_KEY_CHACHMEI',    docType: 405, itemDetails: 'תרומה',      mosadNumber: '7001916' },
+  'חכמי ירושלים שכ"ל':    { envKey: 'EZCOUNT_API_KEY_CHACHMEI',    docType: 400, itemDetails: 'שכר לימוד', mosadNumber: '7003862' },
 };
 
 function normalizeDate(d) {
@@ -135,13 +135,7 @@ export default async function handler(req, res) {
       const rawDate        = firstTransferDate || null;
       const issueDateIso   = toIso(rawDate);
 
-      // Lookup mosad_number for this branch
-      const { data: instRow } = await supabase
-        .from('institutions')
-        .select('mosad_number')
-        .eq('mosad_name', branch)
-        .maybeSingle();
-      const mosadNumber = instRow?.mosad_number ?? null;
+      const mosadNumber = config.mosadNumber ?? null;
 
       // Insert into bank_transfers — appears in the "העברות בנקאיות" tab
       const { error: btErr } = await supabase.from('bank_transfers').insert({
