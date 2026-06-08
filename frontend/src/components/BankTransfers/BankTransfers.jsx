@@ -135,7 +135,7 @@ export default function BankTransfers({ institutions }) {
                 <td className={styles.muted}>{row.bank_name ?? '—'}</td>
                 <td className={styles.muted}>{row.bank_branch ?? '—'}</td>
                 <td className={styles.muted}>{row.bank_account ?? '—'}</td>
-                <td>{institutionMap[row.mosad_number] ?? row.institution_name ?? row.mosad_number ?? '—'}</td>
+                <td>{institutionMap[row.mosad_number] ?? row.mosad_number ?? '—'}</td>
                 <td className={styles.muted}>{row.document_number ?? '—'}</td>
                 <td className={styles.note}>{row.document_note ?? '—'}</td>
                 <td>
