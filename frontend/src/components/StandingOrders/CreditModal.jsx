@@ -8,9 +8,14 @@ const fmt = (n, cur = 'ILS') => {
 };
 
 function parseExpiry(raw) {
-  if (!raw || raw.length < 4) return raw ?? '—';
-  return `${raw.slice(0, 2)}/${raw.slice(2, 4)}`;
+  if (!raw) return '—';
+  const s = String(raw);
+  if (s.includes('/')) return s;       // already formatted (e.g. "2/04")
+  if (s.length < 4) return s;
+  return `${s.slice(0, 2)}/${s.slice(2, 4)}`;
 }
+
+const stripHtml = (s) => String(s ?? '').replace(/<[^>]*>/g, '').trim();
 
 const KEVA_STATUS   = { '1': 'פעילה', '2': 'מוקפאת', '3': 'נמחקה' };
 const KEVA_FREQ     = { '1': 'חודשי', '2': 'שבועי', '3': 'יזכור' };
@@ -191,7 +196,7 @@ export default function CreditModal({ kevaId, mosadNumber, onClose, onRefresh })
                               <tr key={i}>
                                 <td className={styles.date}>{h.Date ?? '—'}</td>
                                 <td className={hs === '1' ? styles.active : hs === '2' ? styles.error : styles.muted}>{HIST_STATUS[hs] ?? '—'}</td>
-                                <td className={styles.amount}>{h.Amount ? fmt(h.Amount, currency) : '—'}</td>
+                                <td className={styles.amount}>{h.Amount ? fmt(parseFloat(stripHtml(h.Amount)), currency) : '—'}</td>
                                 <td className={styles.muted}>{h.Name ?? '—'}</td>
                                 <td className={styles.muted}>{h.LastNum ? `****${h.LastNum}` : '—'}</td>
                                 <td className={styles.muted}>{h.TransactionId ?? '—'}</td>
