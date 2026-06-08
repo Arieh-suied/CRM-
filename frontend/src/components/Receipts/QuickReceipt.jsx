@@ -40,8 +40,9 @@ export default function QuickReceipt() {
   const [lastReceipt, setLastReceipt] = useState(null);
 
   // Autocomplete
-  const [suggestions, setSuggestions] = useState([]);
-  const [showSugg, setShowSugg]       = useState(false);
+  const [suggestions, setSuggestions]       = useState([]);
+  const [showSugg, setShowSugg]             = useState(false);
+  const [selectedCustomerId, setSelectedCustomerId] = useState(null);
   const suggRef = useRef(null);
 
   useEffect(() => {
@@ -79,9 +80,10 @@ export default function QuickReceipt() {
 
   const selectCustomer = (c) => {
     setName(c.name);
-    if (c.id_number) setIdNum(c.id_number);
-    if (c.phone)     setPhone(c.phone);
-    if (c.email)     setEmail(c.email);
+    setIdNum(c.id_number || '');
+    setPhone(c.phone    || '');
+    setEmail(c.email    || '');
+    setSelectedCustomerId(c.id);
     setPayments(prev => {
       const updated = [...prev];
       if (c.bank_name)    updated[0] = { ...updated[0], bankName:    c.bank_name };
@@ -91,6 +93,11 @@ export default function QuickReceipt() {
     });
     setShowSugg(false);
   };
+
+  const saveCustomerField = useCallback(async (field, value) => {
+    if (!selectedCustomerId) return;
+    await supabase.from('customers').update({ [field]: value || null }).eq('id', selectedCustomerId);
+  }, [selectedCustomerId]);
 
   const updatePayment = (id, field, val) =>
     setPayments(prev => prev.map(p => p.id === id ? { ...p, [field]: val } : p));
@@ -149,7 +156,7 @@ export default function QuickReceipt() {
 
       // Reset form
       setBranch(''); setName(''); setIdNum(''); setPhone(''); setEmail(''); setNotes('');
-      setPayments([newPayment()]);
+      setPayments([newPayment()]); setSelectedCustomerId(null);
     } catch (err) {
       setMsg({ text: err.message, ok: false });
     } finally {
@@ -207,7 +214,7 @@ export default function QuickReceipt() {
                 <input
                   className={styles.fieldInput}
                   value={name}
-                  onChange={e => { setName(e.target.value); searchCustomers(e.target.value); }}
+                  onChange={e => { setName(e.target.value); setSelectedCustomerId(null); searchCustomers(e.target.value); }}
                   onFocus={() => suggestions.length && setShowSugg(true)}
                   placeholder="שם מלא"
                   autoComplete="off"
@@ -229,17 +236,39 @@ export default function QuickReceipt() {
 
             <div className={styles.fieldGroup}>
               <label className={styles.fieldLabel}>מספר זהות / ח.פ.</label>
-              <input className={styles.fieldInput} value={idNum} onChange={e => setIdNum(e.target.value)} placeholder="ת.ז. או ח.פ." dir="ltr" />
+              <input
+                className={styles.fieldInput}
+                value={idNum}
+                onChange={e => setIdNum(e.target.value)}
+                onBlur={e => saveCustomerField('id_number', e.target.value)}
+                placeholder="ת.ז. או ח.פ."
+                dir="ltr"
+              />
             </div>
 
             <div className={styles.fieldGroup}>
               <label className={styles.fieldLabel}>טלפון</label>
-              <input className={styles.fieldInput} value={phone} onChange={e => setPhone(e.target.value)} placeholder="050-0000000" type="tel" />
+              <input
+                className={styles.fieldInput}
+                value={phone}
+                onChange={e => setPhone(e.target.value)}
+                onBlur={e => saveCustomerField('phone', e.target.value)}
+                placeholder="050-0000000"
+                type="tel"
+              />
             </div>
 
             <div className={styles.fieldGroup}>
               <label className={styles.fieldLabel}>אימייל</label>
-              <input className={styles.fieldInput} value={email} onChange={e => setEmail(e.target.value)} placeholder="email@example.com" type="email" dir="ltr" />
+              <input
+                className={styles.fieldInput}
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                onBlur={e => saveCustomerField('email', e.target.value)}
+                placeholder="email@example.com"
+                type="email"
+                dir="ltr"
+              />
             </div>
           </div>
         </div>
