@@ -125,72 +125,70 @@ export default async function handler(req, res) {
     // Extract receipt_id from the PDF URL (last path segment)
     const receiptId  = docUrl ? (docUrl.split('/').pop() || String(docNumber)) : String(docNumber);
 
-    // Persist to Supabase (non-blocking — don't fail the response if DB write fails)
-    (async () => {
-      try {
-        const supabase = getSupabase();
-        const firstPayment   = Array.isArray(paymentEntries) && paymentEntries.length > 0 ? paymentEntries[0] : null;
-        const saveBankName   = firstPayment?.bankName   || bankName   || null;
-        const saveBankBranch = firstPayment?.bankBranch || bankBranch || null;
-        const saveBankAccount= firstPayment?.bankAccount|| bankAccount|| null;
-        const rawDate        = firstTransferDate || null;
-        const issueDateIso   = toIso(rawDate);
+    // Persist to Supabase before responding (fire-and-forget after response risks early termination on Vercel)
+    try {
+      const supabase = getSupabase();
+      const firstPayment   = Array.isArray(paymentEntries) && paymentEntries.length > 0 ? paymentEntries[0] : null;
+      const saveBankName   = firstPayment?.bankName   || bankName   || null;
+      const saveBankBranch = firstPayment?.bankBranch || bankBranch || null;
+      const saveBankAccount= firstPayment?.bankAccount|| bankAccount|| null;
+      const rawDate        = firstTransferDate || null;
+      const issueDateIso   = toIso(rawDate);
 
-        // Insert into bank_transfers — appears in the "העברות בנקאיות" tab
-        const { error: btErr } = await supabase.from('bank_transfers').insert({
-          customer_name:       customerName.trim(),
-          customer_email:      customerEmail || null,
-          customer_id_number:  customerId    || null,
-          transfer_amount:     amount,
-          currency:            'ILS',
-          bank_name:           saveBankName,
-          bank_branch:         saveBankBranch,
-          bank_account:        saveBankAccount,
-          document_number:     String(docNumber || ''),
-          document_date:       issueDateIso,
-          document_date_raw:   rawDate,
-          document_note:       notes || null,
-          receipt_id:          receiptId,
-        });
-        if (btErr) console.error('bank_transfers insert error:', btErr.message);
+      // Insert into bank_transfers — appears in the "העברות בנקאיות" tab
+      const { error: btErr } = await supabase.from('bank_transfers').insert({
+        customer_name:       customerName.trim(),
+        customer_email:      customerEmail || null,
+        customer_id_number:  customerId    || null,
+        transfer_amount:     amount,
+        currency:            'ILS',
+        bank_name:           saveBankName,
+        bank_branch:         saveBankBranch,
+        bank_account:        saveBankAccount,
+        document_number:     String(docNumber || ''),
+        document_date:       issueDateIso,
+        document_date_raw:   rawDate,
+        document_note:       notes || null,
+        receipt_id:          receiptId,
+      });
+      if (btErr) console.error('bank_transfers insert error:', btErr.message);
 
-        // Upsert into issued_receipts
-        const { error: irErr } = await supabase.from('issued_receipts').upsert({
-          external_receipt_id: `ezcount-${branch}-${docNumber}`,
-          receipt_number:      String(docNumber || ''),
-          institution_name:    branch,
-          receipt_type:        config.docType === 400 ? 'חשבונית מס קבלה' : 'קבלה לתרומה',
-          customer_name:       customerName.trim(),
-          customer_id_number:  customerId || null,
-          customer_email:      customerEmail || null,
-          amount,
-          issue_date:          issueDateIso,
-          issue_date_raw:      rawDate,
-          bank_number:         saveBankName,
-          branch_number:       saveBankBranch,
-          account_number:      saveBankAccount,
-          notes:               notes || null,
-          status:              'issued',
-          pdf_url:             docUrl || null,
-          raw_payload:         req.body,
-          updated_at:          new Date().toISOString(),
-        }, { onConflict: 'external_receipt_id' });
-        if (irErr) console.error('issued_receipts upsert error:', irErr.message);
+      // Upsert into issued_receipts
+      const { error: irErr } = await supabase.from('issued_receipts').upsert({
+        external_receipt_id: `ezcount-${branch}-${docNumber}`,
+        receipt_number:      String(docNumber || ''),
+        institution_name:    branch,
+        receipt_type:        config.docType === 400 ? 'חשבונית מס קבלה' : 'קבלה לתרומה',
+        customer_name:       customerName.trim(),
+        customer_id_number:  customerId || null,
+        customer_email:      customerEmail || null,
+        amount,
+        issue_date:          issueDateIso,
+        issue_date_raw:      rawDate,
+        bank_number:         saveBankName,
+        branch_number:       saveBankBranch,
+        account_number:      saveBankAccount,
+        notes:               notes || null,
+        status:              'issued',
+        pdf_url:             docUrl || null,
+        raw_payload:         req.body,
+        updated_at:          new Date().toISOString(),
+      }, { onConflict: 'external_receipt_id' });
+      if (irErr) console.error('issued_receipts upsert error:', irErr.message);
 
-        // Upsert customer record
-        const customerData = { name: customerName.trim() };
-        if (customerId)    customerData.id_number   = customerId;
-        if (customerPhone) customerData.phone        = customerPhone;
-        if (customerEmail) customerData.email        = customerEmail;
-        if (saveBankName)    customerData.bank_name    = saveBankName;
-        if (saveBankBranch)  customerData.bank_branch  = saveBankBranch;
-        if (saveBankAccount) customerData.bank_account = saveBankAccount;
-        await supabase.from('customers').upsert(customerData, { onConflict: 'name' });
+      // Upsert customer record
+      const customerData = { name: customerName.trim() };
+      if (customerId)      customerData.id_number    = customerId;
+      if (customerPhone)   customerData.phone        = customerPhone;
+      if (customerEmail)   customerData.email        = customerEmail;
+      if (saveBankName)    customerData.bank_name    = saveBankName;
+      if (saveBankBranch)  customerData.bank_branch  = saveBankBranch;
+      if (saveBankAccount) customerData.bank_account = saveBankAccount;
+      await supabase.from('customers').upsert(customerData, { onConflict: 'name' });
 
-      } catch (dbErr) {
-        console.error('DB persist error:', dbErr);
-      }
-    })();
+    } catch (dbErr) {
+      console.error('DB persist error:', dbErr);
+    }
 
     return res.status(200).json({ success: true, docNumber, docUrl });
 
