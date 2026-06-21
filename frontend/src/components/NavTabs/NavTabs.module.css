@@ -1,3 +1,4 @@
+/* ── Desktop: horizontal pill tabs ── */
 .tabs {
   display: flex;
   gap: 2px;
@@ -38,20 +39,172 @@
   font-weight: 600;
 }
 
+/* ── Mobile nav button (hidden on desktop) ── */
+.mobileNavBtn { display: none; }
+
+/* ── Backdrop + Drawer (hidden on desktop) ── */
+.backdrop { display: none; }
+.drawer   { display: none; }
+
+/* ════════════════════════════════
+   Mobile styles
+   ════════════════════════════════ */
 @media (max-width: 768px) {
-  .tabs {
+
+  /* Hide desktop tabs */
+  .tabs { display: none; }
+
+  /* Current tab button */
+  .mobileNavBtn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
     width: 100%;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    flex-wrap: nowrap;
-    border-radius: var(--radius-sm);
+    margin-bottom: 14px;
+    padding: 11px 16px;
+    background: rgba(255, 255, 255, 0.65);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    border: var(--glass-border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--color-text);
+    cursor: pointer;
+    transition: background 0.15s;
   }
-  .tabs::-webkit-scrollbar { display: none; }
-  .tab {
-    padding: 8px 14px;
-    font-size: 12px;
+
+  .mobileNavBtn:active {
+    background: rgba(255, 255, 255, 0.85);
+  }
+
+  .mobileNavLabel {
+    flex: 1;
+    text-align: right;
+  }
+
+  .burgerIcon {
+    width: 20px;
+    height: 14px;
+    color: var(--color-text-muted);
     flex-shrink: 0;
-    min-height: 38px;
+  }
+
+  /* Backdrop */
+  .backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(20, 30, 60, 0.35);
+    backdrop-filter: blur(2px);
+    z-index: 300;
+    animation: fadeIn 0.18s ease;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+
+  /* Side drawer — slides in from the right (RTL start side) */
+  .drawer {
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 72vw;
+    max-width: 280px;
+    background: rgba(255, 255, 255, 0.96);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    border-left: var(--glass-border);
+    box-shadow: -8px 0 32px rgba(80, 100, 160, 0.18);
+    z-index: 400;
+    transform: translateX(110%);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow-y: auto;
+  }
+
+  .drawerOpen {
+    transform: translateX(0);
+  }
+
+  .drawerHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 18px 14px;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .drawerTitle {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .drawerClose {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(200, 210, 230, 0.3);
+    color: var(--color-text-muted);
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .drawerClose:hover {
+    background: rgba(242, 92, 92, 0.12);
+    color: var(--color-danger);
+  }
+
+  .drawerNav {
+    display: flex;
+    flex-direction: column;
+    padding: 10px 0;
+  }
+
+  .drawerTab {
+    display: block;
+    width: 100%;
+    padding: 14px 20px;
+    border: none;
+    border-bottom: 1px solid rgba(200, 210, 230, 0.25);
+    background: transparent;
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--color-text);
+    text-align: right;
+    cursor: pointer;
+    transition: background 0.12s;
+  }
+
+  .drawerTab:last-child {
+    border-bottom: none;
+  }
+
+  .drawerTab:active {
+    background: rgba(79, 126, 248, 0.06);
+  }
+
+  .drawerTabActive {
+    color: var(--color-primary);
+    font-weight: 700;
+    background: rgba(79, 126, 248, 0.06);
+    border-right: 3px solid var(--color-primary);
+    padding-right: 17px;
   }
 }
