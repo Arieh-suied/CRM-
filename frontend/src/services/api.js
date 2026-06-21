@@ -38,14 +38,14 @@ export function createAdminUser(body) {
 }
 
 export function updateAdminUser(id, body) {
-  return adminRequest(`/admin/users/${id}`, {
+  return adminRequest(`/admin/users?id=${encodeURIComponent(id)}`, {
     method: 'PUT',
     body: JSON.stringify(body),
   });
 }
 
 export function deleteAdminUser(id) {
-  return adminRequest(`/admin/users/${id}`, { method: 'DELETE' })
+  return adminRequest(`/admin/users?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
     .catch(() => {}); // 204 No Content has no body — ignore parse error
 }
 
