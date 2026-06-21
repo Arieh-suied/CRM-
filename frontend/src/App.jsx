@@ -4,6 +4,7 @@ import NavTabs from './components/NavTabs/NavTabs.jsx';
 import LoginScreen from './components/LoginScreen/LoginScreen.jsx';
 import AccessDenied from './components/AccessDenied/AccessDenied.jsx';
 import { useAuth } from './contexts/AuthContext.jsx';
+import SummaryCards from './components/SummaryCards/SummaryCards.jsx';
 import FiltersBar from './components/FiltersBar/FiltersBar.jsx';
 import TransactionsTable from './components/TransactionsTable/TransactionsTable.jsx';
 import StripeDonations from './components/StripeDonations/StripeDonations.jsx';
@@ -33,7 +34,7 @@ function Dashboard({ user, signOut, role, allowedMosadim }) {
   const [institutions, setInstitutions]   = useState([]);
   const [filterOptions, setFilterOptions] = useState({ transaction_types: [], group_names: [] });
 
-  const { transactions, pagination, loading, error, loadPage } =
+  const { transactions, summary, pagination, loading, error, loadPage } =
     useTransactions(filters, sort);
 
   useEffect(() => {
@@ -76,6 +77,13 @@ function Dashboard({ user, signOut, role, allowedMosadim }) {
 
         {activeTab === 'transactions' && (
           <>
+            <SummaryCards
+              summary={summary}
+              institutions={visibleInstitutions}
+              loading={loading}
+              selectedMosad={filters.mosad_number}
+              onSelectMosad={(mosad_number) => setFilters((prev) => ({ ...prev, mosad_number }))}
+            />
             <FiltersBar
               filters={filters}
               onChange={handleFiltersChange}

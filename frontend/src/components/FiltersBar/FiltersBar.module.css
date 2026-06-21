@@ -97,10 +97,7 @@
   color: var(--color-text);
   transition: border-color 0.18s;
   white-space: nowrap;
-  text-overflow: ellipsis;
-  overflow: hidden;
-  max-width: 160px;
-  flex-shrink: 1;
+  flex-shrink: 0;
 }
 
 .select:focus {
@@ -311,7 +308,7 @@
   .advanced { padding: 8px 12px 10px; }
   .searchWrap { min-width: 100%; order: -1; flex: 1 1 100%; }
   .chip { height: 36px; padding: 0 10px; }
-  .select { height: 36px; flex: 1 1 auto; max-width: none; }
+  .select { height: 36px; }
   .moreBtn { height: 36px; }
   .resetInline { height: 36px; }
 }
