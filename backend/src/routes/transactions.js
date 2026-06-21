@@ -9,8 +9,8 @@ function applyFilters(query, { mosad_number, transaction_type, group_name, date_
   if (mosad_number) query = query.eq('mosad_number', mosad_number);
   if (transaction_type) query = query.eq('transaction_type', transaction_type);
   if (group_name) query = query.eq('group_name', group_name);
-  if (date_from) query = query.gte('transaction_time_iso', date_from);
-  if (date_to) query = query.lte('transaction_time_iso', date_to + 'T23:59:59');
+  if (date_from) query = query.gte('transaction_time_parsed', date_from);
+  if (date_to) query = query.lte('transaction_time_parsed', date_to + 'T23:59:59');
   if (search) {
     query = query.or(
       `client_name.ilike.%${search}%,phone.ilike.%${search}%,email.ilike.%${search}%,external_transaction_id.ilike.%${search}%`
@@ -23,13 +23,14 @@ const SORTABLE_COLUMNS = new Set([
   'transaction_time_iso', 'client_name', 'amount',
   'transaction_type', 'group_name', 'mosad_number',
 ]);
+const SORT_COLUMN_MAP = { transaction_time_iso: 'transaction_time_parsed' };
 
 router.get('/', async (req, res) => {
   const { action, page = 1, sort_by = 'transaction_time_iso', sort_dir = 'desc', ...filters } = req.query;
 
   // ?action=summary
   if (action === 'summary') {
-    let q = supabase.from('transactions').select('amount, mosad_number, transaction_time_iso');
+    let q = supabase.from('transactions_with_parsed_time').select('amount, mosad_number, transaction_time_parsed');
     q = applyFilters(q, filters);
     const { data, error } = await q;
     if (error) return res.status(500).json({ error: error.message });
@@ -43,8 +44,8 @@ router.get('/', async (req, res) => {
     for (const row of data) {
       const amt = parseFloat(row.amount) || 0;
       const key = row.mosad_number || '__unknown__';
-      if (row.transaction_time_iso) {
-        const d = new Date(row.transaction_time_iso);
+      if (row.transaction_time_parsed) {
+        const d = new Date(row.transaction_time_parsed);
         if (d.getFullYear() === currentYear) {
           yearlyTotal += amt;
           if (d.getMonth() === currentMonth) {
@@ -79,10 +80,11 @@ router.get('/', async (req, res) => {
   }
 
   const offset = (parseInt(page) - 1) * PAGE_SIZE;
-  const column = SORTABLE_COLUMNS.has(sort_by) ? sort_by : 'transaction_time_iso';
+  const sortField = SORTABLE_COLUMNS.has(sort_by) ? sort_by : 'transaction_time_iso';
+  const column = SORT_COLUMN_MAP[sortField] ?? sortField;
 
   let query = supabase
-    .from('transactions')
+    .from('transactions_with_parsed_time')
     .select('*', { count: 'exact' })
     .order(column, { ascending: sort_dir === 'asc' })
     .range(offset, offset + PAGE_SIZE - 1);
@@ -103,8 +105,8 @@ router.get('/', async (req, res) => {
 
 router.get('/summary', async (req, res) => {
   let query = supabase
-    .from('transactions')
-    .select('amount, mosad_number, transaction_time_iso');
+    .from('transactions_with_parsed_time')
+    .select('amount, mosad_number, transaction_time_parsed');
 
   query = applyFilters(query, req.query);
 
@@ -123,8 +125,8 @@ router.get('/summary', async (req, res) => {
     const amt = parseFloat(row.amount) || 0;
     const key = row.mosad_number || '__unknown__';
 
-    if (row.transaction_time_iso) {
-      const d = new Date(row.transaction_time_iso);
+    if (row.transaction_time_parsed) {
+      const d = new Date(row.transaction_time_parsed);
       if (d.getFullYear() === currentYear) {
         yearlyTotal += amt;
         if (d.getMonth() === currentMonth) {
