@@ -1,3 +1,5 @@
+import { supabase } from '../lib/supabase.js';
+
 const BASE = '/api';
 
 async function request(path, options = {}) {
@@ -7,6 +9,44 @@ async function request(path, options = {}) {
     throw new Error(err.error || 'Request failed');
   }
   return res.json();
+}
+
+async function adminRequest(path, options = {}) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  return request(path, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(options.headers || {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+}
+
+// ── Admin user management ──────────────────────────────────────────────────────
+
+export function fetchAdminUsers() {
+  return adminRequest('/admin/users');
+}
+
+export function createAdminUser(body) {
+  return adminRequest('/admin/users', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export function updateAdminUser(id, body) {
+  return adminRequest(`/admin/users/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteAdminUser(id) {
+  return adminRequest(`/admin/users/${id}`, { method: 'DELETE' })
+    .catch(() => {}); // 204 No Content has no body — ignore parse error
 }
 
 export function fetchTransactions(params = {}) {

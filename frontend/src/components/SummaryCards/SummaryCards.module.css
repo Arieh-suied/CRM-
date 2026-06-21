@@ -1,5 +1,5 @@
 .wrapper {
-  margin-bottom: 20px;
+  margin-bottom: 14px;
 }
 
 .header {
@@ -21,7 +21,7 @@
 .grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 10px;
 }
 
 .dropdown {
@@ -123,18 +123,18 @@
 }
 
 .card {
-  flex: 1 1 calc(25% - 12px);
+  flex: 1 1 calc(25% - 10px);
   background: rgba(255, 255, 255, 0.7);
   backdrop-filter: var(--blur);
   -webkit-backdrop-filter: var(--blur);
   border: var(--glass-border);
-  border-radius: var(--radius-lg);
-  padding: 18px 20px;
+  border-radius: var(--radius);
+  padding: 12px 16px;
   box-shadow: var(--shadow-sm);
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  border-top: 3px solid var(--color-primary);
+  gap: 4px;
+  border-top: 2px solid var(--color-primary);
   transition: box-shadow 0.2s, transform 0.2s;
 }
 
@@ -159,15 +159,15 @@
 }
 
 .amount {
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 700;
   color: var(--color-primary);
-  letter-spacing: -0.5px;
+  letter-spacing: -0.4px;
 }
 
 .skeleton {
-  height: 90px;
-  border-top: 3px solid var(--color-border);
+  height: 70px;
+  border-top: 2px solid var(--color-border);
   background: linear-gradient(90deg,
     rgba(255,255,255,0.4) 25%,
     rgba(220,228,245,0.5) 50%,

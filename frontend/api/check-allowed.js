@@ -18,9 +18,17 @@ export default async function handler(req, res) {
 
   const { data } = await supabase
     .from('allowed_users')
-    .select('is_active')
+    .select('is_active, role, allowed_mosadim')
     .eq('email', user.email.trim())
     .maybeSingle();
 
-  return res.json({ allowed: data?.is_active === true });
+  if (!data?.is_active) {
+    return res.json({ allowed: false });
+  }
+
+  return res.json({
+    allowed:          true,
+    role:             data.role ?? 'viewer',
+    allowed_mosadim:  data.allowed_mosadim ?? null,
+  });
 }

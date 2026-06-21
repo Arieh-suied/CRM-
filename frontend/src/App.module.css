@@ -4,6 +4,19 @@
   flex-direction: column;
 }
 
+.loadingScreen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg);
+}
+
+.loadingText {
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
 .header {
   background: rgba(255, 255, 255, 0.6);
   backdrop-filter: var(--blur);
@@ -21,11 +34,35 @@
 .headerRight {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+}
+
+.avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.roleBadge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-primary);
+  background: rgba(79, 126, 248, 0.1);
+  border: 1px solid rgba(79, 126, 248, 0.25);
+  border-radius: 20px;
+  padding: 2px 9px;
 }
 
 .userEmail {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--color-text-muted);
 }
 
@@ -84,4 +121,5 @@
   .userEmail { display: none; }
   .title { font-size: 16px; }
   .signOutBtn { padding: 6px 12px; font-size: 12px; }
+  .roleBadge { display: none; }
 }

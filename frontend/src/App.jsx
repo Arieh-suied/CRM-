@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import styles from './App.module.css';
 import NavTabs from './components/NavTabs/NavTabs.jsx';
 import LoginScreen from './components/LoginScreen/LoginScreen.jsx';
@@ -6,7 +6,6 @@ import AccessDenied from './components/AccessDenied/AccessDenied.jsx';
 import { useAuth } from './contexts/AuthContext.jsx';
 import SummaryCards from './components/SummaryCards/SummaryCards.jsx';
 import FiltersBar from './components/FiltersBar/FiltersBar.jsx';
-import SearchBar from './components/SearchBar/SearchBar.jsx';
 import TransactionsTable from './components/TransactionsTable/TransactionsTable.jsx';
 import StripeDonations from './components/StripeDonations/StripeDonations.jsx';
 import BankTransfers from './components/BankTransfers/BankTransfers.jsx';
@@ -14,6 +13,7 @@ import { useTransactions } from './hooks/useTransactions.js';
 import { fetchInstitutions, fetchFilterOptions } from './services/api.js';
 import StandingOrders from './components/StandingOrders/StandingOrders.jsx';
 import Receipts from './components/Receipts/Receipts.jsx';
+import UserManagement from './components/UserManagement/UserManagement.jsx';
 
 const EMPTY_FILTERS = {
   mosad_number: '', transaction_type: '', group_name: '',
@@ -22,10 +22,15 @@ const EMPTY_FILTERS = {
 
 const DEFAULT_SORT = { sort_by: 'transaction_time_iso', sort_dir: 'desc' };
 
-function Dashboard({ user, signOut }) {
-  const [activeTab, setActiveTab] = useState('transactions');
-  const [filters, setFilters]     = useState(EMPTY_FILTERS);
-  const [sort, setSort]           = useState(DEFAULT_SORT);
+function UserAvatar({ email }) {
+  const initial = email ? email[0].toUpperCase() : '?';
+  return <div className={styles.avatar}>{initial}</div>;
+}
+
+function Dashboard({ user, signOut, role, allowedMosadim }) {
+  const [activeTab, setActiveTab]   = useState('transactions');
+  const [filters, setFilters]       = useState(EMPTY_FILTERS);
+  const [sort, setSort]             = useState(DEFAULT_SORT);
   const [institutions, setInstitutions]   = useState([]);
   const [filterOptions, setFilterOptions] = useState({ transaction_types: [], group_names: [] });
 
@@ -37,12 +42,14 @@ function Dashboard({ user, signOut }) {
     fetchFilterOptions().then(setFilterOptions).catch(console.error);
   }, []);
 
-  const handleFiltersChange = useCallback((newFilters) => {
-    setFilters((prev) => ({ ...prev, ...newFilters, search: prev.search }));
-  }, []);
+  // Filter institutions by what the user is allowed to see
+  const visibleInstitutions = useMemo(() => {
+    if (!allowedMosadim || allowedMosadim.length === 0) return institutions;
+    return institutions.filter((i) => allowedMosadim.includes(i.mosad_number));
+  }, [institutions, allowedMosadim]);
 
-  const handleSearch = useCallback((term) => {
-    setFilters((prev) => ({ ...prev, search: term }));
+  const handleFiltersChange = useCallback((newFilters) => {
+    setFilters((prev) => ({ ...prev, ...newFilters }));
   }, []);
 
   const handleSort = useCallback((column) => {
@@ -58,34 +65,35 @@ function Dashboard({ user, signOut }) {
       <header className={styles.header}>
         <h1 className={styles.title}>לוח עסקאות</h1>
         <div className={styles.headerRight}>
+          {role === 'admin' && <span className={styles.roleBadge}>מנהל</span>}
+          <UserAvatar email={user.email} />
           <span className={styles.userEmail}>{user.email}</span>
           <button className={styles.signOutBtn} onClick={signOut}>התנתק</button>
         </div>
       </header>
 
       <main className={styles.main}>
-        <NavTabs active={activeTab} onChange={setActiveTab} />
+        <NavTabs active={activeTab} onChange={setActiveTab} role={role} />
 
         {activeTab === 'transactions' && (
           <>
             <SummaryCards
               summary={summary}
-              institutions={institutions}
+              institutions={visibleInstitutions}
               loading={loading}
               selectedMosad={filters.mosad_number}
               onSelectMosad={(mosad_number) => setFilters((prev) => ({ ...prev, mosad_number }))}
             />
-            <SearchBar onSearch={handleSearch} />
             <FiltersBar
               filters={filters}
               onChange={handleFiltersChange}
-              institutions={institutions}
+              institutions={visibleInstitutions}
               filterOptions={filterOptions}
             />
             {error && <div className={styles.error}>שגיאה: {error}</div>}
             <TransactionsTable
               transactions={transactions}
-              institutions={institutions}
+              institutions={visibleInstitutions}
               loading={loading}
               pagination={pagination}
               sort={sort}
@@ -95,28 +103,31 @@ function Dashboard({ user, signOut }) {
           </>
         )}
 
-        {activeTab === 'stripe' && <StripeDonations />}
-        {activeTab === 'bank' && <BankTransfers institutions={institutions} />}
-        {activeTab === 'keva' && <StandingOrders institutions={institutions} />}
-        {activeTab === 'receipts' && <Receipts />}
+        {activeTab === 'stripe'    && <StripeDonations />}
+        {activeTab === 'bank'      && <BankTransfers institutions={visibleInstitutions} />}
+        {activeTab === 'keva'      && <StandingOrders institutions={visibleInstitutions} />}
+        {activeTab === 'receipts'  && <Receipts />}
+        {activeTab === 'users' && role === 'admin' && (
+          <UserManagement institutions={institutions} />
+        )}
       </main>
     </div>
   );
 }
 
 export default function App() {
-  const { user, isAllowed, loading, signOut } = useAuth();
+  const { user, isAllowed, role, allowedMosadim, loading, signOut } = useAuth();
 
   if (loading) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-bg)' }}>
-        <span style={{ color: 'var(--color-text-muted)', fontSize: 14 }}>טוען...</span>
+      <div className={styles.loadingScreen}>
+        <span className={styles.loadingText}>טוען...</span>
       </div>
     );
   }
 
-  if (!user) return <LoginScreen />;
+  if (!user)      return <LoginScreen />;
   if (!isAllowed) return <AccessDenied />;
 
-  return <Dashboard user={user} signOut={signOut} />;
+  return <Dashboard user={user} signOut={signOut} role={role} allowedMosadim={allowedMosadim} />;
 }

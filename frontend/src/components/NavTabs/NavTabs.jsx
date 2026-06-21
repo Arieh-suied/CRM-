@@ -8,10 +8,14 @@ const TABS = [
   { id: 'receipts',     label: 'קבלות' },
 ];
 
-export default function NavTabs({ active, onChange }) {
+const ADMIN_TAB = { id: 'users', label: 'ניהול משתמשים' };
+
+export default function NavTabs({ active, onChange, role }) {
+  const tabs = role === 'admin' ? [...TABS, ADMIN_TAB] : TABS;
+
   return (
     <div className={styles.tabs}>
-      {TABS.map((tab) => (
+      {tabs.map((tab) => (
         <button
           key={tab.id}
           className={`${styles.tab} ${active === tab.id ? styles.tabActive : ''}`}
