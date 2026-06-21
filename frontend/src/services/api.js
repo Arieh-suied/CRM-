@@ -58,13 +58,13 @@ export function fetchTransactions(params = {}) {
 
 export function fetchSummary(params = {}) {
   const qs = new URLSearchParams(
-    Object.fromEntries(Object.entries(params).filter(([, v]) => v !== '' && v != null))
+    Object.fromEntries(Object.entries({ ...params, action: 'summary' }).filter(([, v]) => v !== '' && v != null))
   ).toString();
-  return request(`/transactions/summary${qs ? '?' + qs : ''}`);
+  return request(`/transactions?${qs}`);
 }
 
 export function fetchFilterOptions() {
-  return request('/transactions/filters');
+  return request('/transactions?action=filters');
 }
 
 export function fetchInstitutions() {
