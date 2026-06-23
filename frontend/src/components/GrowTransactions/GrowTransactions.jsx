@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase.js';
+import ReceiptModal from '../ReceiptModal/ReceiptModal.jsx';
 import styles from './GrowTransactions.module.css';
 
 const PAGE_SIZE = 50;
@@ -39,6 +40,7 @@ export default function GrowTransactions() {
   const [statusFilter, setStatusFilter] = useState('');
   const [loading, setLoading] = useState(false);
   const [sort, setSort]       = useState({ col: 'created_at', dir: 'desc' });
+  const [receipt, setReceipt] = useState(null);
 
   const handleSort = useCallback((col) => {
     setSort((prev) => prev.col === col
@@ -71,6 +73,7 @@ export default function GrowTransactions() {
   useEffect(() => { load(1); }, [load]);
 
   return (
+    <>
     <div className={styles.wrapper}>
       <div className={styles.toolbar}>
         <div className={styles.searchWrap}>
@@ -108,7 +111,7 @@ export default function GrowTransactions() {
               <SortTh label="סכום"   col="payment_sum"       sort={sort} onSort={handleSort} />
               <SortTh label="אסמכתא" col="asmachta"          sort={sort} onSort={handleSort} />
               <SortTh label="סטטוס"  col="status"            sort={sort} onSort={handleSort} />
-              <SortTh label="מס' קבלה" col="ezcount_doc_number" sort={sort} onSort={handleSort} />
+              <th>קבלה</th>
               <th>שגיאה</th>
             </tr>
           </thead>
@@ -125,7 +128,20 @@ export default function GrowTransactions() {
                 <td className={styles.amount}>{fmt(row.payment_sum)}</td>
                 <td className={styles.muted}>{row.asmachta ?? '—'}</td>
                 <td><StatusBadge status={row.status} /></td>
-                <td className={styles.muted}>{row.ezcount_doc_number ?? '—'}</td>
+                <td>
+                  {row.ezcount_response?.pdf_link
+                    ? <button
+                        className={styles.receiptLink}
+                        onClick={() => setReceipt({
+                          url: row.ezcount_response.pdf_link,
+                          title: `קבלה ${row.ezcount_doc_number ?? ''} — ${row.full_name ?? ''}`,
+                        })}
+                      >
+                        קבלה
+                      </button>
+                    : <span className={styles.muted}>—</span>
+                  }
+                </td>
                 <td className={styles.note}>
                   {row.status === 'failed'
                     ? (row.ezcount_response?.error || row.ezcount_response?.errMsg || 'שגיאה לא ידועה')
@@ -145,5 +161,14 @@ export default function GrowTransactions() {
         </div>
       </div>
     </div>
+
+    {receipt && (
+      <ReceiptModal
+        url={receipt.url}
+        title={receipt.title}
+        onClose={() => setReceipt(null)}
+      />
+    )}
+    </>
   );
 }

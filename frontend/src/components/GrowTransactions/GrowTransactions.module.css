@@ -132,6 +132,25 @@
   white-space: nowrap;
 }
 
+.receiptLink {
+  color: var(--color-primary);
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 12px;
+  padding: 3px 10px;
+  background: rgba(79,126,248,0.08);
+  border-radius: 20px;
+  transition: background 0.15s;
+  white-space: nowrap;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.receiptLink:hover {
+  background: rgba(79,126,248,0.16);
+}
+
 .badgeSuccess  { background: rgba(56,161,105,0.12); color: #276749; }
 .badgeFailed   { background: rgba(229,62,62,0.12);  color: #9b2c2c; }
 .badgeReceived { background: rgba(214,158,46,0.15); color: #744210; }
