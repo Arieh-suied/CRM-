@@ -8,6 +8,22 @@ const EZ_DOC_TYPE = 405; // קבלה לתרומה
 const EZ_ITEM_DETAILS = 'תרומה';
 const EZ_PAYMENT_TYPE_CREDIT_CARD = 3;
 
+const CC_TYPE_BY_BRAND = {
+  isracard: 1,
+  cal: 2,
+  visacal: 2,
+  diners: 3,
+  amex: 4,
+  americanexpress: 4,
+  visa: 5,
+  mastercard: 6,
+};
+
+function ccTypeFromBrand(brand) {
+  const key = String(brand || '').toLowerCase().replace(/\s+/g, '');
+  return CC_TYPE_BY_BRAND[key] ?? 5; // default to Visa if Grow sends an unrecognized brand
+}
+
 function normalizeDate(d) {
   if (!d) return undefined;
   const s = String(d).trim();
@@ -25,6 +41,17 @@ async function createEzcountReceipt(payload) {
   const apiKey = process.env.EZCOUNT_API_KEY;
   if (!apiKey) throw new Error('Missing env var: EZCOUNT_API_KEY');
 
+  const numPayments = parseInt(payload.allPaymentNum, 10) || 1;
+
+  const payment = {
+    payment_type: EZ_PAYMENT_TYPE_CREDIT_CARD,
+    payment_sum: Number(payload.paymentSum),
+    cc_type: ccTypeFromBrand(payload.cardBrand),
+    cc_number: payload.cardSuffix || '',
+    cc_deal_type: numPayments > 1 ? 2 : 1,
+  };
+  if (numPayments > 1) payment.cc_num_of_payments = numPayments;
+
   const ezPayload = {
     api_key: apiKey,
     type: EZ_DOC_TYPE,
@@ -33,10 +60,11 @@ async function createEzcountReceipt(payload) {
     customer_email: payload.payerEmail || '',
     forceItemsIntoNonItemsDocument: true,
     item: [{ details: EZ_ITEM_DETAILS, amount: '1', price: Number(payload.paymentSum) }],
-    payment: [{ payment_type: EZ_PAYMENT_TYPE_CREDIT_CARD, payment_sum: Number(payload.paymentSum) }],
+    payment: [payment],
     comment: [payload.paymentDesc, payload.asmachta ? `אסמכתא: ${payload.asmachta}` : null]
       .filter(Boolean).join(' | '),
   };
+  if (payload.transactionCode) ezPayload.transaction_id = payload.transactionCode;
   const issueDate = normalizeDate(payload.paymentDate);
   if (issueDate) ezPayload.date = issueDate;
   if (payload.invoiceLicenseNumber) ezPayload.customer_crn = payload.invoiceLicenseNumber;
@@ -55,7 +83,7 @@ export default async function handler(req, res) {
   const {
     transactionCode, paymentSum, paymentType, paymentDate,
     asmachta, paymentDesc, fullName, payerPhone, payerEmail,
-    cardSuffix, cardBrand, paymentSource,
+    cardSuffix, cardBrand, paymentSource, allPaymentNum,
   } = req.body || {};
 
   if (!transactionCode) {
@@ -106,7 +134,8 @@ export default async function handler(req, res) {
     let ezData;
     try {
       ezData = await createEzcountReceipt({
-        paymentSum, paymentDate, fullName, payerPhone, payerEmail, paymentDesc, asmachta,
+        transactionCode, paymentSum, paymentDate, fullName, payerPhone, payerEmail, paymentDesc, asmachta,
+        cardSuffix, cardBrand, allPaymentNum,
         invoiceLicenseNumber: req.body?.invoiceLicenseNumber,
       });
     } catch (ezErr) {
