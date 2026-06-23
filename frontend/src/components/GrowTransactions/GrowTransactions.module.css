@@ -1,0 +1,183 @@
+.wrapper {
+  background: rgba(255,255,255,0.7);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border: var(--glass-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--color-border);
+  flex-wrap: wrap;
+}
+
+.searchWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  max-width: 380px;
+}
+
+.searchIcon {
+  position: absolute;
+  right: 12px;
+  width: 15px;
+  height: 15px;
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+.search {
+  width: 100%;
+  padding: 8px 36px 8px 32px;
+  border: var(--glass-border);
+  border-radius: var(--radius);
+  background: rgba(255,255,255,0.6);
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--color-text);
+  transition: border-color 0.2s;
+}
+
+.search:focus {
+  outline: none;
+  border-color: rgba(79,126,248,0.5);
+}
+
+.clearBtn {
+  position: absolute;
+  left: 8px;
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.select {
+  height: 36px;
+  padding: 0 10px;
+  border: var(--glass-border);
+  border-radius: var(--radius);
+  background: rgba(255,255,255,0.6);
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--color-text);
+}
+
+.count {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  margin-right: auto;
+}
+
+.tableWrap { overflow-x: auto; }
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.table thead {
+  background: rgba(238,240,247,0.6);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.table th {
+  padding: 11px 14px;
+  text-align: right;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.sortable { transition: color 0.15s; }
+.sortable:hover { color: var(--color-primary); }
+.sortIcon { font-size: 10px; }
+
+.table td {
+  padding: 11px 14px;
+  border-bottom: 1px solid rgba(200,210,230,0.3);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.table tbody tr:last-child td { border-bottom: none; }
+.table tbody tr:hover { background: rgba(79,126,248,0.03); }
+
+.name   { font-weight: 500; }
+.date   { color: var(--color-text-muted); font-size: 12px; }
+.muted  { color: var(--color-text-muted); font-size: 12px; }
+.amount { font-weight: 700; color: var(--color-success); }
+.note   { color: var(--color-danger, #c53030); font-size: 12px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+
+.badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.badgeSuccess  { background: rgba(56,161,105,0.12); color: #276749; }
+.badgeFailed   { background: rgba(229,62,62,0.12);  color: #9b2c2c; }
+.badgeReceived { background: rgba(214,158,46,0.15); color: #744210; }
+
+.center {
+  text-align: center;
+  padding: 48px;
+  color: var(--color-text-muted);
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-top: 1px solid var(--color-border);
+  background: rgba(238,240,247,0.4);
+}
+
+.paginationInfo { font-size: 13px; color: var(--color-text-muted); }
+.paginationBtns { display: flex; gap: 8px; }
+
+.pageBtn {
+  padding: 6px 14px;
+  border: var(--glass-border);
+  border-radius: 20px;
+  background: rgba(255,255,255,0.7);
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.pageBtn:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.pageBtn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+@media (max-width: 640px) {
+  .toolbar { padding: 12px 14px; gap: 8px; }
+  .searchWrap { max-width: 100%; flex: 1 1 100%; }
+  .select { height: 44px; flex: 1 1 calc(50% - 4px); }
+  .count { width: 100%; margin-right: 0; }
+  .pageBtn { padding: 10px 16px; min-height: 44px; }
+  .pagination { flex-wrap: wrap; gap: 8px; }
+}

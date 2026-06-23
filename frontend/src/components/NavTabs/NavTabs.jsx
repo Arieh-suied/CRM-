@@ -6,6 +6,7 @@ const TABS = [
   { id: 'stripe',       label: 'Stripe' },
   { id: 'bank',         label: 'העברות בנקאיות' },
   { id: 'keva',         label: 'הוראות קבע' },
+  { id: 'grow',         label: 'Grow' },
   { id: 'receipts',     label: 'קבלות' },
 ];
 

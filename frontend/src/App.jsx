@@ -13,6 +13,7 @@ import { useTransactions } from './hooks/useTransactions.js';
 import { fetchInstitutions, fetchFilterOptions } from './services/api.js';
 import StandingOrders from './components/StandingOrders/StandingOrders.jsx';
 import Receipts from './components/Receipts/Receipts.jsx';
+import GrowTransactions from './components/GrowTransactions/GrowTransactions.jsx';
 import UserManagement from './components/UserManagement/UserManagement.jsx';
 
 const EMPTY_FILTERS = {
@@ -107,6 +108,7 @@ function Dashboard({ user, signOut, role, allowedMosadim }) {
         {activeTab === 'bank'      && <BankTransfers institutions={visibleInstitutions} />}
         {activeTab === 'keva'      && <StandingOrders institutions={visibleInstitutions} />}
         {activeTab === 'receipts'  && <Receipts />}
+        {activeTab === 'grow'      && <GrowTransactions />}
         {activeTab === 'users' && role === 'admin' && (
           <UserManagement institutions={institutions} />
         )}
