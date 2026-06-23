@@ -13,9 +13,11 @@ function normalizeDate(d) {
   const s = String(d).trim();
   if (!s) return undefined;
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  if (/^\d{2}\/\d{2}\/(\d{2}|\d{4})$/.test(s)) return s;
   const m = s.match(/^(\d{1,2})[.\-\/](\d{1,2})[.\-\/](\d{2}|\d{4})$/);
-  if (m) return `${m[1].padStart(2, '0')}/${m[2].padStart(2, '0')}/${m[3]}`;
+  if (m) {
+    const year = m[3].length === 2 ? `20${m[3]}` : m[3];
+    return `${m[1].padStart(2, '0')}/${m[2].padStart(2, '0')}/${year}`;
+  }
   return s;
 }
 
