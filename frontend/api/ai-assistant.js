@@ -60,34 +60,60 @@ const QUERYABLE_TABLES = {
   },
 };
 
-const TOOLS = [{
-  type: 'function',
-  function: {
-    name: 'query_data',
-    description: 'מחפש ומחזיר רשומות מטבלת נתונים מאושרת ב-CRM. טבלאות זמינות:\n' +
-      Object.entries(QUERYABLE_TABLES).map(([key, cfg]) => `- ${key}: ${cfg.description}`).join('\n') +
-      '\nיש להשתמש בכלי הזה בכל פעם שהשאלה דורשת נתון אמיתי (תורם, תרומה, סכום, תאריך, קבלה, מוסד וכו׳).',
-    parameters: {
-      type: 'object',
-      properties: {
-        table: { type: 'string', enum: Object.keys(QUERYABLE_TABLES) },
-        search: { type: 'string', description: 'מחרוזת חיפוש חופשית (למשל שם תורם) שתיבדק מול עמודות הטקסט הרלוונטיות בטבלה' },
-        mosad_number: { type: 'string', description: 'סינון לפי מספר מוסד, אם רלוונטי לטבלה ולשאלה' },
-        date_from: { type: 'string', description: 'תאריך מינימלי בפורמט YYYY-MM-DD' },
-        date_to: { type: 'string', description: 'תאריך מקסימלי בפורמט YYYY-MM-DD' },
-        limit: { type: 'integer', description: `מספר תוצאות מקסימלי (עד ${MAX_LIMIT}), ברירת מחדל ${DEFAULT_LIMIT}` },
+const TOOLS = [
+  {
+    type: 'function',
+    function: {
+      name: 'query_data',
+      description: 'מחפש ומחזיר רשומות מטבלת נתונים מאושרת ב-CRM. טבלאות זמינות:\n' +
+        Object.entries(QUERYABLE_TABLES).map(([key, cfg]) => `- ${key}: ${cfg.description}`).join('\n') +
+        '\nיש להשתמש בכלי הזה בכל פעם שהשאלה דורשת נתון אמיתי (תורם, תרומה, סכום, תאריך, קבלה, מוסד וכו׳).',
+      parameters: {
+        type: 'object',
+        properties: {
+          table: { type: 'string', enum: Object.keys(QUERYABLE_TABLES) },
+          search: { type: 'string', description: 'מחרוזת חיפוש חופשית (למשל שם תורם) שתיבדק מול עמודות הטקסט הרלוונטיות בטבלה' },
+          mosad_number: { type: 'string', description: 'סינון לפי מספר מוסד, אם רלוונטי לטבלה ולשאלה' },
+          date_from: { type: 'string', description: 'תאריך מינימלי בפורמט YYYY-MM-DD' },
+          date_to: { type: 'string', description: 'תאריך מקסימלי בפורמט YYYY-MM-DD' },
+          limit: { type: 'integer', description: `מספר תוצאות מקסימלי (עד ${MAX_LIMIT}), ברירת מחדל ${DEFAULT_LIMIT}` },
+        },
+        required: ['table'],
       },
-      required: ['table'],
     },
   },
-}];
+  {
+    type: 'function',
+    function: {
+      name: 'remember_note',
+      description: 'שומר הערה/הנחיה קבועה שתוזכר בכל שיחה עתידית עם כל המשתמשים. יש להשתמש בכלי הזה רק כשהמשתמש מבקש במפורש "זכור/תזכור..." וכדומה. הכלי פעיל רק עבור מנהל המערכת — אם המשתמש הנוכחי אינו מנהל, הקריאה תיכשל.',
+      parameters: {
+        type: 'object',
+        properties: {
+          content: { type: 'string', description: 'תוכן ההערה/ההנחיה לשמירה, בעברית, בניסוח עצמאי ומובן (לא "תזכור ש..." אלא התוכן עצמו)' },
+        },
+        required: ['content'],
+      },
+    },
+  },
+];
 
-const SYSTEM_PROMPT = `את/ה עוזר/ת AI פנימי/ת למערכת CRM של עמותות וגביית תרומות. עונה בעברית בלבד, בקצרה ולעניין.
+function buildSystemPrompt(notes, isAdmin) {
+  let prompt = `את/ה עוזר/ת AI פנימי/ת למערכת CRM של עמותות וגביית תרומות. עונה בעברית בלבד, בקצרה ולעניין.
 כשנשאלת שאלה שדורשת מידע אמיתי ממסד הנתונים (תורם, תרומה, סכום, תאריך, קבלה, מוסד וכו׳) — חובה להשתמש בכלי query_data כדי לשלוף את המידע בפועל. אסור להמציא, לשער או "לזכור" תשובה ללא שליפה בפועל.
 אם אחרי חיפוש לא נמצא מידע רלוונטי, יש לומר זאת בבירור ("לא מצאתי רשומה כזו במערכת") ולא לנחש.
 כששואלים על תרומה/פעולה "אחרונה" — יש למיין לפי תאריך מהחדש לישן ולהתייחס לרשומה הראשונה שמתקבלת.
 חיפוש לפי שם פרטי בלבד (למשל "אריה") עלול להתאים למספר אנשים שונים עם שמות משפחה שונים. אם תוצאות החיפוש מכילות יותר משם משפחה אחד מובחן עבור אותו שם פרטי, אסור לבחור אחד מהם באופן שרירותי — יש לעצור ולשאול את המשתמש לבירור (למשל "יש כמה אריה במערכת — מה שם המשפחה?"), ולציין את האפשרויות שנמצאו אם זה עוזר. רק אחרי שהמשתמש מבהיר יש להמשיך ולשלוף את התשובה הסופית.
-תאריכים בתשובה הסופית יש לכתוב בפורמט DD/MM/YYYY.`;
+תאריכים בתשובה הסופית יש לכתוב בפורמט DD/MM/YYYY.
+${isAdmin
+    ? 'המשתמש הנוכחי הוא מנהל המערכת — אם הוא מבקש ממך "תזכור ש..." או דומה, השתמש בכלי remember_note כדי לשמור את ההנחיה לשיחות עתידיות.'
+    : 'המשתמש הנוכחי אינו מנהל — אם הוא מבקש ממך לזכור משהו, הסבר בנימוס שרק מנהל המערכת יכול לבקש זאת.'}`;
+
+  if (notes?.length) {
+    prompt += `\n\nהערות קבועות שנשמרו על ידי המנהל בעבר (יש להתייחס אליהן כעובדות ידועות):\n${notes.map(n => `- ${n}`).join('\n')}`;
+  }
+  return prompt;
+}
 
 function buildQuery(supabase, args) {
   const cfg = QUERYABLE_TABLES[args?.table];
@@ -115,6 +141,45 @@ async function executeQuery(supabase, args) {
   const { data, error } = await query;
   if (error) return { error: error.message };
   return { rows: data, count: data.length };
+}
+
+async function getRequestUser(req, supabase) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) return null;
+  const token = authHeader.slice('Bearer '.length);
+  const { data: { user } } = await supabase.auth.getUser(token);
+  if (!user?.email) return null;
+
+  const { data } = await supabase
+    .from('allowed_users')
+    .select('role, is_active')
+    .eq('email', user.email.trim())
+    .maybeSingle();
+
+  if (!data?.is_active) return null;
+  return { email: user.email, role: data.role ?? 'viewer' };
+}
+
+async function loadNotes(supabase) {
+  const { data } = await supabase
+    .from('ai_assistant_notes')
+    .select('content')
+    .order('created_at', { ascending: true });
+  return (data ?? []).map(n => n.content);
+}
+
+async function executeRememberNote(supabase, args, requestUser) {
+  if (requestUser?.role !== 'admin') {
+    return { error: 'רק מנהל המערכת יכול לבקש מהעוזר לזכור דברים.' };
+  }
+  const content = (args?.content || '').trim();
+  if (!content) return { error: 'לא צוין תוכן לשמירה' };
+
+  const { error } = await supabase
+    .from('ai_assistant_notes')
+    .insert({ content, created_by: requestUser.email });
+  if (error) return { error: error.message };
+  return { success: true };
 }
 
 async function callOpenAI(messages, apiKey) {
@@ -149,12 +214,18 @@ export default async function handler(req, res) {
     }
 
     const supabase = getSupabase();
+    const requestUser = await getRequestUser(req, supabase);
+    const notes = await loadNotes(supabase);
+
     const cleanHistory = history
       .slice(-MAX_HISTORY)
       .filter(m => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
       .map(m => ({ role: m.role, content: m.content }));
 
-    const messages = [{ role: 'system', content: SYSTEM_PROMPT }, ...cleanHistory];
+    const messages = [
+      { role: 'system', content: buildSystemPrompt(notes, requestUser?.role === 'admin') },
+      ...cleanHistory,
+    ];
 
     for (let round = 0; round < MAX_ROUNDS; round++) {
       const completion = await callOpenAI(messages, apiKey);
@@ -169,7 +240,9 @@ export default async function handler(req, res) {
       for (const call of msg.tool_calls) {
         let args = {};
         try { args = JSON.parse(call.function.arguments || '{}'); } catch { /* leave empty */ }
-        const result = await executeQuery(supabase, args);
+        const result = call.function.name === 'remember_note'
+          ? await executeRememberNote(supabase, args, requestUser)
+          : await executeQuery(supabase, args);
         messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) });
       }
     }

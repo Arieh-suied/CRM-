@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import styles from './AIAssistant.module.css';
+import { supabase } from '../../lib/supabase.js';
 
 function SparkleBubbleIcon({ size = 24 }) {
   return (
@@ -52,9 +53,13 @@ export default function AIAssistant() {
     setInput('');
     setLoading(true);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers = { 'Content-Type': 'application/json' };
+      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+
       const res = await fetch('/api/ai-assistant', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ messages: history }),
       });
       const data = await res.json();
