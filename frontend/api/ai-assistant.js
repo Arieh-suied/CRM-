@@ -58,6 +58,30 @@ const QUERYABLE_TABLES = {
     order: ['mosad_name', true],
     description: 'רשימת המוסדות ומספרי המוסד שלהם',
   },
+  grow_transactions: {
+    table: 'grow_transactions',
+    select: 'full_name, payer_phone, payer_email, payment_sum, payment_date, payment_type, institution_name, asmachta, status, created_at',
+    searchColumns: ['full_name', 'payer_phone', 'payer_email', 'asmachta', 'transaction_code'],
+    dateColumn: 'created_at',
+    order: ['created_at', false],
+    description: 'תרומות שהתקבלו דרך Grow (סליקת אשראי)',
+  },
+  stripe_donations: {
+    table: 'stripe_donations_enriched',
+    select: 'resolved_name, donor_email, amount, paid_at, stripe_customer_id, stripe_payment_intent_id',
+    searchColumns: ['resolved_name', 'donor_email', 'stripe_customer_id', 'stripe_payment_intent_id'],
+    dateColumn: 'paid_at',
+    order: ['paid_at', false],
+    description: 'תרומות שהתקבלו דרך Stripe (כרטיס אשראי, כולל הוראות קבע)',
+  },
+  payment_failures: {
+    table: 'payment_failures',
+    select: 'customer_name, customer_id_number, institution_name, amount, error_reason, order_number, donor_email, donor_phone, created_at',
+    searchColumns: ['customer_name', 'institution_name', 'order_number', 'donor_email'],
+    dateColumn: 'created_at',
+    order: ['created_at', false],
+    description: 'חיובים/הוראות קבע שנכשלו',
+  },
 };
 
 const TOOLS = [
