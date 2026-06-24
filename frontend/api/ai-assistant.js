@@ -142,6 +142,19 @@ ${isAdmin
   return prompt;
 }
 
+// Builds a PostgREST .or() filter where, for multi-word searches, each word must
+// appear in the column (any order) rather than requiring the exact phrase — so
+// "אריה סוויד" and "סוויד אריה" match the same rows.
+function buildSearchFilter(words, searchColumns) {
+  if (words.length <= 1) {
+    const w = words[0] ?? '';
+    return searchColumns.map(c => `${c}.ilike.%${w}%`).join(',');
+  }
+  return searchColumns
+    .map(c => `and(${words.map(w => `${c}.ilike.%${w}%`).join(',')})`)
+    .join(',');
+}
+
 function buildQuery(supabase, args) {
   const cfg = QUERYABLE_TABLES[args?.table];
   if (!cfg) return null;
@@ -152,9 +165,9 @@ function buildQuery(supabase, args) {
     // Strip characters that are syntactically meaningful in PostgREST's .or() filter
     // mini-language (comma separates conditions, parens nest logic) so a crafted
     // search string can't inject extra filter clauses.
-    const safeSearch = String(args.search).replace(/[,()]/g, ' ').trim();
-    if (safeSearch) {
-      query = query.or(cfg.searchColumns.map(c => `${c}.ilike.%${safeSearch}%`).join(','));
+    const words = String(args.search).replace(/[,()]/g, ' ').trim().split(/\s+/).filter(Boolean);
+    if (words.length) {
+      query = query.or(buildSearchFilter(words, cfg.searchColumns));
     }
   }
   if (args.mosad_number && cfg.mosadColumn) {
