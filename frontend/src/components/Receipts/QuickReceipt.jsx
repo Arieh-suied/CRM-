@@ -124,7 +124,6 @@ export default function QuickReceipt() {
     const extras = [];
     if (data.asmachta) extras.push(`אסמכתא: ${data.asmachta}`);
     if (data.account_name && data.account_name !== nameToUse) extras.push(`שם בעל חשבון: ${data.account_name}`);
-    if (data.remarks) extras.push(data.remarks);
     if (extras.length) {
       setNotes(prev => prev.trim() ? `${prev.trim()}\n${extras.join(' | ')}` : extras.join(' | '));
     }

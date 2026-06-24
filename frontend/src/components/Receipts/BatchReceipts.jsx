@@ -93,6 +93,10 @@ export default function BatchReceipts() {
   const [idFilter, setIdFilter]       = useState('all');
   const [sortBy, setSortBy]           = useState('name');
 
+  // Name autocomplete (per entry row)
+  const [nameSuggestions, setNameSuggestions]     = useState({});
+  const [activeSuggestId, setActiveSuggestId]     = useState(null);
+
   // Checkpoint
   const [checkpoint, setCheckpoint]   = useState(null);
   const [showCpForm, setShowCpForm]   = useState(false);
@@ -269,7 +273,6 @@ export default function BatchReceipts() {
         const nameUncertain = !data.donor_name && !!data.account_name;
 
         const notesParts = [];
-        if (data.remarks) notesParts.push(data.remarks);
         if (data.account_name && data.account_name !== nameToUse) notesParts.push(`שם בעל חשבון: ${data.account_name}`);
 
         inserts.push({
@@ -315,6 +318,25 @@ export default function BatchReceipts() {
     const dbVal = value === '' ? null : value;
     await supabase.from('pending_receipts').update({ [field]: dbVal }).eq('id', id);
     setEntries(prev => prev.map(e => e.id === id ? { ...e, [field]: dbVal } : e));
+  };
+
+  const searchNameSuggestions = useCallback(async (entryId, q) => {
+    if (q.length < 2) { setNameSuggestions(prev => ({ ...prev, [entryId]: [] })); return; }
+    const { data } = await supabase.from('customers')
+      .select('*')
+      .or(`name.ilike.%${q}%,bank_account.ilike.%${q}%,id_number.ilike.%${q}%`)
+      .limit(6);
+    setNameSuggestions(prev => ({ ...prev, [entryId]: data || [] }));
+  }, []);
+
+  const applyNameSuggestion = async (entry, customer) => {
+    const patch = { customer_name: customer.name };
+    if (!entry.customer_id?.trim()    && customer.id_number) patch.customer_id    = customer.id_number;
+    if (!entry.customer_email?.trim() && customer.email)     patch.customer_email = customer.email;
+    await supabase.from('pending_receipts').update(patch).eq('id', entry.id);
+    setEntries(prev => prev.map(e => e.id === entry.id ? { ...e, ...patch } : e));
+    setNameSuggestions(prev => ({ ...prev, [entry.id]: [] }));
+    setActiveSuggestId(null);
   };
 
   const deleteEntry = async (id) => {
@@ -545,7 +567,7 @@ export default function BatchReceipts() {
                 <input type="checkbox" className={styles.checkbox} style={{ marginTop: 4 }}
                   checked={selectedIds.has(entry.id)}
                   onChange={() => setSelectedIds(prev => { const n = new Set(prev); n.has(entry.id) ? n.delete(entry.id) : n.add(entry.id); return n; })} />
-                <div style={{ flex: 1 }}>
+                <div style={{ flex: 1, position: 'relative' }}>
                   <div className={styles.entryMeta}>
                     <span>שם</span>
                     {entry.created_at && <span>נוסף: {new Date(entry.created_at).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>}
@@ -554,9 +576,25 @@ export default function BatchReceipts() {
                     defaultValue={entry.customer_name || ''}
                     className={styles.inlineInput}
                     placeholder="שם לקוח"
-                    onBlur={e => updateField(entry.id, 'customer_name', e.target.value.trim())}
+                    onChange={e => searchNameSuggestions(entry.id, e.target.value)}
+                    onFocus={() => setActiveSuggestId(entry.id)}
+                    onBlur={e => { updateField(entry.id, 'customer_name', e.target.value.trim()); setTimeout(() => setActiveSuggestId(null), 150); }}
                     onKeyDown={e => e.key === 'Enter' && e.target.blur()}
                   />
+                  {activeSuggestId === entry.id && (nameSuggestions[entry.id]?.length > 0) && (
+                    <div className={styles.autocompleteDropdown}>
+                      {nameSuggestions[entry.id].map(c => (
+                        <div key={c.id} className={styles.autocompleteItem}
+                          onMouseDown={e => e.preventDefault()}
+                          onClick={() => applyNameSuggestion(entry, c)}>
+                          <div className={styles.autocompleteItemName}>{c.name}</div>
+                          <div className={styles.autocompleteItemSub}>
+                            {[c.id_number, c.bank_account, c.email].filter(Boolean).join(' · ')}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   {uncertainNameIds.has(entry.id) && (
                     <div style={{ fontSize: 11, color: '#744210', marginTop: 4 }}>
                       ⚠ שם לא מאומת מהצילום (שם בעל החשבון) - יש לבדוק
