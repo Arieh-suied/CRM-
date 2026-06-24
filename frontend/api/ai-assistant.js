@@ -84,14 +84,31 @@ const QUERYABLE_TABLES = {
   },
 };
 
+const PERSON_TABLE_KEYS = Object.keys(QUERYABLE_TABLES).filter(k => k !== 'institutions');
+
 const TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'search_person',
+      description: `מחפש אדם/תורם לפי שם בכל הטבלאות הרלוונטיות בבת אחת (${PERSON_TABLE_KEYS.join(', ')}) ומחזיר את כל ההתאמות מכולן, מקובצות לפי טבלה. זה הכלי שיש להשתמש בו (לא query_data) לכל שאלה על תורם/תרומה לפי שם — הוא מבטיח כיסוי מלא של כל המקורות בקריאה אחת, כדי שלא יוחמץ תורם שמופיע רק בחלק מהטבלאות.`,
+      parameters: {
+        type: 'object',
+        properties: {
+          search: { type: 'string', description: 'שם או חלק משם לחיפוש (מילים בכל סדר יתאימו)' },
+          limit_per_table: { type: 'integer', description: `מספר תוצאות מקסימלי לכל טבלה (עד ${MAX_LIMIT}), ברירת מחדל ${DEFAULT_LIMIT}` },
+        },
+        required: ['search'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'query_data',
-      description: 'מחפש ומחזיר רשומות מטבלת נתונים מאושרת ב-CRM. טבלאות זמינות:\n' +
+      description: 'מחפש ומחזיר רשומות מטבלת נתונים מאושרת אחת ב-CRM (לדוגמה סינון לפי מוסד/טווח תאריכים, או רשימת מוסדות). טבלאות זמינות:\n' +
         Object.entries(QUERYABLE_TABLES).map(([key, cfg]) => `- ${key}: ${cfg.description}`).join('\n') +
-        '\nיש להשתמש בכלי הזה בכל פעם שהשאלה דורשת נתון אמיתי (תורם, תרומה, סכום, תאריך, קבלה, מוסד וכו׳).',
+        '\nלחיפוש תורם/אדם לפי שם יש להשתמש בכלי search_person ולא בכלי הזה, כי הוא בודק רק טבלה אחת בכל קריאה.',
       parameters: {
         type: 'object',
         properties: {
@@ -124,13 +141,13 @@ const TOOLS = [
 
 function buildSystemPrompt(notes, isAdmin) {
   let prompt = `את/ה עוזר/ת AI פנימי/ת למערכת CRM של עמותות וגביית תרומות. עונה בעברית בלבד, בקצרה ולעניין.
-כשנשאלת שאלה שדורשת מידע אמיתי ממסד הנתונים (תורם, תרומה, סכום, תאריך, קבלה, מוסד וכו׳) — חובה להשתמש בכלי query_data כדי לשלוף את המידע בפועל. אסור להמציא, לשער או "לזכור" תשובה ללא שליפה בפועל.
-תורם יכול להופיע בכל אחת מהטבלאות הזמינות (transactions, customers, issued_receipts, bank_transfers, pending_receipts, grow_transactions, stripe_donations, payment_failures) — לא רק ב-transactions. אסור להכריז "לא מצאתי" אחרי בדיקת טבלה אחת בלבד. כשמחפשים אדם לפי שם, יש לבדוק לפחות את transactions, customers, issued_receipts, bank_transfers, grow_transactions ו-stripe_donations (ניתן וכדאי לקרוא לכלי query_data כמה פעמים במקביל באותה תשובה, אחת לכל טבלה) לפני שמסכמים שלא נמצאה התאמה בשום מקום.
-אם חיפוש לפי שם החזיר 0 תוצאות בכל הטבלאות שנבדקו, לפני שמודיעים שלא נמצא — יש לבדוק אם ייתכן שמילת חיבור דבוקה בלי רווח בתחילת השם שהמשתמש כתב (למשל "ויצחק" במקום "יצחק", כתוצאה מהעתקה מתשובה קודמת שהכילה "...או יצחק") ולנסות שוב חיפוש עם השם בלי האות הדבוקה. רק אם גם זה לא מחזיר תוצאות בשום טבלה, יש לומר בבירור ("לא מצאתי רשומה כזו במערכת") ולא לנחש.
-חיפוש לפי שם פרטי בלבד (למשל "אריה" או "יצחק") עלול להתאים למספר אנשים שונים עם שמות משפחה שונים. לכן, בכל חיפוש לפי שם — חובה לבדוק קודם אם יש כמה אנשים מתאימים, ורק אז להמשיך:
-1. בקריאה הראשונה לכלי query_data עבור חיפוש לפי שם, אסור להגביל ל-limit=1 (גם אם השאלה היא על "פעם אחרונה") — יש להשתמש בברירת המחדל של הכלי כדי לראות את כל האנשים שתואמים לשם, ולבדוק כמה שמות משפחה/מזהים מובחנים מופיעים.
-2. אם נמצא יותר משם משפחה אחד מובחן עבור אותו שם פרטי — בין אם בטבלה אחת או בצבירה מכל הטבלאות שנבדקו — אסור לבחור אחד מהם באופן שרירותי. יש לעצור ולשאול את המשתמש לבירור (למשל "יש כמה אריה במערכת — מה שם המשפחה?"), ולהציג את האפשרויות שנמצאו כרשימה ממוספרת (1. 2. 3. ...) — לא כמשפט רץ עם "או"/"ו-" בין השמות, כדי שאם המשתמש יעתיק שם מהרשימה הוא לא ידביק בטעות מילת חיבור.
-3. רק אם נמצא אדם מובחן אחד (או אחרי שהמשתמש הבהיר למי הוא מתכוון) — ניתן למיין את התוצאות שלו לפי תאריך מהחדש לישן ולהתייחס לרשומה הראשונה כ"האחרונה".
+כשנשאלת שאלה שדורשת מידע אמיתי ממסד הנתונים (תורם, תרומה, סכום, תאריך, קבלה, מוסד וכו׳) — חובה להשתמש בכלים (search_person או query_data) כדי לשלוף את המידע בפועל. אסור להמציא, לשער או "לזכור" תשובה ללא שליפה בפועל.
+לכל שאלה על תורם/אדם לפי שם (כולל "מתי X תרם בפעם האחרונה", "האם X תרם", וכו׳) — יש להשתמש בכלי search_person, שבודק בקריאה אחת את כל הטבלאות הרלוונטיות. אסור להכריז "לא מצאתי" בלי להשתמש בו קודם.
+אם search_person החזיר 0 תוצאות בכל הטבלאות, לפני שמודיעים שלא נמצא — יש לבדוק אם ייתכן שמילת חיבור דבוקה בלי רווח בתחילת השם שהמשתמש כתב (למשל "ויצחק" במקום "יצחק", כתוצאה מהעתקה מתשובה קודמת שהכילה "...או יצחק") ולנסות שוב עם השם בלי האות הדבוקה. רק אם גם זה לא מחזיר תוצאות, יש לומר בבירור ("לא מצאתי רשומה כזו במערכת") ולא לנחש.
+חיפוש לפי שם פרטי בלבד (למשל "אריה" או "יצחק") עלול להתאים למספר אנשים שונים עם שמות משפחה שונים. אחרי קריאה ל-search_person, יש לבדוק את כל התוצאות מכל הטבלאות יחד:
+1. אם עולה יותר משם משפחה/מזהה מובחן אחד עבור אותו שם פרטי — אסור לבחור אחד מהם באופן שרירותי. יש לעצור ולשאול את המשתמש לבירור (למשל "יש כמה אריה במערכת — מה שם המשפחה?"), ולהציג את האפשרויות כרשימה ממוספרת (1. 2. 3. ...) — לא כמשפט רץ עם "או"/"ו-" בין השמות, כדי שאם המשתמש יעתיק שם מהרשימה הוא לא ידביק בטעות מילת חיבור.
+2. רק אם נמצא אדם מובחן אחד (או אחרי שהמשתמש הבהיר למי הוא מתכוון) — ניתן למיין את כל התוצאות שלו (מכל הטבלאות) לפי תאריך מהחדש לישן ולהתייחס לרשומה הראשונה כ"האחרונה".
+לבדיקות שאינן לפי שם (סינון לפי מוסד/טווח תאריכים, רשימת מוסדות וכו׳) יש להשתמש בכלי query_data.
 תאריכים בתשובה הסופית יש לכתוב בפורמט DD/MM/YYYY.
 ${isAdmin
     ? 'המשתמש הנוכחי הוא מנהל המערכת — אם הוא מבקש ממך "תזכור ש..." או דומה, השתמש בכלי remember_note כדי לשמור את ההנחיה לשיחות עתידיות.'
@@ -187,6 +204,26 @@ async function executeQuery(supabase, args) {
   const { data, error } = await query;
   if (error) return { error: error.message };
   return { rows: data, count: data.length };
+}
+
+async function executeSearchPerson(supabase, args) {
+  const words = String(args?.search || '').replace(/[,()]/g, ' ').trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return { error: 'לא צוין שם לחיפוש' };
+  const limit = Math.min(Math.max(parseInt(args.limit_per_table, 10) || DEFAULT_LIMIT, 1), MAX_LIMIT);
+
+  const entries = await Promise.all(PERSON_TABLE_KEYS.map(async (key) => {
+    const cfg = QUERYABLE_TABLES[key];
+    const [orderCol, ascending] = cfg.order;
+    const { data, error } = await supabase
+      .from(cfg.table)
+      .select(cfg.select)
+      .or(buildSearchFilter(words, cfg.searchColumns))
+      .order(orderCol, { ascending, nullsLast: true })
+      .limit(limit);
+    return [key, error ? { error: error.message } : { rows: data, count: data.length }];
+  }));
+
+  return Object.fromEntries(entries);
 }
 
 async function getRequestUser(req, supabase) {
@@ -291,6 +328,8 @@ export default async function handler(req, res) {
         try { args = JSON.parse(call.function.arguments || '{}'); } catch { /* leave empty */ }
         const result = call.function.name === 'remember_note'
           ? await executeRememberNote(supabase, args, requestUser)
+          : call.function.name === 'search_person'
+          ? await executeSearchPerson(supabase, args)
           : await executeQuery(supabase, args);
         messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) });
       }
