@@ -56,12 +56,6 @@ export function fetchTransactions(params = {}) {
   return request(`/transactions${qs ? '?' + qs : ''}`);
 }
 
-export function fetchSummary(params = {}) {
-  const qs = new URLSearchParams(
-    Object.fromEntries(Object.entries({ ...params, action: 'summary' }).filter(([, v]) => v !== '' && v != null))
-  ).toString();
-  return request(`/transactions?${qs}`);
-}
 
 export function fetchFilterOptions() {
   return request('/transactions?action=filters');

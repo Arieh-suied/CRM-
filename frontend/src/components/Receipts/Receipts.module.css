@@ -528,62 +528,6 @@
   color: var(--color-text);
 }
 
-/* ── Masav / Reconciliation ──────────────────────────────────────── */
-.reconTabs {
-  display: flex;
-  gap: 4px;
-  padding: 14px 18px 0;
-}
-
-.reconTab {
-  padding: 7px 16px;
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  font-size: 13px;
-  font-family: inherit;
-  font-weight: 500;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  margin-bottom: -1px;
-  transition: all 0.12s;
-}
-
-.reconTab:hover { color: var(--color-text); }
-
-.reconTabActive {
-  color: var(--color-primary);
-  border-bottom-color: var(--color-primary);
-}
-
-.statCards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-  gap: 12px;
-  margin-bottom: 18px;
-}
-
-.statCard {
-  background: rgba(255,255,255,0.8);
-  border: var(--glass-border);
-  border-radius: var(--radius);
-  padding: 14px 16px;
-  text-align: center;
-}
-
-.statValue {
-  font-size: 24px;
-  font-weight: 800;
-  color: var(--color-text);
-  line-height: 1.2;
-}
-
-.statLabel {
-  font-size: 11px;
-  color: var(--color-text-muted);
-  margin-top: 3px;
-}
-
 /* ── Last receipt bar ────────────────────────────────────────────── */
 .lastReceiptBar {
   background: rgba(238,240,247,0.5);
@@ -657,5 +601,4 @@
   .filterBtns { overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
   .filterBtns::-webkit-scrollbar { display: none; }
   .filterBtn { flex-shrink: 0; min-height: 36px; padding: 6px 14px; }
-  .statCards { grid-template-columns: 1fr 1fr; }
 }

@@ -2,12 +2,10 @@ import { useState } from 'react';
 import styles from './Receipts.module.css';
 import QuickReceipt from './QuickReceipt.jsx';
 import BatchReceipts from './BatchReceipts.jsx';
-import Reconciliation from './Reconciliation.jsx';
 
 const VIEWS = [
   { id: 'quick',   label: 'קבלה מהירה' },
   { id: 'batch',   label: 'העלאת העברות' },
-  { id: 'masav',   label: 'הצלבת מסב' },
 ];
 
 export default function Receipts() {
@@ -30,7 +28,6 @@ export default function Receipts() {
       <div style={{ padding: '20px 18px' }}>
         {view === 'quick' && <QuickReceipt />}
         {view === 'batch' && <BatchReceipts />}
-        {view === 'masav' && <Reconciliation />}
       </div>
     </div>
   );
