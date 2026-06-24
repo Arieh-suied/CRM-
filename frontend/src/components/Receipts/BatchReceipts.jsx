@@ -53,6 +53,14 @@ function parseDate(val) {
   return String(val);
 }
 
+function isoToDmy(iso) {
+  if (!iso) return null;
+  const m = String(iso).trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return iso;
+  const [, y, mo, d] = m;
+  return `${d}/${mo}/${y}`;
+}
+
 function normalizeName(name = '') {
   return name.trim().toLowerCase()
     .replace(/\s+/g, ' ')
@@ -272,7 +280,7 @@ export default function BatchReceipts() {
           bank_branch: data.branch_number || null,
           bank_account: data.account_number || null,
           amount: data.amount ?? null,
-          transfer_date: data.transfer_date || null,
+          transfer_date: isoToDmy(data.transfer_date),
           reference_number: data.asmachta || null,
           notes: notesParts.length ? notesParts.join(' | ') : null,
           branch: '',
