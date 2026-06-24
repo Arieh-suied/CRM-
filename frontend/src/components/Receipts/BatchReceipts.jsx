@@ -286,7 +286,8 @@ export default function BatchReceipts() {
           transfer_date: isoToDmy(data.transfer_date),
           reference_number: data.asmachta || null,
           notes: notesParts.length ? notesParts.join(' | ') : null,
-          branch: '',
+          // Discount Bank's "מחויב" confirmation screen always belongs to חכמי ירושלים
+          branch: data.is_discount_chachmei_screen ? 'חכמי ירושלים' : '',
           status: 'pending',
         });
         uncertainFlags.push(nameUncertain);
@@ -340,6 +341,7 @@ export default function BatchReceipts() {
   };
 
   const deleteEntry = async (id) => {
+    if (!confirm('למחוק את ההעברה הזו?')) return;
     await supabase.from('pending_receipts').delete().eq('id', id);
     setEntries(prev => prev.filter(e => e.id !== id));
   };

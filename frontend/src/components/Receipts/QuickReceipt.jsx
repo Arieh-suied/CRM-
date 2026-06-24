@@ -104,6 +104,9 @@ export default function QuickReceipt() {
     setPayments(prev => prev.map(p => p.id === id ? { ...p, [field]: val } : p));
 
   const handleExtracted = (data) => {
+    // Discount Bank's "מחויב" confirmation screen always belongs to חכמי ירושלים
+    if (data.is_discount_chachmei_screen) setBranch('חכמי ירושלים');
+
     // Prefer donor_name; fall back to account_name (uncertain — flagged in the upload component) so the field isn't left empty
     const nameToUse = data.donor_name || data.account_name;
     if (nameToUse && !name.trim()) {
