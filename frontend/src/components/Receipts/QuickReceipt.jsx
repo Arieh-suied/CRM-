@@ -104,9 +104,11 @@ export default function QuickReceipt() {
     setPayments(prev => prev.map(p => p.id === id ? { ...p, [field]: val } : p));
 
   const handleExtracted = (data) => {
-    if (data.donor_name && !name.trim()) {
-      setName(data.donor_name);
-      searchCustomers(data.donor_name);
+    // Prefer donor_name; fall back to account_name (uncertain — flagged in the upload component) so the field isn't left empty
+    const nameToUse = data.donor_name || data.account_name;
+    if (nameToUse && !name.trim()) {
+      setName(nameToUse);
+      searchCustomers(nameToUse);
     }
     setPayments(prev => {
       const updated = [...prev];
@@ -120,9 +122,9 @@ export default function QuickReceipt() {
       return updated;
     });
     const extras = [];
-    if (data.asmachta)     extras.push(`אסמכתא: ${data.asmachta}`);
-    if (data.account_name) extras.push(`שם בעל חשבון: ${data.account_name}`);
-    if (data.remarks)      extras.push(data.remarks);
+    if (data.asmachta) extras.push(`אסמכתא: ${data.asmachta}`);
+    if (data.account_name && data.account_name !== nameToUse) extras.push(`שם בעל חשבון: ${data.account_name}`);
+    if (data.remarks) extras.push(data.remarks);
     if (extras.length) {
       setNotes(prev => prev.trim() ? `${prev.trim()}\n${extras.join(' | ')}` : extras.join(' | '));
     }

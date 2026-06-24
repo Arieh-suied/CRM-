@@ -94,7 +94,12 @@ export default function TransferScreenshotUpload({ onExtracted }) {
     if (fileRef.current) fileRef.current.value = '';
   };
 
-  const missing = result ? REQUIRED_FIELDS.filter(f => result[f.key] == null) : [];
+  const nameUncertain = !!result && !result.donor_name && !!result.account_name;
+
+  const missing = result ? REQUIRED_FIELDS.filter(f => {
+    if (f.key === 'donor_name') return !result.donor_name && !result.account_name;
+    return result[f.key] == null;
+  }) : [];
 
   return (
     <div className={styles.card}>
@@ -140,6 +145,11 @@ export default function TransferScreenshotUpload({ onExtracted }) {
       {result && (
         <div className={styles.successMsg} style={{ marginTop: 12, marginBottom: 0 }}>
           <div>הנתונים שזוהו מולאו בטופס למטה — יש לבדוק ולתקן לפני הפקת הקבלה.</div>
+          {nameUncertain && (
+            <div style={{ marginTop: 6, color: '#744210' }}>
+              ⚠️ השם שמולא ("{result.account_name}") הוא שם בעל החשבון מהצילום ולא בהכרח שם התורם בפועל — יש לאמת ולתקן את שם הלקוח.
+            </div>
+          )}
           {missing.length > 0 && (
             <div style={{ marginTop: 6, color: '#744210' }}>
               ⚠️ לא זוהו בבירור בתמונה: {missing.map(f => f.label).join(', ')} — יש למלא ידנית.
