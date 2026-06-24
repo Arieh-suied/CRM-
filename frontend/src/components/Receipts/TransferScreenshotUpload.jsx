@@ -1,8 +1,9 @@
 import { useState, useRef } from 'react';
 import styles from './Receipts.module.css';
+import { compressImage, ALLOWED_IMAGE_TYPES } from './imageUtils.js';
 
 const ACCEPT = 'image/jpeg,image/jpg,image/png,image/webp';
-const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+const ALLOWED_TYPES = ALLOWED_IMAGE_TYPES;
 
 const REQUIRED_FIELDS = [
   { key: 'donor_name',     label: 'שם תורם' },
@@ -12,32 +13,6 @@ const REQUIRED_FIELDS = [
   { key: 'branch_number',  label: 'סניף' },
   { key: 'account_number', label: 'חשבון' },
 ];
-
-function compressImage(file, maxDim = 1600, quality = 0.85) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const img = new Image();
-      img.onload = () => {
-        let { width, height } = img;
-        if (width > maxDim || height > maxDim) {
-          const scale = maxDim / Math.max(width, height);
-          width = Math.round(width * scale);
-          height = Math.round(height * scale);
-        }
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', quality));
-      };
-      img.onerror = () => reject(new Error('שגיאה בטעינת התמונה'));
-      img.src = reader.result;
-    };
-    reader.onerror = () => reject(new Error('שגיאה בקריאת הקובץ'));
-    reader.readAsDataURL(file);
-  });
-}
 
 export default function TransferScreenshotUpload({ onExtracted }) {
   const [preview, setPreview]   = useState(null);

@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 import styles from './Receipts.module.css';
 import { supabase } from '../../lib/supabase.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
+import { analyzeTransferScreenshot, ALLOWED_IMAGE_TYPES } from './imageUtils.js';
 
 const BRANCHES = [
   'סומך נופלים',
@@ -90,6 +91,10 @@ export default function BatchReceipts() {
   const [cpDraft, setCpDraft]         = useState({ customer_name: '', amount: '', reference_number: '', bank_account: '' });
 
   const xlsxRef = useRef(null);
+  const imagesRef = useRef(null);
+  const [imgAnalyzing, setImgAnalyzing] = useState(false);
+  const [imgProgress, setImgProgress] = useState({ current: 0, total: 0 });
+  const [imgErrors, setImgErrors] = useState([]);
 
   const fetchEntries = useCallback(async () => {
     setLoading(true);
@@ -234,6 +239,58 @@ export default function BatchReceipts() {
     else alert('שגיאה בשמירה: ' + error.message);
   };
 
+  // Screenshot upload — analyze multiple bank-transfer screenshots and queue them as pending receipts
+  const handleImages = async (fileList) => {
+    const files = Array.from(fileList || []).filter(f => ALLOWED_IMAGE_TYPES.includes(f.type));
+    if (!files.length) { alert('לא נבחרו תמונות תקינות (jpg/png/webp)'); return; }
+
+    setImgAnalyzing(true);
+    setImgProgress({ current: 0, total: files.length });
+    setImgErrors([]);
+
+    const inserts = [];
+    const errors = [];
+
+    for (let i = 0; i < files.length; i++) {
+      setImgProgress({ current: i + 1, total: files.length });
+      try {
+        const data = await analyzeTransferScreenshot(files[i]);
+        const nameToUse = data.donor_name || data.account_name || null;
+
+        const notesParts = [];
+        if (data.remarks) notesParts.push(data.remarks);
+        if (data.account_name && data.account_name !== nameToUse) notesParts.push(`שם בעל חשבון: ${data.account_name}`);
+        if (!data.donor_name && data.account_name) notesParts.push('⚠ שם לא מאומת מהצילום - יש לבדוק');
+
+        inserts.push({
+          user_id: user.id,
+          customer_name: nameToUse,
+          customer_id: null,
+          bank_name: data.bank_number || null,
+          bank_branch: data.branch_number || null,
+          bank_account: data.account_number || null,
+          amount: data.amount ?? null,
+          transfer_date: data.transfer_date || null,
+          reference_number: data.asmachta || null,
+          notes: notesParts.length ? notesParts.join(' | ') : null,
+          branch: '',
+          status: 'pending',
+        });
+      } catch (err) {
+        errors.push({ fileName: files[i].name, error: err.message });
+      }
+    }
+
+    setImgAnalyzing(false);
+    setImgErrors(errors);
+    if (imagesRef.current) imagesRef.current.value = '';
+
+    if (!inserts.length) return;
+    const { error } = await supabase.from('pending_receipts').insert(inserts);
+    if (!error) fetchEntries();
+    else alert('שגיאה בשמירה: ' + error.message);
+  };
+
   const updateField = async (id, field, value) => {
     const dbVal = value === '' ? null : value;
     await supabase.from('pending_receipts').update({ [field]: dbVal }).eq('id', id);
@@ -336,15 +393,36 @@ export default function BatchReceipts() {
     <div>
       <h3 className={styles.sectionTitle}>העלאת העברות בנקאיות</h3>
 
-      {/* Excel upload */}
+      {/* Upload zones */}
       <div className={styles.card}>
-        <input ref={xlsxRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }}
-          onChange={e => { const f = e.target.files?.[0]; if (f) handleExcel(f); }} />
-        <div className={styles.uploadZone} onClick={() => xlsxRef.current?.click()}>
-          <div className={styles.uploadIcon}>📊</div>
-          <div className={styles.uploadLabel}>העלה קובץ אקסל</div>
-          <div className={styles.uploadSub}>xlsx, xls, csv</div>
+        <div className={styles.formGrid}>
+          <input ref={xlsxRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }}
+            onChange={e => { const f = e.target.files?.[0]; if (f) handleExcel(f); }} />
+          <div className={styles.uploadZone} onClick={() => xlsxRef.current?.click()}>
+            <div className={styles.uploadIcon}>📊</div>
+            <div className={styles.uploadLabel}>העלה קובץ אקסל</div>
+            <div className={styles.uploadSub}>xlsx, xls, csv</div>
+          </div>
+
+          <input ref={imagesRef} type="file" accept="image/jpeg,image/jpg,image/png,image/webp" multiple style={{ display: 'none' }}
+            onChange={e => { const fs = e.target.files; if (fs?.length) handleImages(fs); }} />
+          <div className={styles.uploadZone} onClick={() => !imgAnalyzing && imagesRef.current?.click()} style={imgAnalyzing ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}>
+            <div className={styles.uploadIcon}>📷</div>
+            <div className={styles.uploadLabel}>
+              {imgAnalyzing ? `מנתח ${imgProgress.current}/${imgProgress.total}...` : 'העלה צילומי מסך של העברות'}
+            </div>
+            <div className={styles.uploadSub}>jpg, png, webp — אפשר לבחור כמה תמונות יחד</div>
+          </div>
         </div>
+
+        {imgErrors.length > 0 && (
+          <div className={styles.errorMsg} style={{ marginTop: 12, marginBottom: 0 }}>
+            {imgErrors.length} תמונות לא נותחו בהצלחה:
+            <ul style={{ margin: '6px 0 0', paddingRight: 18 }}>
+              {imgErrors.map((e, i) => <li key={i}>{e.fileName} — {e.error}</li>)}
+            </ul>
+          </div>
+        )}
       </div>
 
       {/* Checkpoint */}
