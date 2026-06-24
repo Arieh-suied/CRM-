@@ -148,7 +148,13 @@ function buildQuery(supabase, args) {
   let query = supabase.from(cfg.table).select(cfg.select);
 
   if (args.search && cfg.searchColumns?.length) {
-    query = query.or(cfg.searchColumns.map(c => `${c}.ilike.%${args.search}%`).join(','));
+    // Strip characters that are syntactically meaningful in PostgREST's .or() filter
+    // mini-language (comma separates conditions, parens nest logic) so a crafted
+    // search string can't inject extra filter clauses.
+    const safeSearch = String(args.search).replace(/[,()]/g, ' ').trim();
+    if (safeSearch) {
+      query = query.or(cfg.searchColumns.map(c => `${c}.ilike.%${safeSearch}%`).join(','));
+    }
   }
   if (args.mosad_number && cfg.mosadColumn) {
     query = query.eq(cfg.mosadColumn, args.mosad_number);
@@ -241,6 +247,9 @@ export default async function handler(req, res) {
 
     const supabase = getSupabase();
     const requestUser = await getRequestUser(req, supabase);
+    if (!requestUser) {
+      return res.status(401).json({ error: 'יש להתחבר למערכת כדי להשתמש בעוזר' });
+    }
     const notes = await loadNotes(supabase);
 
     const cleanHistory = history
