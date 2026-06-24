@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import styles from './Receipts.module.css';
 import { supabase } from '../../lib/supabase.js';
+import TransferScreenshotUpload from './TransferScreenshotUpload.jsx';
 
 const BRANCHES = [
   'סומך נופלים',
@@ -102,6 +103,31 @@ export default function QuickReceipt() {
   const updatePayment = (id, field, val) =>
     setPayments(prev => prev.map(p => p.id === id ? { ...p, [field]: val } : p));
 
+  const handleExtracted = (data) => {
+    if (data.donor_name && !name.trim()) {
+      setName(data.donor_name);
+      searchCustomers(data.donor_name);
+    }
+    setPayments(prev => {
+      const updated = [...prev];
+      const first = { ...updated[0], method: '4' };
+      if (data.amount != null)         first.amount      = String(data.amount);
+      if (data.transfer_date)          first.date        = data.transfer_date;
+      if (data.bank_number)            first.bankName    = data.bank_number;
+      if (data.branch_number)          first.bankBranch  = data.branch_number;
+      if (data.account_number)         first.bankAccount = data.account_number;
+      updated[0] = first;
+      return updated;
+    });
+    const extras = [];
+    if (data.asmachta)     extras.push(`אסמכתא: ${data.asmachta}`);
+    if (data.account_name) extras.push(`שם בעל חשבון: ${data.account_name}`);
+    if (data.remarks)      extras.push(data.remarks);
+    if (extras.length) {
+      setNotes(prev => prev.trim() ? `${prev.trim()}\n${extras.join(' | ')}` : extras.join(' | '));
+    }
+  };
+
   const removePayment = (id) =>
     setPayments(prev => prev.filter(p => p.id !== id));
 
@@ -191,6 +217,8 @@ export default function QuickReceipt() {
           </div>
         </div>
       )}
+
+      <TransferScreenshotUpload onExtracted={handleExtracted} />
 
       <form onSubmit={handleSubmit}>
         <div className={styles.card}>
