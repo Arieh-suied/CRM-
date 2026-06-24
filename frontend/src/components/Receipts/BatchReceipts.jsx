@@ -95,6 +95,7 @@ export default function BatchReceipts() {
   const [imgAnalyzing, setImgAnalyzing] = useState(false);
   const [imgProgress, setImgProgress] = useState({ current: 0, total: 0 });
   const [imgErrors, setImgErrors] = useState([]);
+  const [uncertainNameIds, setUncertainNameIds] = useState(new Set());
 
   const fetchEntries = useCallback(async () => {
     setLoading(true);
@@ -249,6 +250,7 @@ export default function BatchReceipts() {
     setImgErrors([]);
 
     const inserts = [];
+    const uncertainFlags = [];
     const errors = [];
 
     for (let i = 0; i < files.length; i++) {
@@ -256,11 +258,11 @@ export default function BatchReceipts() {
       try {
         const data = await analyzeTransferScreenshot(files[i]);
         const nameToUse = data.donor_name || data.account_name || null;
+        const nameUncertain = !data.donor_name && !!data.account_name;
 
         const notesParts = [];
         if (data.remarks) notesParts.push(data.remarks);
         if (data.account_name && data.account_name !== nameToUse) notesParts.push(`שם בעל חשבון: ${data.account_name}`);
-        if (!data.donor_name && data.account_name) notesParts.push('⚠ שם לא מאומת מהצילום - יש לבדוק');
 
         inserts.push({
           user_id: user.id,
@@ -276,6 +278,7 @@ export default function BatchReceipts() {
           branch: '',
           status: 'pending',
         });
+        uncertainFlags.push(nameUncertain);
       } catch (err) {
         errors.push({ fileName: files[i].name, error: err.message });
       }
@@ -286,9 +289,18 @@ export default function BatchReceipts() {
     if (imagesRef.current) imagesRef.current.value = '';
 
     if (!inserts.length) return;
-    const { error } = await supabase.from('pending_receipts').insert(inserts);
-    if (!error) fetchEntries();
-    else alert('שגיאה בשמירה: ' + error.message);
+    const { data: inserted, error } = await supabase.from('pending_receipts').insert(inserts).select('id');
+    if (!error) {
+      if (inserted) {
+        const newUncertainIds = inserted.filter((row, i) => uncertainFlags[i]).map(row => row.id);
+        if (newUncertainIds.length) {
+          setUncertainNameIds(prev => new Set([...prev, ...newUncertainIds]));
+        }
+      }
+      fetchEntries();
+    } else {
+      alert('שגיאה בשמירה: ' + error.message);
+    }
   };
 
   const updateField = async (id, field, value) => {
@@ -537,6 +549,11 @@ export default function BatchReceipts() {
                     onBlur={e => updateField(entry.id, 'customer_name', e.target.value.trim())}
                     onKeyDown={e => e.key === 'Enter' && e.target.blur()}
                   />
+                  {uncertainNameIds.has(entry.id) && (
+                    <div style={{ fontSize: 11, color: '#744210', marginTop: 4 }}>
+                      ⚠ שם לא מאומת מהצילום (שם בעל החשבון) - יש לבדוק
+                    </div>
+                  )}
                 </div>
                 <div style={{ width: 110 }}>
                   <div className={styles.entryMeta}><span>סכום</span></div>
