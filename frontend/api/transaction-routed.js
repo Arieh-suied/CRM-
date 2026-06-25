@@ -18,10 +18,19 @@ import { sendTelegramMessage } from './_telegram.js';
 import { appendRow } from './_google-sheets.js';
 import { getMatchingFundRules } from './_fund-routing.js';
 
-const YESHIVOT_NAMES = new Set(['אור אפרים', 'אור אפרים שכ"ל', 'חכמי ירושלים', 'חכמי ירושלים שכ"ל']);
+// Institution names in the real `institutions` table aren't a fixed small
+// set (e.g. "ישיבת אור אפרים", "ישיבת חכמי ירושלים - שכ\"ל", or even
+// "יפה ותמה שע\"י ארגון צדקה וחסד סומך נופלים") — so bucket by substring
+// rather than exact match.
+function isYeshivotName(name) {
+  return name?.includes('אור אפרים') || name?.includes('חכמי ירושלים');
+}
+function isSomechName(name) {
+  return name?.includes('סומך');
+}
 
 async function resolveTelegramChat(row, supabase) {
-  if ((row.comments || '').includes('סומך') || (row.group_name || '').includes('סומך')) {
+  if (isSomechName(row.comments) || isSomechName(row.group_name)) {
     return { chatId: process.env.TELEGRAM_CHAT_SOMECH, label: 'סומך נופלים' };
   }
 
@@ -32,10 +41,10 @@ async function resolveTelegramChat(row, supabase) {
     .maybeSingle();
 
   const mosadName = data?.mosad_name;
-  if (mosadName === 'סומך נופלים') {
+  if (isSomechName(mosadName)) {
     return { chatId: process.env.TELEGRAM_CHAT_SOMECH, label: 'סומך נופלים' };
   }
-  if (mosadName && YESHIVOT_NAMES.has(mosadName)) {
+  if (isYeshivotName(mosadName)) {
     return { chatId: process.env.TELEGRAM_CHAT_YESHIVOT, label: 'ישיבות' };
   }
   return null;
