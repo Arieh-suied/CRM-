@@ -29,36 +29,43 @@ function isSomechName(name) {
   return name?.includes('סומך');
 }
 
-async function resolveTelegramChat(row, supabase) {
-  if (isSomechName(row.comments) || isSomechName(row.group_name)) {
-    return { chatId: process.env.TELEGRAM_CHAT_SOMECH, label: 'סומך נופלים' };
-  }
-
+async function resolveInstitution(row, supabase) {
   const { data } = await supabase
     .from('institutions')
     .select('mosad_name')
     .eq('mosad_number', row.mosad_number)
     .maybeSingle();
+  const mosadName = data?.mosad_name || null;
 
-  const mosadName = data?.mosad_name;
-  if (isSomechName(mosadName)) {
-    return { chatId: process.env.TELEGRAM_CHAT_SOMECH, label: 'סומך נופלים' };
+  if (isSomechName(row.comments) || isSomechName(row.group_name) || isSomechName(mosadName)) {
+    return { chatId: process.env.TELEGRAM_CHAT_SOMECH, mosadName: mosadName || 'סומך נופלים' };
   }
   if (isYeshivotName(mosadName)) {
-    return { chatId: process.env.TELEGRAM_CHAT_YESHIVOT, label: 'ישיבות' };
+    return { chatId: process.env.TELEGRAM_CHAT_YESHIVOT, mosadName };
   }
   return null;
 }
 
-function buildTelegramText(row, label, fundNames) {
-  const lines = [
-    `💰 עסקה חדשה - ${label}`,
+// Institutions whose name carries a "שכ\"ל" (school-fee) suffix are tuition
+// accounts; everything else routed here is a donation.
+function paymentTypeFor(mosadName) {
+  return mosadName?.includes('שכ"ל') || mosadName?.includes('שכר לימוד') ? 'שכר לימוד' : 'תרומה';
+}
+
+function receiptUrlFor(row) {
+  return row.receipt_data ? `https://files.ezcount.co.il/front/documents/get/${row.receipt_data}` : null;
+}
+
+function buildTelegramText(row, mosadName) {
+  return [
+    `התקבלה עסקה ב${mosadName}`,
+    '',
     `שם: ${row.client_name || '—'}`,
-    `סכום: ₪${row.amount}`,
-  ];
-  if (fundNames.length) lines.push(`קרן: ${fundNames.join(', ')}`);
-  if (row.transaction_time_raw) lines.push(`תאריך: ${row.transaction_time_raw}`);
-  return lines.join('\n');
+    `סכום: ${row.amount}₪`,
+    `הערות: ${row.comments || ''}`,
+    `קטגוריה: ${row.group_name || ''}`,
+    `סוג תשלום: ${paymentTypeFor(mosadName)}`,
+  ].join('\n');
 }
 
 export default async function handler(req, res) {
@@ -78,12 +85,11 @@ export default async function handler(req, res) {
   const results = { telegram: null, sheets: [] };
 
   try {
-    const target = await resolveTelegramChat(record, supabase);
+    const target = await resolveInstitution(record, supabase);
     if (target?.chatId) {
-      const matches = getMatchingFundRules(record);
-      const text = buildTelegramText(record, target.label, matches.map((m) => m.name));
-      await sendTelegramMessage(target.chatId, text);
-      results.telegram = { sent: true, channel: target.label };
+      const text = buildTelegramText(record, target.mosadName);
+      await sendTelegramMessage(target.chatId, text, { receiptUrl: receiptUrlFor(record) });
+      results.telegram = { sent: true, channel: target.mosadName };
     } else {
       results.telegram = { sent: false, reason: 'no matching institution/channel' };
     }
