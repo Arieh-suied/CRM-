@@ -27,6 +27,13 @@ const FIELD_LABELS = {
 const ALLOWED_FIELDS = new Set(Object.keys(FIELD_LABELS));
 const ALLOWED_OPS = new Set(['eq', 'contains', 'not_contains']);
 
+// Not every fund sheet keeps a running-balance formula in A1 — some start
+// straight into the header row instead. Only trust A1 as a balance if it
+// actually looks like a currency amount.
+function looksLikeBalance(value) {
+  return typeof value === 'string' && /^-?\s*₪/.test(value.trim());
+}
+
 async function handleGet(req, res, supabase) {
   const { data, error } = await supabase.from('funds').select('*').order('name');
   if (error) return res.status(500).json({ error: error.message });
@@ -36,7 +43,8 @@ async function handleGet(req, res, supabase) {
       let balance = null;
       let balanceError = null;
       try {
-        balance = await getCellValue(fund.spreadsheet_id, fund.sheet_name, 'A1');
+        const raw = await getCellValue(fund.spreadsheet_id, fund.sheet_name, 'A1');
+        balance = looksLikeBalance(raw) ? raw : null;
       } catch (err) {
         balanceError = err.message;
       }
