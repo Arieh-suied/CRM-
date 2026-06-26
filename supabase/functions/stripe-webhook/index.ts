@@ -198,6 +198,7 @@ async function handlePaymentIntentFailed(pi: Stripe.PaymentIntent, event: Stripe
     donation_source:          'stripe',
     raw_event:                event,
     raw_payment:              pi,
+    paid_at:                  new Date(pi.created * 1000).toISOString(),
   }, { onConflict: 'stripe_payment_intent_id' });
 }
 
