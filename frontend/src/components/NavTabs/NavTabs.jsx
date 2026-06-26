@@ -8,6 +8,7 @@ const TABS = [
   { id: 'keva',         label: 'הוראות קבע' },
   { id: 'grow',         label: 'Grow' },
   { id: 'receipts',     label: 'קבלות' },
+  { id: 'funds',        label: 'ניהול קרנות' },
 ];
 
 const ADMIN_TAB = { id: 'users', label: 'ניהול משתמשים' };

@@ -3,6 +3,7 @@
 // Env vars required: OPENAI_API_KEY (optional: OPENAI_ASSISTANT_MODEL, default 'gpt-4o-mini')
 
 import { getSupabase } from './_supabase.js';
+import { getRequestUser } from './_auth.js';
 import { sendTelegramMessage } from './_telegram.js';
 import { resolveInstitution, buildTelegramText, receiptUrlFor } from './_transaction-notify.js';
 
@@ -243,22 +244,6 @@ async function executeSearchPerson(supabase, args) {
   return Object.fromEntries(entries);
 }
 
-async function getRequestUser(req, supabase) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer ')) return null;
-  const token = authHeader.slice('Bearer '.length);
-  const { data: { user } } = await supabase.auth.getUser(token);
-  if (!user?.email) return null;
-
-  const { data } = await supabase
-    .from('allowed_users')
-    .select('role, is_active')
-    .eq('email', user.email.trim())
-    .maybeSingle();
-
-  if (!data?.is_active) return null;
-  return { email: user.email, role: data.role ?? 'viewer' };
-}
 
 async function loadNotes(supabase) {
   const { data } = await supabase

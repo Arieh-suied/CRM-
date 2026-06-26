@@ -54,7 +54,7 @@ export default async function handler(req, res) {
     results.telegram = { sent: false, error: err.message };
   }
 
-  const matchingRules = getMatchingFundRules(record);
+  const matchingRules = await getMatchingFundRules(supabase, record);
   for (const rule of matchingRules) {
     try {
       await appendRow(rule.spreadsheetId, rule.sheetName, rule.buildRow(record));
