@@ -9,6 +9,7 @@ const TABS = [
   { id: 'grow',         label: 'Grow' },
   { id: 'receipts',     label: 'קבלות' },
   { id: 'funds',        label: 'ניהול קרנות' },
+  { id: 'failures',     label: 'סירובים' },
 ];
 
 const ADMIN_TAB = { id: 'users', label: 'ניהול משתמשים' };

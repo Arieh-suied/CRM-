@@ -16,6 +16,7 @@ import GrowTransactions from './components/GrowTransactions/GrowTransactions.jsx
 import UserManagement from './components/UserManagement/UserManagement.jsx';
 import AIAssistant from './components/AIAssistant/AIAssistant.jsx';
 import FundsManagement from './components/Funds/FundsManagement.jsx';
+import PaymentFailures from './components/PaymentFailures/PaymentFailures.jsx';
 
 const EMPTY_FILTERS = {
   mosad_number: '', transaction_type: '', group_name: '',
@@ -104,6 +105,7 @@ function Dashboard({ user, signOut, role, allowedMosadim }) {
         {activeTab === 'receipts'  && <Receipts />}
         {activeTab === 'grow'      && <GrowTransactions />}
         {activeTab === 'funds'     && <FundsManagement />}
+        {activeTab === 'failures'  && <PaymentFailures />}
         {activeTab === 'users' && role === 'admin' && (
           <UserManagement institutions={institutions} />
         )}
