@@ -1,15 +1,18 @@
 // Syncs payment-failure emails from Gmail into `payment_failures`, and sends a
-// Telegram notification to the "סירובים" channel for every newly-saved failure.
+// Telegram notification to the matching institution's "סירובים" channel
+// (סומך נופלים / ישיבות — same two-channel split as successful transactions)
+// for every newly-saved failure.
 // Ported from backend/src/routes/gmailSync.js (an old Express route that was
 // never carried over to the Vercel functions, leaving the "סנכרן" button in
 // PaymentFailures.jsx pointing at a 404).
 //
 // Env vars required:
 //   GMAIL_USER, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI, GOOGLE_REFRESH_TOKEN
-//   TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_REFUSALS
+//   TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_REFUSALS_SOMECH, TELEGRAM_CHAT_REFUSALS_YESHIVOT
 
 import { getSupabase } from './_supabase.js';
 import { sendTelegramMessage } from './_telegram.js';
+import { isSomechName, isYeshivotName } from './_transaction-notify.js';
 
 async function getGmailAccessToken() {
   const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI, GOOGLE_REFRESH_TOKEN } = process.env;
@@ -120,9 +123,15 @@ function buildRefusalText(record) {
   return lines.join('\n');
 }
 
+function refusalChatId(institutionName) {
+  if (isSomechName(institutionName)) return process.env.TELEGRAM_CHAT_REFUSALS_SOMECH;
+  if (isYeshivotName(institutionName)) return process.env.TELEGRAM_CHAT_REFUSALS_YESHIVOT;
+  return null;
+}
+
 async function notifyRefusal(record) {
-  const chatId = process.env.TELEGRAM_CHAT_REFUSALS;
-  if (!chatId) return; // not configured yet — skip silently rather than fail the sync
+  const chatId = refusalChatId(record.institution_name);
+  if (!chatId) return; // unrecognized institution, or not configured yet — skip rather than fail the sync
   try {
     await sendTelegramMessage(chatId, buildRefusalText(record));
   } catch (err) {

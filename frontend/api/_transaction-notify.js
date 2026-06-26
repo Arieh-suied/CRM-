@@ -7,7 +7,9 @@ export function isYeshivotName(name) {
   return name?.includes('אור אפרים') || name?.includes('חכמי ירושלים');
 }
 export function isSomechName(name) {
-  return name?.includes('סומך');
+  // "יפה ותמה" is a סומך נופלים sub-fund — its name alone doesn't contain
+  // "סומך", so it needs an explicit override (confirmed with the user).
+  return name?.includes('סומך') || name?.includes('יפה ותמה');
 }
 
 // Institutions whose name carries a "שכ\"ל" (school-fee) suffix are tuition
