@@ -3,6 +3,8 @@
 // Env vars required: OPENAI_API_KEY (optional: OPENAI_ASSISTANT_MODEL, default 'gpt-4o-mini')
 
 import { getSupabase } from './_supabase.js';
+import { sendTelegramMessage } from './_telegram.js';
+import { resolveInstitution, buildTelegramText, receiptUrlFor } from './_transaction-notify.js';
 
 const MAX_ROUNDS = 5;
 const MAX_HISTORY = 20;
@@ -12,7 +14,7 @@ const MAX_LIMIT = 50;
 const QUERYABLE_TABLES = {
   transactions: {
     table: 'transactions_with_parsed_time',
-    select: 'client_name, phone, email, amount, mosad_number, transaction_type, group_name, transaction_time_parsed, external_transaction_id',
+    select: 'id, client_name, phone, email, amount, mosad_number, transaction_type, group_name, comments, transaction_time_parsed, transaction_time_raw, receipt_data, external_transaction_id',
     searchColumns: ['client_name', 'phone', 'email', 'external_transaction_id'],
     dateColumn: 'transaction_time_parsed',
     mosadColumn: 'mosad_number',
@@ -137,6 +139,21 @@ const TOOLS = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'send_telegram_notification',
+      description: 'שולח לערוץ הטלגרם של "סומך נופלים" או "ישיבות" הודעה על עסקה ספציפית מטבלת transactions, באותו פורמט של ההתראות האוטומטיות (כולל כפתור קבלה אם קיימת). יש להשתמש בכלי הזה רק כשמשתמש מנהל מבקש במפורש לשלוח/להציג בטלגרם עסקה מסוימת. יש לאתר קודם את ה-id המדויק של העסקה (באמצעות search_person או query_data על טבלת transactions) ולהעביר אותו כאן — לא לבנות את תוכן ההודעה בעצמך. הכלי פעיל רק עבור מנהל המערכת.',
+      parameters: {
+        type: 'object',
+        properties: {
+          transaction_id: { type: 'integer', description: 'השדה id של השורה בטבלת transactions שצריך לשלוח' },
+          channel: { type: 'string', enum: ['סומך נופלים', 'ישיבות'], description: 'לאיזה ערוץ לשלוח' },
+        },
+        required: ['transaction_id', 'channel'],
+      },
+    },
+  },
 ];
 
 function buildSystemPrompt(notes, isAdmin) {
@@ -150,8 +167,8 @@ function buildSystemPrompt(notes, isAdmin) {
 לבדיקות שאינן לפי שם (סינון לפי מוסד/טווח תאריכים, רשימת מוסדות וכו׳) יש להשתמש בכלי query_data.
 תאריכים בתשובה הסופית יש לכתוב בפורמט DD/MM/YYYY.
 ${isAdmin
-    ? 'המשתמש הנוכחי הוא מנהל המערכת — אם הוא מבקש ממך "תזכור ש..." או דומה, השתמש בכלי remember_note כדי לשמור את ההנחיה לשיחות עתידיות.'
-    : 'המשתמש הנוכחי אינו מנהל — אם הוא מבקש ממך לזכור משהו, הסבר בנימוס שרק מנהל המערכת יכול לבקש זאת.'}`;
+    ? 'המשתמש הנוכחי הוא מנהל המערכת — אם הוא מבקש ממך "תזכור ש..." או דומה, השתמש בכלי remember_note כדי לשמור את ההנחיה לשיחות עתידיות. אם הוא מבקש לשלוח/להציג בטלגרם עסקה מסוימת (לדוגמה "תשלח לערוץ הישיבות את התרומה האחרונה של X"), יש למצוא קודם את העסקה המדויקת (search_person/query_data) ולקבל ממנה את ה-id, ואז להשתמש בכלי send_telegram_notification עם אותו id והערוץ המתאים — לא לבנות את תוכן ההודעה בעצמך.'
+    : 'המשתמש הנוכחי אינו מנהל — אם הוא מבקש ממך לזכור משהו או לשלוח הודעה לטלגרם, הסבר בנימוס שרק מנהל המערכת יכול לבקש זאת.'}`;
 
   if (notes?.length) {
     prompt += `\n\nהערות קבועות שנשמרו על ידי המנהל בעבר (יש להתייחס אליהן כעובדות ידועות):\n${notes.map(n => `- ${n}`).join('\n')}`;
@@ -265,6 +282,40 @@ async function executeRememberNote(supabase, args, requestUser) {
   return { success: true };
 }
 
+const TELEGRAM_CHAT_BY_BUCKET = {
+  'סומך נופלים': () => process.env.TELEGRAM_CHAT_SOMECH,
+  'ישיבות': () => process.env.TELEGRAM_CHAT_YESHIVOT,
+};
+
+async function executeSendTelegramNotification(supabase, args, requestUser) {
+  if (requestUser?.role !== 'admin') {
+    return { error: 'רק מנהל המערכת יכול לבקש לשלוח הודעות לטלגרם.' };
+  }
+  const chatIdGetter = TELEGRAM_CHAT_BY_BUCKET[args?.channel];
+  if (!chatIdGetter) return { error: `ערוץ לא מוכר: ${args?.channel}` };
+  const chatId = chatIdGetter();
+  if (!chatId) return { error: `לא הוגדר chat id לערוץ ${args.channel}` };
+
+  const { data: row, error } = await supabase
+    .from('transactions')
+    .select('id, client_name, amount, comments, group_name, mosad_number, receipt_data')
+    .eq('id', args?.transaction_id)
+    .maybeSingle();
+  if (error) return { error: error.message };
+  if (!row) return { error: `לא נמצאה עסקה עם id=${args?.transaction_id}` };
+
+  const institution = await resolveInstitution(row, supabase);
+  const mosadName = institution?.mosadName || args.channel;
+  const text = buildTelegramText(row, mosadName);
+
+  try {
+    await sendTelegramMessage(chatId, text, { receiptUrl: receiptUrlFor(row) });
+    return { success: true };
+  } catch (err) {
+    return { error: err.message };
+  }
+}
+
 async function callOpenAI(messages, apiKey) {
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -328,6 +379,8 @@ export default async function handler(req, res) {
         try { args = JSON.parse(call.function.arguments || '{}'); } catch { /* leave empty */ }
         const result = call.function.name === 'remember_note'
           ? await executeRememberNote(supabase, args, requestUser)
+          : call.function.name === 'send_telegram_notification'
+          ? await executeSendTelegramNotification(supabase, args, requestUser)
           : call.function.name === 'search_person'
           ? await executeSearchPerson(supabase, args)
           : await executeQuery(supabase, args);
