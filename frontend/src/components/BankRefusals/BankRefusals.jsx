@@ -173,9 +173,13 @@ export default function BankRefusals({ institutions }) {
                   <td>
                     {row.status === 'pending' ? (
                       <div className={styles.actions}>
-                        <button className={styles.actionBtn} disabled={resolvingId === row.id} onClick={() => handleResolve(row, 'cleared')}>
-                          ✅ לא חזר – הוצא קבלה
-                        </button>
+                        {row.existing_receipt_number ? (
+                          <span className={styles.muted}>קבלה כבר קיימת בנדרים+ (#{row.existing_receipt_number})</span>
+                        ) : (
+                          <button className={styles.actionBtn} disabled={resolvingId === row.id} onClick={() => handleResolve(row, 'cleared')}>
+                            ✅ לא חזר – הוצא קבלה
+                          </button>
+                        )}
                         <button className={styles.dangerBtn} disabled={resolvingId === row.id} onClick={() => handleResolve(row, 'bounced')}>
                           ↩️ חזר – בטל בנדרים+
                         </button>

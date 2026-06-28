@@ -33,7 +33,7 @@ function parseHistoryCsv(buf) {
   if (lines.length < 2) return [];
   const header = lines[0].split('\t').map((h) => h.trim());
   const idx = (name) => header.indexOf(name);
-  const col = { id: idx('מספר הוראה'), idNum: idx('מספר זהות'), name: idx('שם'), bank: idx('בנק'), branch: idx('סניף'), account: idx('חשבון'), date: idx('תאריך'), amount: idx('סכום'), status: idx('תנועה') };
+  const col = { id: idx('מספר הוראה'), idNum: idx('מספר זהות'), name: idx('שם'), bank: idx('בנק'), branch: idx('סניף'), account: idx('חשבון'), date: idx('תאריך'), amount: idx('סכום'), status: idx('תנועה'), receiptNo: idx('מספר קבלה') };
 
   return lines.slice(1).map((line) => {
     const c = line.split('\t');
@@ -47,6 +47,7 @@ function parseHistoryCsv(buf) {
       date: c[col.date]?.trim(),
       amount: parseFloat(c[col.amount]),
       status: c[col.status]?.trim(),
+      existingReceiptNumber: c[col.receiptNo]?.trim() || null,
     };
   }).filter((r) => r.masavId && r.date);
 }
@@ -91,6 +92,7 @@ async function sync(inst, period) {
       bank_branch:       charge.branch,
       bank_account:      charge.account,
       auto_status:       bounced ? 'bounced' : 'cleared',
+      existing_receipt_number: charge.existingReceiptNumber,
       updated_at:        new Date().toISOString(),
     }, { onConflict: 'masav_id,period', ignoreDuplicates: false });
   }
@@ -135,6 +137,13 @@ export default async function handler(req, res) {
     if (fetchErr || !row) return res.status(404).json({ error: 'Row not found' });
 
     if (resolution === 'cleared') {
+      if (row.receipt_id) {
+        return res.status(409).json({ error: `קבלה כבר הופקה לשורה זו (מספר ${row.receipt_id}) — לא יונפק כפל` });
+      }
+      if (row.existing_receipt_number) {
+        return res.status(409).json({ error: `נדרים+ כבר הפיק קבלה לחיוב זה (מספר ${row.existing_receipt_number}) — לא יונפק כפל` });
+      }
+
       const result = await issueReceipt({
         customerName:  row.client_name,
         customerId:    row.client_id_number,
