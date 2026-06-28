@@ -1,17 +1,6 @@
-import { getSupabase } from './_supabase.js';
+import { BANK_URL, getInstitution as getInst, callNedarim as callNedarimRaw } from './_nedarim.js';
 
-const BANK_URL = 'https://matara.pro/nedarimplus/Reports/Masav3.aspx';
-
-async function getInst(mosad_number) {
-  const { data } = await getSupabase().from('institutions').select('mosad_number, api_password').eq('mosad_number', mosad_number).single();
-  if (!data?.api_password) throw new Error('No API password configured');
-  return data;
-}
-
-async function callNedarim(params) {
-  const body = new URLSearchParams(params);
-  return fetch(BANK_URL, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body.toString() });
-}
+const callNedarim = (params) => callNedarimRaw(BANK_URL, params);
 
 export default async function handler(req, res) {
   const { mosad_number, masav_id, export: exportType, from, to } = req.query;

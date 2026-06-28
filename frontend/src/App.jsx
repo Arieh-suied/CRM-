@@ -17,6 +17,7 @@ import UserManagement from './components/UserManagement/UserManagement.jsx';
 import AIAssistant from './components/AIAssistant/AIAssistant.jsx';
 import FundsManagement from './components/Funds/FundsManagement.jsx';
 import PaymentFailures from './components/PaymentFailures/PaymentFailures.jsx';
+import BankRefusals from './components/BankRefusals/BankRefusals.jsx';
 
 const EMPTY_FILTERS = {
   mosad_number: '', transaction_type: '', group_name: '',
@@ -106,6 +107,7 @@ function Dashboard({ user, signOut, role, allowedMosadim }) {
         {activeTab === 'grow'      && <GrowTransactions />}
         {activeTab === 'funds'     && <FundsManagement />}
         {activeTab === 'failures'  && <PaymentFailures />}
+        {activeTab === 'bank-refusals' && <BankRefusals institutions={visibleInstitutions} />}
         {activeTab === 'users' && role === 'admin' && (
           <UserManagement institutions={institutions} />
         )}

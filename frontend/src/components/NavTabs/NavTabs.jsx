@@ -10,6 +10,7 @@ const TABS = [
   { id: 'receipts',     label: 'קבלות' },
   { id: 'funds',        label: 'ניהול קרנות' },
   { id: 'failures',     label: 'סירובים' },
+  { id: 'bank-refusals', label: 'סירובים בנקאי' },
 ];
 
 const ADMIN_TAB = { id: 'users', label: 'ניהול משתמשים' };

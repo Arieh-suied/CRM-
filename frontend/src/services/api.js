@@ -156,3 +156,16 @@ export async function exportBankOrders(mosadNumber, type, from, to) {
   a.href = blobUrl; a.download = `bank-${type}-${mosadNumber}.csv`; a.click();
   URL.revokeObjectURL(blobUrl);
 }
+
+// Bank standing-order refusals — monthly reconciliation
+export function fetchBankRefusals(mosadNumber, period) {
+  return request(`/bank-refusals?mosad_number=${encodeURIComponent(mosadNumber)}&period=${encodeURIComponent(period)}`);
+}
+
+export function syncBankRefusals(mosadNumber, period) {
+  return request(`/bank-refusals?mosad_number=${encodeURIComponent(mosadNumber)}&period=${encodeURIComponent(period)}&action=sync`);
+}
+
+export function resolveBankRefusal(id, resolution, comment) {
+  return postJson('/bank-refusals', { action: 'resolve', id, resolution, comment });
+}
