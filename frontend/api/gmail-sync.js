@@ -51,9 +51,24 @@ function decodeBase64Url(data) {
   return Buffer.from(data.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
 }
 
+function htmlToText(html) {
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(div|p)>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .trim();
+}
+
 function extractPlainText(payload) {
   if (!payload) return '';
   if (payload.mimeType === 'text/plain' && payload.body?.data) return decodeBase64Url(payload.body.data);
+  // Some failure emails (e.g. the som.noflim mailbox) have only a text/html
+  // body, no text/plain alternative — strip tags down to plain text instead.
+  if (payload.mimeType === 'text/html' && payload.body?.data) return htmlToText(decodeBase64Url(payload.body.data));
   if (payload.parts) {
     for (const part of payload.parts) {
       const result = extractPlainText(part);
@@ -79,13 +94,20 @@ function parseAmount(raw) {
   return cleaned ? Number(cleaned) : null;
 }
 
+function extractInstitution(text) {
+  // Two observed formats: "עבור: <מוסד>" (colon right after the label) and
+  // "עבור <מוסד>:" (colon after the value instead — the som.noflim mailbox).
+  let match = text.match(/עבור:\s*(.+)/);
+  if (match) return match[1].trim();
+  match = text.match(/עבור\s+(.+?):/);
+  return match ? match[1].trim() : null;
+}
+
 function parseFailureEmail(message) {
   const headers = message.payload.headers || [];
   const text = extractPlainText(message.payload);
   const subject = findHeader(headers, 'subject');
-  // Real format is "עבור: <institution>" — colon directly after the label, no
-  // space before it (the old regex assumed a space and never matched).
-  const institution = extractField(text, 'עבור');
+  const institution = extractInstitution(text);
   // Some failure emails don't have a "תשלומים:" line — the kind (e.g. "הו"ק")
   // is in the subject instead, e.g. "שגיאה / סירוב הו"ק".
   const subjectKind = subject.replace(/^.*סירוב\s*/, '').trim() || null;
