@@ -7,7 +7,9 @@
 // PaymentFailures.jsx pointing at a 404).
 //
 // Env vars required:
-//   GMAIL_USER, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI, GOOGLE_REFRESH_TOKEN
+//   GMAIL_USER_SOM, GOOGLE_CLIENT_ID_SOM, GOOGLE_CLIENT_SECRET_SOM, GOOGLE_REDIRECT_URI_SOM, GOOGLE_REFRESH_TOKEN_SOM
+//   (dedicated to the som.noflim@gmail.com mailbox/OAuth client — kept separate
+//   from the older GOOGLE_*/GMAIL_USER vars, which belong to a different account)
 //   TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_REFUSALS_SOMECH, TELEGRAM_CHAT_REFUSALS_YESHIVOT
 
 import { getSupabase } from './_supabase.js';
@@ -15,18 +17,18 @@ import { sendTelegramMessage } from './_telegram.js';
 import { isSomechName, isYeshivotName } from './_transaction-notify.js';
 
 async function getGmailAccessToken() {
-  const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI, GOOGLE_REFRESH_TOKEN } = process.env;
-  if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !GOOGLE_REDIRECT_URI || !GOOGLE_REFRESH_TOKEN) {
-    throw new Error('Missing Gmail/Google env vars (GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI/REFRESH_TOKEN)');
+  const { GOOGLE_CLIENT_ID_SOM, GOOGLE_CLIENT_SECRET_SOM, GOOGLE_REDIRECT_URI_SOM, GOOGLE_REFRESH_TOKEN_SOM } = process.env;
+  if (!GOOGLE_CLIENT_ID_SOM || !GOOGLE_CLIENT_SECRET_SOM || !GOOGLE_REDIRECT_URI_SOM || !GOOGLE_REFRESH_TOKEN_SOM) {
+    throw new Error('Missing Gmail/Google env vars (GOOGLE_CLIENT_ID_SOM/SECRET_SOM/REDIRECT_URI_SOM/REFRESH_TOKEN_SOM)');
   }
   const res = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
-      client_id: GOOGLE_CLIENT_ID,
-      client_secret: GOOGLE_CLIENT_SECRET,
-      redirect_uri: GOOGLE_REDIRECT_URI,
-      refresh_token: GOOGLE_REFRESH_TOKEN,
+      client_id: GOOGLE_CLIENT_ID_SOM,
+      client_secret: GOOGLE_CLIENT_SECRET_SOM,
+      redirect_uri: GOOGLE_REDIRECT_URI_SOM,
+      refresh_token: GOOGLE_REFRESH_TOKEN_SOM,
       grant_type: 'refresh_token',
     }),
   });
