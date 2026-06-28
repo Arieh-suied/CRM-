@@ -43,7 +43,7 @@ async function handleGet(req, res, supabase) {
       let balance = null;
       let balanceError = null;
       try {
-        const raw = await getCellValue(fund.spreadsheet_id, fund.sheet_name, 'A1');
+        const raw = await getCellValue(fund.spreadsheet_id, fund.sheet_name, fund.balance_cell || 'A1');
         balance = looksLikeBalance(raw) ? raw : null;
       } catch (err) {
         balanceError = err.message;
