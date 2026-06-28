@@ -2,8 +2,8 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import styles from './BankRefusals.module.css';
 import { fetchBankRefusals, syncBankRefusals, resolveBankRefusal } from '../../services/api.js';
 
-// Only the two institutions with bank standing-order tuition collection (no automatic refusal email, unlike credit)
-const TUITION_MOSAD_NUMBERS = ['7003860', '7003862'];
+// אור אפרים + חכמי ירושלים — תרומות והשכ"ל, ללא הודעת סירוב אוטומטית (בשונה מאשראי)
+const BANK_REFUSAL_MOSAD_NUMBERS = ['7001725', '7003860', '7001916', '7003862'];
 
 const fmt = (n) => {
   try { return new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 }).format(n ?? 0); }
@@ -81,7 +81,7 @@ export default function BankRefusals({ institutions }) {
   const [errorMsg, setErrorMsg]       = useState('');
 
   const eligibleInstitutions = useMemo(
-    () => (institutions ?? []).filter((i) => TUITION_MOSAD_NUMBERS.includes(i.mosad_number)),
+    () => (institutions ?? []).filter((i) => BANK_REFUSAL_MOSAD_NUMBERS.includes(i.mosad_number)),
     [institutions]
   );
 
