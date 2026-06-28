@@ -9,7 +9,9 @@ export async function getInstitution(mosad_number) {
   return data;
 }
 
+// Nedarim+ rejects write actions (SetMasavStatus, GetMasavId, ...) sent as POST with
+// "חובה לשלוח פרמטר ..." even though every param is present — they only work over GET.
 export async function callNedarim(url, params) {
-  const body = new URLSearchParams(params);
-  return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body.toString() });
+  const qs = new URLSearchParams(params);
+  return fetch(`${url}?${qs.toString()}`, { method: 'GET' });
 }
