@@ -19,7 +19,7 @@ create table if not exists bank_standing_order_failures (
   bank_account       text,
   auto_status        text,                  -- 'cleared' | 'bounced' | null
   status             text not null default 'pending', -- 'pending' | 'cleared' | 'bounced'
-  resolution         text,                  -- 'receipt_issued' | 'cancelled_in_nedarim'
+  resolution         text,                  -- 'receipt_issued' | 'cancelled_in_nedarim' | 'marked_manually'
   receipt_id         text,
   nedarim_result     jsonb,
   notes              text,

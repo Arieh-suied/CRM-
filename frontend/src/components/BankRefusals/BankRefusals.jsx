@@ -116,6 +116,15 @@ export default function BankRefusals({ institutions }) {
     setResolvingId(null);
   };
 
+  const handleMarkManually = async (row, resolution) => {
+    setResolvingId(row.id); setErrorMsg('');
+    try {
+      await resolveBankRefusal(row.id, resolution);
+      load();
+    } catch (e) { setErrorMsg(e.message); }
+    setResolvingId(null);
+  };
+
   return (
     <div className={styles.wrapper}>
       <div className={styles.toolbar}>
@@ -183,9 +192,15 @@ export default function BankRefusals({ institutions }) {
                         <button className={styles.dangerBtn} disabled={resolvingId === row.id} onClick={() => handleResolve(row, 'bounced')}>
                           ↩️ חזר – בטל בנדרים+
                         </button>
+                        <button className={styles.actionBtn} disabled={resolvingId === row.id} onClick={() => handleMarkManually(row, 'cleared_manual')}>
+                          סמן כנפרע (ללא פעולה)
+                        </button>
+                        <button className={styles.dangerBtn} disabled={resolvingId === row.id} onClick={() => handleMarkManually(row, 'bounced_manual')}>
+                          סמן כחזר (ללא פעולה)
+                        </button>
                       </div>
                     ) : (
-                      <span className={styles.muted}>{row.resolution === 'receipt_issued' ? 'קבלה הוצאה' : row.resolution === 'cancelled_in_nedarim' ? 'בוטל בנדרים+' : '—'}</span>
+                      <span className={styles.muted}>{row.resolution === 'receipt_issued' ? 'קבלה הוצאה' : row.resolution === 'cancelled_in_nedarim' ? 'בוטל בנדרים+' : row.resolution === 'marked_manually' ? 'סומן ידנית' : '—'}</span>
                     )}
                   </td>
                 </tr>

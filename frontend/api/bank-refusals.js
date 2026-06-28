@@ -181,6 +181,16 @@ export default async function handler(req, res) {
       return res.json({ success: true });
     }
 
+    if (resolution === 'cleared_manual' || resolution === 'bounced_manual') {
+      const { error: updErr } = await supabase.from('bank_standing_order_failures').update({
+        status: resolution === 'cleared_manual' ? 'cleared' : 'bounced',
+        resolution: 'marked_manually',
+        updated_at: new Date().toISOString(),
+      }).eq('id', id);
+      if (updErr) return res.status(500).json({ error: updErr.message });
+      return res.json({ success: true });
+    }
+
     return res.status(400).json({ error: 'Invalid resolution' });
   }
 
