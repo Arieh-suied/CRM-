@@ -35,7 +35,7 @@ function looksLikeBalance(value) {
 }
 
 async function handleGet(req, res, supabase) {
-  const { data, error } = await supabase.from('funds').select('*').order('name');
+  const { data, error } = await supabase.from('funds').select('*').eq('hidden', false).order('name');
   if (error) return res.status(500).json({ error: error.message });
 
   const withBalances = await Promise.all(
