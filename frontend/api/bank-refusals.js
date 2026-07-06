@@ -58,7 +58,7 @@ function dateInRange(ddmmyyyyStr, from, to) {
   return dt >= from && dt <= to;
 }
 
-async function sync(inst, period) {
+export async function sync(inst, period) {
   const { from, periodEnd, to } = periodRange(period);
   const r = await callNedarim({
     Action: 'GetMasavHistoryCSVNew',

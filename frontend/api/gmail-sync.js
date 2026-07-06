@@ -14,7 +14,7 @@
 
 import { getSupabase } from './_supabase.js';
 import { sendTelegramMessage } from './_telegram.js';
-import { isSomechName, isYeshivotName } from './_transaction-notify.js';
+import { refusalChatId } from './_transaction-notify.js';
 
 async function getGmailAccessToken() {
   const { GOOGLE_CLIENT_ID_SOM, GOOGLE_CLIENT_SECRET_SOM, GOOGLE_REDIRECT_URI_SOM, GOOGLE_REFRESH_TOKEN_SOM } = process.env;
@@ -145,12 +145,6 @@ function buildRefusalText(record) {
   if (record.payment_kind) lines.push(`סוג: ${record.payment_kind}`);
   if (record.order_number) lines.push(`מספר הוראה: ${record.order_number}`);
   return lines.join('\n');
-}
-
-function refusalChatId(institutionName) {
-  if (isSomechName(institutionName)) return process.env.TELEGRAM_CHAT_REFUSALS_SOMECH;
-  if (isYeshivotName(institutionName)) return process.env.TELEGRAM_CHAT_REFUSALS_YESHIVOT;
-  return null;
 }
 
 async function notifyRefusal(record) {

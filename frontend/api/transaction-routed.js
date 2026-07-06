@@ -11,6 +11,7 @@
 //   TELEGRAM_BOT_TOKEN
 //   TELEGRAM_CHAT_SOMECH      — chat id for the "סומך נופלים" channel
 //   TELEGRAM_CHAT_YESHIVOT    — chat id for the "ישיבות" channel (אור אפרים + חכמי ירושלים)
+//   TELEGRAM_CHAT_BNOT_CHAYIL — chat id for the "בנות חיל" channel (mosad 7016650)
 //   GOOGLE_SHEETS_CLIENT_EMAIL / GOOGLE_SHEETS_PRIVATE_KEY
 
 import { getSupabase } from './_supabase.js';
@@ -20,7 +21,10 @@ import { getMatchingFundRules } from './_fund-routing.js';
 import { resolveInstitution, buildTelegramText, receiptUrlFor } from './_transaction-notify.js';
 
 function chatIdForBucket(bucket) {
-  return bucket === 'סומך נופלים' ? process.env.TELEGRAM_CHAT_SOMECH : process.env.TELEGRAM_CHAT_YESHIVOT;
+  if (bucket === 'סומך נופלים') return process.env.TELEGRAM_CHAT_SOMECH;
+  if (bucket === 'ישיבות') return process.env.TELEGRAM_CHAT_YESHIVOT;
+  if (bucket === 'בנות חיל') return process.env.TELEGRAM_CHAT_BNOT_CHAYIL;
+  return null;
 }
 
 export default async function handler(req, res) {

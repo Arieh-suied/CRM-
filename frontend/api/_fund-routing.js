@@ -35,6 +35,12 @@ function buildRowValues(row, columns) {
       case 'group_name': return row.group_name;
       case 'literal': return col.text;
       case 'amount': return fee(row.amount, col.fee_pct, col.fee_mult);
+      case 'receipt': {
+        const url = row.receipt_data
+          ? `https://files.ezcount.co.il/front/documents/get/${row.receipt_data}`
+          : null;
+        return url ? `=HYPERLINK("${url}","הצג קבלה")` : '';
+      }
       default: return '';
     }
   });

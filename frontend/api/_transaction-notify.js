@@ -18,6 +18,14 @@ export function paymentTypeFor(mosadName) {
   return mosadName?.includes('שכ"ל') || mosadName?.includes('שכר לימוד') ? 'שכר לימוד' : 'תרומה';
 }
 
+// Routes refusal alerts (both Gmail credit-card refusals and the monthly bank
+// standing-order report) to the Telegram channel matching the institution.
+export function refusalChatId(institutionName) {
+  if (isSomechName(institutionName)) return process.env.TELEGRAM_CHAT_REFUSALS_SOMECH;
+  if (isYeshivotName(institutionName)) return process.env.TELEGRAM_CHAT_REFUSALS_YESHIVOT;
+  return null;
+}
+
 export function receiptUrlFor(row) {
   return row.receipt_data ? `https://files.ezcount.co.il/front/documents/get/${row.receipt_data}` : null;
 }
@@ -42,6 +50,9 @@ export async function resolveInstitution(row, supabase) {
     .maybeSingle();
   const mosadName = data?.mosad_name || null;
 
+  if (String(row.mosad_number) === '7016650') {
+    return { bucket: 'בנות חיל', mosadName: mosadName || 'בנות חיל' };
+  }
   if (isSomechName(row.comments) || isSomechName(row.group_name) || isSomechName(mosadName)) {
     return { bucket: 'סומך נופלים', mosadName: mosadName || 'סומך נופלים' };
   }
