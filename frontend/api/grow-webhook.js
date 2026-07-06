@@ -80,6 +80,19 @@ async function createEzcountReceipt(payload) {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
+  // Grow calls this endpoint directly, so it can't send a Supabase JWT. Guard it
+  // with a shared secret instead: set GROW_WEBHOOK_SECRET in Vercel and append
+  // ?secret=<value> (or send an x-webhook-secret header) from the Grow webhook
+  // config. While the env var is unset the endpoint stays open (unchanged
+  // behaviour) so production keeps working until the secret is wired up.
+  const webhookSecret = process.env.GROW_WEBHOOK_SECRET;
+  if (webhookSecret) {
+    const provided = req.headers['x-webhook-secret'] || req.query?.secret;
+    if (provided !== webhookSecret) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+  }
+
   const {
     transactionCode, paymentSum, paymentType, paymentDate,
     asmachta, paymentDesc, fullName, payerPhone, payerEmail,

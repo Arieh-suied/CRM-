@@ -2,8 +2,23 @@ import { supabase } from '../lib/supabase.js';
 
 const BASE = '/api';
 
+// Drop-in replacement for fetch() that attaches the logged-in user's Supabase
+// JWT as a Bearer token. Every /api call must go through this so the server can
+// authenticate the caller — the endpoints no longer trust unauthenticated hits.
+export async function authFetch(url, options = {}) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  return fetch(url, {
+    ...options,
+    headers: {
+      ...(options.headers || {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+}
+
 async function request(path, options = {}) {
-  const res = await fetch(`${BASE}${path}`, options);
+  const res = await authFetch(`${BASE}${path}`, options);
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(err.error || 'Request failed');
@@ -11,16 +26,10 @@ async function request(path, options = {}) {
   return res.json();
 }
 
-async function adminRequest(path, options = {}) {
-  const { data: { session } } = await supabase.auth.getSession();
-  const token = session?.access_token;
+function adminRequest(path, options = {}) {
   return request(path, {
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(options.headers || {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
+    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
   });
 }
 
@@ -118,7 +127,7 @@ export function chargeCreditOrder(mosadNumber, params) {
 }
 
 export async function exportCreditOrders(mosadNumber, type) {
-  const res = await fetch(`/api/standing-orders?mosad_number=${encodeURIComponent(mosadNumber)}&export=${type}`);
+  const res = await authFetch(`/api/standing-orders?mosad_number=${encodeURIComponent(mosadNumber)}&export=${type}`);
   if (!res.ok) throw new Error('Export failed');
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
@@ -148,7 +157,7 @@ export async function exportBankOrders(mosadNumber, type, from, to) {
   let url = `/api/bank-orders?mosad_number=${encodeURIComponent(mosadNumber)}&export=${type}`;
   if (from) url += `&from=${encodeURIComponent(from)}`;
   if (to)   url += `&to=${encodeURIComponent(to)}`;
-  const res = await fetch(url);
+  const res = await authFetch(url);
   if (!res.ok) throw new Error('Export failed');
   const blob = await res.blob();
   const blobUrl = URL.createObjectURL(blob);

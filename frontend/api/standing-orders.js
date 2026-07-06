@@ -1,8 +1,15 @@
 import { CREDIT_URL, getInstitution as getInst, callNedarim as callNedarimRaw } from './_nedarim.js';
+import { getSupabase } from './_supabase.js';
+import { requireUser, WRITE_ROLES } from './_auth.js';
 
 const callNedarim = (params) => callNedarimRaw(CREDIT_URL, params);
 
 export default async function handler(req, res) {
+  // Reading orders needs a logged-in user; charging / editing / deleting a
+  // standing order (POST) is restricted to editors and admins.
+  const user = await requireUser(req, res, getSupabase(), req.method === 'GET' ? {} : { roles: WRITE_ROLES });
+  if (!user) return;
+
   const { mosad_number, keva_id, export: exportType } = req.query;
   if (!mosad_number) return res.status(400).json({ error: 'mosad_number is required' });
 

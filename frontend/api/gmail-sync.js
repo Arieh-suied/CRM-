@@ -13,6 +13,7 @@
 //   TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_REFUSALS_SOMECH, TELEGRAM_CHAT_REFUSALS_YESHIVOT
 
 import { getSupabase } from './_supabase.js';
+import { requireUser } from './_auth.js';
 import { sendTelegramMessage } from './_telegram.js';
 import { refusalChatId } from './_transaction-notify.js';
 
@@ -167,7 +168,11 @@ export default async function handler(req, res) {
     if (cronSecret && req.headers.authorization !== `Bearer ${cronSecret}`) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
-  } else if (req.method !== 'POST') {
+  } else if (req.method === 'POST') {
+    // Manual "סנכרן" button — must be a logged-in user, not an anonymous caller.
+    const user = await requireUser(req, res, getSupabase());
+    if (!user) return;
+  } else {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 

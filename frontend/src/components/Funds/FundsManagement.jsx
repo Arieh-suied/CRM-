@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import styles from '../Receipts/Receipts.module.css';
 import { supabase } from '../../lib/supabase.js';
+import { authFetch } from '../../services/api.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 
 const FIELD_OPTIONS = [
@@ -45,7 +46,7 @@ export default function FundsManagement() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/funds');
+      const res = await authFetch('/api/funds');
       const data = await res.json();
       setFunds(Array.isArray(data) ? data : []);
     } catch {

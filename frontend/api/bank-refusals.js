@@ -1,4 +1,5 @@
 import { getSupabase } from './_supabase.js';
+import { requireUser, WRITE_ROLES } from './_auth.js';
 import { BANK_URL, getInstitution, callNedarim as callNedarimRaw } from './_nedarim.js';
 import { issueReceipt, branchByMosadNumber } from './_receipts-core.js';
 
@@ -101,6 +102,9 @@ export async function sync(inst, period) {
 }
 
 export default async function handler(req, res) {
+  const caller = await requireUser(req, res, getSupabase(), req.method === 'GET' ? {} : { roles: WRITE_ROLES });
+  if (!caller) return;
+
   const { mosad_number, period, action } = req.query;
 
   if (req.method === 'GET') {

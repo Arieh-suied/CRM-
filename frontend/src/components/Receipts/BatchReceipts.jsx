@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import * as XLSX from 'xlsx';
 import styles from './Receipts.module.css';
 import { supabase } from '../../lib/supabase.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import { analyzeTransferScreenshot, ALLOWED_IMAGE_TYPES } from './imageUtils.js';
+import { authFetch } from '../../services/api.js';
 
 const BRANCHES = [
   'סומך נופלים',
@@ -171,6 +171,7 @@ export default function BatchReceipts() {
 
   // Excel upload
   const handleExcel = async (file) => {
+    const XLSX = await import('xlsx');
     const data = await file.arrayBuffer();
     const wb = XLSX.read(data, { type: 'array' });
 
@@ -364,7 +365,7 @@ export default function BatchReceipts() {
     setErrorIds(prev => { const next = new Set(prev); next.delete(entry.id); return next; });
     setSendingId(entry.id);
     try {
-      const res = await fetch('/api/receipts', {
+      const res = await authFetch('/api/receipts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -410,10 +411,11 @@ export default function BatchReceipts() {
     setBatchSending(false);
   };
 
-  const exportExcel = () => {
+  const exportExcel = async () => {
     const rows = (selectedIds.size > 0 ? filteredEntries.filter(e => selectedIds.has(e.id)) : filteredEntries)
       .map(e => ({ 'שם לקוח': e.customer_name || '', 'ת.ז': e.customer_id || '', 'אימייל': e.customer_email || '', 'סכום': e.amount ?? '', 'תאריך': e.transfer_date || '', 'בנק': e.bank_name || '', 'סניף': e.bank_branch || '', 'חשבון': e.bank_account || '', 'אסמכתא': e.reference_number || '', 'מוסד': e.branch || '', 'הערות': e.notes || '' }));
     if (!rows.length) return;
+    const XLSX = await import('xlsx');
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'העברות');

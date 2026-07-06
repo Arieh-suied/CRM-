@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import styles from './StripeDonations.module.css';
+import { authFetch } from '../../services/api.js';
 
 const fmt = (n, currency = 'USD') =>
   new Intl.NumberFormat('he-IL', { style: 'currency', currency, maximumFractionDigits: 2 }).format(n ?? 0);
@@ -49,7 +50,7 @@ function DonationsView() {
     setLoading(true);
     const params = { page: p, sort_by: sort.col, sort_dir: sort.dir };
     if (query) params.search = query;
-    const res = await fetch(`/api/stripe-donations?${new URLSearchParams(params)}`);
+    const res = await authFetch(`/api/stripe-donations?${new URLSearchParams(params)}`);
     const json = await res.json();
     setData(json.data ?? []);
     setTotal(json.total ?? 0);
@@ -63,7 +64,7 @@ function DonationsView() {
   const syncCustomers = async () => {
     setSyncing(true); setSyncMsg('');
     try {
-      const res  = await fetch('/api/stripe-donations', { method: 'POST' });
+      const res  = await authFetch('/api/stripe-donations', { method: 'POST' });
       const json = await res.json();
       if (!res.ok) { setSyncMsg(`שגיאה: ${json.error}`); return; }
       setSyncMsg(`עודכנו ${json.updated} רשומות`);
@@ -153,7 +154,7 @@ function SubscriptionsView() {
     setLoading(true);
     const params = { view: 'subscriptions' };
     if (search) params.search = search;
-    const res  = await fetch(`/api/stripe-donations?${new URLSearchParams(params)}`);
+    const res  = await authFetch(`/api/stripe-donations?${new URLSearchParams(params)}`);
     const json = await res.json();
     setData(json.data ?? []);
     setTotal(json.total ?? 0);
@@ -165,7 +166,7 @@ function SubscriptionsView() {
   const syncSubs = async () => {
     setSyncing(true); setSyncMsg('');
     try {
-      const res  = await fetch('/api/stripe-donations?action=subscriptions', { method: 'POST' });
+      const res  = await authFetch('/api/stripe-donations?action=subscriptions', { method: 'POST' });
       const json = await res.json();
       if (!res.ok) { setSyncMsg(`שגיאה: ${json.error}`); return; }
       setSyncMsg(json.message ?? `סונכרנו ${json.synced} מנויים`);

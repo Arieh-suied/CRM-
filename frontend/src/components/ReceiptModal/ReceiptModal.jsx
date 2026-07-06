@@ -18,7 +18,7 @@ export default function ReceiptModal({ url, title, onClose }) {
 
   return (
     <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+      <div className={styles.modal} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={title ?? 'קבלה'}>
         <div className={styles.header}>
           <span className={styles.title}>{title ?? 'קבלה'}</span>
           <div className={styles.actions}>
@@ -30,7 +30,7 @@ export default function ReceiptModal({ url, title, onClose }) {
             >
               פתח בטאב חדש ↗
             </a>
-            <button className={styles.closeBtn} onClick={onClose}>✕</button>
+            <button className={styles.closeBtn} onClick={onClose} aria-label="סגור">✕</button>
           </div>
         </div>
         <div className={styles.body}>

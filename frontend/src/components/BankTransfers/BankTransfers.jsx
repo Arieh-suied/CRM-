@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import styles from './BankTransfers.module.css';
 import ReceiptModal from '../ReceiptModal/ReceiptModal.jsx';
+import { authFetch } from '../../services/api.js';
 
 const fmt = (n, currency = 'ILS') => {
   try {
@@ -54,7 +55,7 @@ export default function BankTransfers({ institutions }) {
     if (query)       params.search       = query;
     if (mosadFilter) params.mosad_number = mosadFilter;
     const qs = new URLSearchParams(params).toString();
-    const res = await fetch(`/api/bank-transfers?${qs}`);
+    const res = await authFetch(`/api/bank-transfers?${qs}`);
     const json = await res.json();
     setData(json.data ?? []);
     setTotal(json.total ?? 0);

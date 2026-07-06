@@ -8,7 +8,7 @@
 //   FUNDS_SHARE_EMAIL             — Google account the new copy is shared with
 
 import { getSupabase } from './_supabase.js';
-import { getRequestUser } from './_auth.js';
+import { getRequestUser, requireUser } from './_auth.js';
 import {
   getCellValue,
   copySpreadsheet,
@@ -155,7 +155,11 @@ async function handlePost(req, res, supabase, requestUser) {
 export default async function handler(req, res) {
   const supabase = getSupabase();
 
-  if (req.method === 'GET') return handleGet(req, res, supabase);
+  if (req.method === 'GET') {
+    const user = await requireUser(req, res, supabase);
+    if (!user) return;
+    return handleGet(req, res, supabase);
+  }
 
   if (req.method === 'POST') {
     const requestUser = await getRequestUser(req, supabase);

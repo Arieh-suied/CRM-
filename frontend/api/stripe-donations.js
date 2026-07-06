@@ -1,4 +1,5 @@
-import { getSupabase } from './_supabase.js';
+import { getSupabase, ilikeOr } from './_supabase.js';
+import { requireUser, WRITE_ROLES } from './_auth.js';
 
 const PAGE_SIZE = 50;
 const ALLOWED_SORT = new Set(['resolved_name', 'donor_email', 'amount', 'paid_at', 'stripe_customer_id']);
@@ -8,6 +9,9 @@ const ALLOWED_SORT = new Set(['resolved_name', 'donor_email', 'amount', 'paid_at
 // POST                          → sync customer names from Stripe
 // POST ?action=subscriptions    → sync active subscriptions from Stripe
 export default async function handler(req, res) {
+  const user = await requireUser(req, res, getSupabase(), req.method === 'GET' ? {} : { roles: WRITE_ROLES });
+  if (!user) return;
+
   if (req.method === 'GET')  return handleGet(req, res);
   if (req.method === 'POST') {
     if (req.query.action === 'subscriptions') return handleSyncSubscriptions(req, res);
@@ -33,7 +37,10 @@ async function handleGet(req, res) {
       .order(col, { ascending: asc, nullsLast: true })
       .range(offset, offset + PAGE_SIZE - 1);
 
-    if (search) query = query.or(`donor_name.ilike.%${search}%,donor_email.ilike.%${search}%,stripe_customer_id.ilike.%${search}%,stripe_payment_intent_id.ilike.%${search}%`);
+    if (search) {
+      const orClause = ilikeOr(['donor_name', 'donor_email', 'stripe_customer_id', 'stripe_payment_intent_id'], search);
+      if (orClause) query = query.or(orClause);
+    }
 
     const { data, error, count } = await query;
     if (error) return res.status(500).json({ error: error.message });

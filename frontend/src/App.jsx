@@ -1,23 +1,28 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import styles from './App.module.css';
+import { useAuth } from './contexts/AuthContext.jsx';
+import { useTransactions } from './hooks/useTransactions.js';
+import { fetchInstitutions, fetchFilterOptions } from './services/api.js';
+
+// Eager — app shell + the default (transactions) tab, needed on first paint.
 import NavTabs from './components/NavTabs/NavTabs.jsx';
 import LoginScreen from './components/LoginScreen/LoginScreen.jsx';
 import AccessDenied from './components/AccessDenied/AccessDenied.jsx';
-import { useAuth } from './contexts/AuthContext.jsx';
 import FiltersBar from './components/FiltersBar/FiltersBar.jsx';
 import TransactionsTable from './components/TransactionsTable/TransactionsTable.jsx';
-import StripeDonations from './components/StripeDonations/StripeDonations.jsx';
-import BankTransfers from './components/BankTransfers/BankTransfers.jsx';
-import { useTransactions } from './hooks/useTransactions.js';
-import { fetchInstitutions, fetchFilterOptions } from './services/api.js';
-import StandingOrders from './components/StandingOrders/StandingOrders.jsx';
-import Receipts from './components/Receipts/Receipts.jsx';
-import GrowTransactions from './components/GrowTransactions/GrowTransactions.jsx';
-import UserManagement from './components/UserManagement/UserManagement.jsx';
-import AIAssistant from './components/AIAssistant/AIAssistant.jsx';
-import FundsManagement from './components/Funds/FundsManagement.jsx';
-import PaymentFailures from './components/PaymentFailures/PaymentFailures.jsx';
-import BankRefusals from './components/BankRefusals/BankRefusals.jsx';
+
+// Lazy — every other tab loads its own chunk on demand (keeps the initial
+// bundle small; the heavy Receipts tab also pulls in xlsx only when opened).
+const StripeDonations  = lazy(() => import('./components/StripeDonations/StripeDonations.jsx'));
+const BankTransfers    = lazy(() => import('./components/BankTransfers/BankTransfers.jsx'));
+const StandingOrders   = lazy(() => import('./components/StandingOrders/StandingOrders.jsx'));
+const Receipts         = lazy(() => import('./components/Receipts/Receipts.jsx'));
+const GrowTransactions = lazy(() => import('./components/GrowTransactions/GrowTransactions.jsx'));
+const UserManagement   = lazy(() => import('./components/UserManagement/UserManagement.jsx'));
+const FundsManagement  = lazy(() => import('./components/Funds/FundsManagement.jsx'));
+const PaymentFailures  = lazy(() => import('./components/PaymentFailures/PaymentFailures.jsx'));
+const BankRefusals     = lazy(() => import('./components/BankRefusals/BankRefusals.jsx'));
+const AIAssistant      = lazy(() => import('./components/AIAssistant/AIAssistant.jsx'));
 
 const EMPTY_FILTERS = {
   mosad_number: '', transaction_type: '', group_name: '',
@@ -26,13 +31,25 @@ const EMPTY_FILTERS = {
 
 const DEFAULT_SORT = { sort_by: 'transaction_time_iso', sort_dir: 'desc' };
 
+// Tab is mirrored in the URL hash (#stripe, #receipts…) so a refresh, bookmark,
+// or back/forward keeps you on the same screen instead of resetting to עסקאות.
+const VALID_TABS = new Set([
+  'transactions', 'stripe', 'bank', 'keva', 'grow',
+  'receipts', 'funds', 'failures', 'bank-refusals', 'users',
+]);
+
+function tabFromHash() {
+  const h = window.location.hash.slice(1);
+  return VALID_TABS.has(h) ? h : 'transactions';
+}
+
 function UserAvatar({ email }) {
   const initial = email ? email[0].toUpperCase() : '?';
   return <div className={styles.avatar}>{initial}</div>;
 }
 
 function Dashboard({ user, signOut, role, allowedMosadim }) {
-  const [activeTab, setActiveTab]   = useState('transactions');
+  const [activeTab, setActiveTab]   = useState(tabFromHash);
   const [filters, setFilters]       = useState(EMPTY_FILTERS);
   const [sort, setSort]             = useState(DEFAULT_SORT);
   const [institutions, setInstitutions]   = useState([]);
@@ -44,6 +61,13 @@ function Dashboard({ user, signOut, role, allowedMosadim }) {
   useEffect(() => {
     fetchInstitutions().then(setInstitutions).catch(console.error);
     fetchFilterOptions().then(setFilterOptions).catch(console.error);
+  }, []);
+
+  // Sync the tab when the hash changes (browser back/forward, manual edit).
+  useEffect(() => {
+    const onHashChange = () => setActiveTab(tabFromHash());
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
   // Filter institutions by what the user is allowed to see
@@ -64,6 +88,13 @@ function Dashboard({ user, signOut, role, allowedMosadim }) {
     );
   }, []);
 
+  const handleTabChange = useCallback((tab) => {
+    // Writing the hash fires 'hashchange', which updates activeTab; when the
+    // hash is already the target (e.g. re-click) set it directly.
+    if (window.location.hash.slice(1) === tab) setActiveTab(tab);
+    else window.location.hash = tab;
+  }, []);
+
   return (
     <div className={styles.layout}>
       <header className={styles.header}>
@@ -77,7 +108,7 @@ function Dashboard({ user, signOut, role, allowedMosadim }) {
       </header>
 
       <main className={styles.main}>
-        <NavTabs active={activeTab} onChange={setActiveTab} role={role} />
+        <NavTabs active={activeTab} onChange={handleTabChange} role={role} />
 
         {activeTab === 'transactions' && (
           <>
@@ -100,20 +131,24 @@ function Dashboard({ user, signOut, role, allowedMosadim }) {
           </>
         )}
 
-        {activeTab === 'stripe'    && <StripeDonations />}
-        {activeTab === 'bank'      && <BankTransfers institutions={visibleInstitutions} />}
-        {activeTab === 'keva'      && <StandingOrders institutions={visibleInstitutions} />}
-        {activeTab === 'receipts'  && <Receipts />}
-        {activeTab === 'grow'      && <GrowTransactions />}
-        {activeTab === 'funds'     && <FundsManagement />}
-        {activeTab === 'failures'  && <PaymentFailures />}
-        {activeTab === 'bank-refusals' && <BankRefusals institutions={visibleInstitutions} />}
-        {activeTab === 'users' && role === 'admin' && (
-          <UserManagement institutions={institutions} />
-        )}
+        <Suspense fallback={<div className={styles.loadingText} style={{ padding: 40, textAlign: 'center' }}>טוען…</div>}>
+          {activeTab === 'stripe'    && <StripeDonations />}
+          {activeTab === 'bank'      && <BankTransfers institutions={visibleInstitutions} />}
+          {activeTab === 'keva'      && <StandingOrders institutions={visibleInstitutions} />}
+          {activeTab === 'receipts'  && <Receipts />}
+          {activeTab === 'grow'      && <GrowTransactions />}
+          {activeTab === 'funds'     && <FundsManagement />}
+          {activeTab === 'failures'  && <PaymentFailures />}
+          {activeTab === 'bank-refusals' && <BankRefusals institutions={visibleInstitutions} />}
+          {activeTab === 'users' && role === 'admin' && (
+            <UserManagement institutions={institutions} />
+          )}
+        </Suspense>
       </main>
 
-      <AIAssistant />
+      <Suspense fallback={null}>
+        <AIAssistant />
+      </Suspense>
     </div>
   );
 }

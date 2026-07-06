@@ -1,8 +1,12 @@
 import { getSupabase } from './_supabase.js';
+import { requireUser, WRITE_ROLES } from './_auth.js';
 
 export default async function handler(req, res) {
   const supabase = getSupabase();
   try {
+    const user = await requireUser(req, res, supabase, req.method === 'GET' ? {} : { roles: WRITE_ROLES });
+    if (!user) return;
+
     if (req.method === 'GET') {
       const { data, error } = await supabase
         .from('institutions')

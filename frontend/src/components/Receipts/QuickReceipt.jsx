@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import styles from './Receipts.module.css';
 import { supabase } from '../../lib/supabase.js';
+import { authFetch } from '../../services/api.js';
 import TransferScreenshotUpload from './TransferScreenshotUpload.jsx';
 
 const BRANCHES = [
@@ -173,7 +174,7 @@ export default function QuickReceipt() {
         notes: notes.trim() || undefined,
       };
 
-      const res = await fetch('/api/receipts', {
+      const res = await authFetch('/api/receipts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),

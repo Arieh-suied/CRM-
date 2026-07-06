@@ -1,3 +1,5 @@
+import { authFetch } from '../../services/api.js';
+
 export const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 
 export function compressImage(file, maxDim = 1600, quality = 0.85) {
@@ -28,7 +30,7 @@ export function compressImage(file, maxDim = 1600, quality = 0.85) {
 
 export async function analyzeTransferScreenshot(file) {
   const dataUrl = await compressImage(file);
-  const res = await fetch('/api/parse-transfer', {
+  const res = await authFetch('/api/parse-transfer', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ image: dataUrl, mimeType: 'image/jpeg' }),

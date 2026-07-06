@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import styles from './Receipts.module.css';
 import { compressImage, ALLOWED_IMAGE_TYPES } from './imageUtils.js';
+import { authFetch } from '../../services/api.js';
 
 const ACCEPT = 'image/jpeg,image/jpg,image/png,image/webp';
 const ALLOWED_TYPES = ALLOWED_IMAGE_TYPES;
@@ -45,7 +46,7 @@ export default function TransferScreenshotUpload({ onExtracted }) {
     setError('');
     setResult(null);
     try {
-      const res = await fetch('/api/parse-transfer', {
+      const res = await authFetch('/api/parse-transfer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ image: imageData, mimeType: 'image/jpeg' }),
