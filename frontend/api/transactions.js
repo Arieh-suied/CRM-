@@ -24,22 +24,39 @@ function applyFilters(query, { mosad_number, transaction_type, group_name, date_
 let filterOptionsCache = { data: null, expires: 0 };
 const FILTER_OPTIONS_TTL_MS = 5 * 60 * 1000;
 
+// Supabase caps each request at 1000 rows, so a single select over the whole
+// table silently misses values — page through and collect distinct non-empty ones.
+async function fetchDistinct(supabase, column) {
+  const CHUNK = 1000;
+  const values = new Set();
+  for (let from = 0; ; from += CHUNK) {
+    const { data, error } = await supabase
+      .from('transactions')
+      .select(column)
+      .not(column, 'is', null)
+      .neq(column, '')
+      .range(from, from + CHUNK - 1);
+    if (error) throw new Error(error.message);
+    for (const row of data) {
+      const v = row[column];
+      if (v && v.trim()) values.add(v);
+    }
+    if (data.length < CHUNK) break;
+  }
+  return [...values].sort();
+}
+
 async function handleFilters(_req, res, supabase) {
   if (filterOptionsCache.data && filterOptionsCache.expires > Date.now()) {
     return res.json(filterOptionsCache.data);
   }
 
-  const [typesRes, groupsRes] = await Promise.all([
-    supabase.from('transactions').select('transaction_type').not('transaction_type', 'is', null),
-    supabase.from('transactions').select('group_name').not('group_name', 'is', null),
+  const [transaction_types, group_names] = await Promise.all([
+    fetchDistinct(supabase, 'transaction_type'),
+    fetchDistinct(supabase, 'group_name'),
   ]);
-  if (typesRes.error) return res.status(500).json({ error: typesRes.error.message });
-  if (groupsRes.error) return res.status(500).json({ error: groupsRes.error.message });
 
-  const payload = {
-    transaction_types: [...new Set(typesRes.data.map((r) => r.transaction_type))].sort(),
-    group_names:       [...new Set(groupsRes.data.map((r) => r.group_name))].sort(),
-  };
+  const payload = { transaction_types, group_names };
   filterOptionsCache = { data: payload, expires: Date.now() + FILTER_OPTIONS_TTL_MS };
   return res.json(payload);
 }

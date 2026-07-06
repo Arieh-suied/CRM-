@@ -19,6 +19,36 @@ function applyFilters(query, { mosad_number, transaction_type, group_name, date_
   return query;
 }
 
+// Supabase caps each request at 1000 rows, so a single select over the whole
+// table silently misses values — page through and collect distinct non-empty ones.
+async function fetchDistinct(column) {
+  const CHUNK = 1000;
+  const values = new Set();
+  for (let from = 0; ; from += CHUNK) {
+    const { data, error } = await supabase
+      .from('transactions')
+      .select(column)
+      .not(column, 'is', null)
+      .neq(column, '')
+      .range(from, from + CHUNK - 1);
+    if (error) throw new Error(error.message);
+    for (const row of data) {
+      const v = row[column];
+      if (v && v.trim()) values.add(v);
+    }
+    if (data.length < CHUNK) break;
+  }
+  return [...values].sort();
+}
+
+async function getFilterOptions() {
+  const [transaction_types, group_names] = await Promise.all([
+    fetchDistinct('transaction_type'),
+    fetchDistinct('group_name'),
+  ]);
+  return { transaction_types, group_names };
+}
+
 const SORTABLE_COLUMNS = new Set([
   'transaction_time_iso', 'client_name', 'amount',
   'transaction_type', 'group_name', 'mosad_number',
@@ -67,16 +97,11 @@ router.get('/', async (req, res) => {
 
   // ?action=filters
   if (action === 'filters') {
-    const [typesRes, groupsRes] = await Promise.all([
-      supabase.from('transactions').select('transaction_type').not('transaction_type', 'is', null),
-      supabase.from('transactions').select('group_name').not('group_name', 'is', null),
-    ]);
-    if (typesRes.error) return res.status(500).json({ error: typesRes.error.message });
-    if (groupsRes.error) return res.status(500).json({ error: groupsRes.error.message });
-    return res.json({
-      transaction_types: [...new Set(typesRes.data.map((r) => r.transaction_type))].sort(),
-      group_names:       [...new Set(groupsRes.data.map((r) => r.group_name))].sort(),
-    });
+    try {
+      return res.json(await getFilterOptions());
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
   }
 
   const offset = (parseInt(page) - 1) * PAGE_SIZE;
@@ -145,18 +170,11 @@ router.get('/summary', async (req, res) => {
 });
 
 router.get('/filters', async (_req, res) => {
-  const [typesRes, groupsRes] = await Promise.all([
-    supabase.from('transactions').select('transaction_type').not('transaction_type', 'is', null),
-    supabase.from('transactions').select('group_name').not('group_name', 'is', null),
-  ]);
-
-  if (typesRes.error) return res.status(500).json({ error: typesRes.error.message });
-  if (groupsRes.error) return res.status(500).json({ error: groupsRes.error.message });
-
-  const transaction_types = [...new Set(typesRes.data.map((r) => r.transaction_type))].sort();
-  const group_names = [...new Set(groupsRes.data.map((r) => r.group_name))].sort();
-
-  res.json({ transaction_types, group_names });
+  try {
+    res.json(await getFilterOptions());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 export default router;
