@@ -1,4 +1,4 @@
-// Test script — sends the latest transaction from mosad 7016650 (בנות חיל)
+// Test script — sends the latest transaction from mosad 7016650 (תולדות ניסים)
 // to the Telegram channel and appends a row to their Google Sheet.
 //
 // Run from the frontend/ directory with real env vars:
@@ -38,7 +38,7 @@ const receiptUrl = row.receipt_data
   : null;
 
 const text = [
-  `התקבלה עסקה ב${row.mosad_name || 'בנות חיל'}`,
+  `התקבלה עסקה ב${row.mosad_name || 'תולדות ניסים'}`,
   '',
   `שם: ${row.client_name || '—'}`,
   `סכום: ${row.amount}₪`,

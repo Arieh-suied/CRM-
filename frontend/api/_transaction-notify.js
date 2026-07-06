@@ -51,7 +51,7 @@ export async function resolveInstitution(row, supabase) {
   const mosadName = data?.mosad_name || null;
 
   if (String(row.mosad_number) === '7016650') {
-    return { bucket: 'בנות חיל', mosadName: mosadName || 'בנות חיל' };
+    return { bucket: 'תולדות ניסים', mosadName: mosadName || 'תולדות ניסים' };
   }
   if (isSomechName(row.comments) || isSomechName(row.group_name) || isSomechName(mosadName)) {
     return { bucket: 'סומך נופלים', mosadName: mosadName || 'סומך נופלים' };
