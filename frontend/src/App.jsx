@@ -54,13 +54,15 @@ function Dashboard({ user, signOut, role, allowedMosadim }) {
   const [sort, setSort]             = useState(DEFAULT_SORT);
   const [institutions, setInstitutions]   = useState([]);
   const [filterOptions, setFilterOptions] = useState({ transaction_types: [], group_names: [] });
+  const [loadError, setLoadError]         = useState(null);
 
   const { transactions, pagination, loading, error, loadPage } =
     useTransactions(filters, sort);
 
   useEffect(() => {
-    fetchInstitutions().then(setInstitutions).catch(console.error);
-    fetchFilterOptions().then(setFilterOptions).catch(console.error);
+    const onLoadErr = () => setLoadError('חלק מהנתונים הבסיסיים (מוסדות/מסננים) לא נטענו. נסה לרענן את הדף.');
+    fetchInstitutions().then(setInstitutions).catch(onLoadErr);
+    fetchFilterOptions().then(setFilterOptions).catch(onLoadErr);
   }, []);
 
   // Sync the tab when the hash changes (browser back/forward, manual edit).
@@ -109,6 +111,8 @@ function Dashboard({ user, signOut, role, allowedMosadim }) {
 
       <main className={styles.main}>
         <NavTabs active={activeTab} onChange={handleTabChange} role={role} />
+
+        {loadError && <div className={styles.error}>{loadError}</div>}
 
         {activeTab === 'transactions' && (
           <>

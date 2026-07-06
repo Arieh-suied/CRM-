@@ -79,6 +79,12 @@ export default function CreditModal({ kevaId, mosadNumber, onClose, onRefresh })
 
   useEffect(load, [mosadNumber, kevaId]);
 
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
   const set = (key) => (val) => setEditForm(p => ({ ...p, [key]: val }));
 
   const statusKey   = String(data?.KevaStatus ?? '');
@@ -124,8 +130,8 @@ export default function CreditModal({ kevaId, mosadNumber, onClose, onRefresh })
 
   return (
     <div className={styles.modalOverlay} onClick={onClose}>
-      <div className={styles.modal} onClick={e => e.stopPropagation()}>
-        <button className={styles.modalClose} onClick={onClose}>✕</button>
+      <div className={styles.modal} onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={`הוראת קבע אשראי ${kevaId}`}>
+        <button className={styles.modalClose} onClick={onClose} aria-label="סגור">✕</button>
 
         {loading && <p className={styles.placeholder}>טוען...</p>}
         {fetchErr && <p className={styles.errorMsg}>{fetchErr}</p>}

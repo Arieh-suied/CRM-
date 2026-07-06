@@ -30,6 +30,7 @@ export default function FundsManagement() {
   const { role } = useAuth();
   const [funds, setFunds]       = useState([]);
   const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving]     = useState(false);
   const [msg, setMsg]           = useState({ text: '', ok: false });
@@ -45,11 +46,14 @@ export default function FundsManagement() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const res = await authFetch('/api/funds');
+      if (!res.ok) throw new Error('load failed');
       const data = await res.json();
       setFunds(Array.isArray(data) ? data : []);
     } catch {
+      setError('שגיאה בטעינת הקרנות. נסה לרענן את הדף.');
       setFunds([]);
     } finally {
       setLoading(false);
@@ -207,6 +211,8 @@ export default function FundsManagement() {
 
       {loading ? (
         <div className={styles.placeholder}>טוען...</div>
+      ) : error ? (
+        <div className={styles.empty} style={{ color: 'var(--color-danger)' }}>{error}</div>
       ) : funds.length === 0 ? (
         <div className={styles.empty}>אין קרנות מוגדרות עדיין</div>
       ) : (
