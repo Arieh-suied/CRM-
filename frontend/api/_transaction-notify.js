@@ -37,6 +37,16 @@ export function refusalChatId(institutionName) {
   return null;
 }
 
+// Routes an institution (matched by name, e.g. from a Gmail standing-order
+// email that has no mosad number) to its *transaction* Telegram channel — the
+// same channel its successful transactions go to, not the refusals channel.
+export function transactionChatIdByName(institutionName) {
+  if (isSomechName(institutionName)) return process.env.TELEGRAM_CHAT_SOMECH;
+  if (isYeshivotName(institutionName)) return process.env.TELEGRAM_CHAT_YESHIVOT;
+  if (isToldotNisimName(institutionName)) return process.env.TELEGRAM_CHAT_BNOT_CHAYIL;
+  return null;
+}
+
 export function receiptUrlFor(row) {
   return row.receipt_data ? `https://files.ezcount.co.il/front/documents/get/${row.receipt_data}` : null;
 }
