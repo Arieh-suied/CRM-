@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import styles from './StandingOrders.module.css';
-import { fetchStandingOrders, exportCreditOrders, exportBankOrders } from '../../services/api.js';
+import { fetchStandingOrders, exportCreditOrders, exportBankOrders, authFetch } from '../../services/api.js';
+import { filterRowsByDateRange, exportAoaXlsx } from '../../lib/exportXlsx.js';
 import CreditModal from './CreditModal.jsx';
 import BankModal from './BankModal.jsx';
 import SortThBase, { sortRows } from '../shared/SortTh.jsx';
@@ -148,16 +149,44 @@ function BankTable({ rows, mosadNumber, onRefresh }) {
   );
 }
 
+function monthRange(offset = 0) {
+  const now = new Date();
+  const first = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+  const last  = offset === 0 ? now : new Date(now.getFullYear(), now.getMonth() + offset + 1, 0);
+  const str = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return { from: str(first), to: str(last) };
+}
+
 function ExportMenu({ mosadNumber, type }) {
   const [open, setOpen]       = useState(false);
   const [exporting, setExp]   = useState(false);
   const [dateFrom, setFrom]   = useState('');
   const [dateTo, setTo]       = useState('');
 
+  const hasRange = !!(dateFrom || dateTo);
+
+  // Nedarim+ can't filter its credit CSVs by date, so when a range is chosen
+  // we download the full CSV, filter the rows locally, and save as Excel.
+  const exportCreditFiltered = async (exportType) => {
+    const res = await authFetch(`/api/standing-orders?mosad_number=${encodeURIComponent(mosadNumber)}&export=${exportType}`);
+    if (!res.ok) throw new Error('Export failed');
+    const text = await res.text();
+    const XLSX = await import('xlsx');
+    const wb = XLSX.read(text, { type: 'string', raw: true });
+    const aoa = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
+    const rows = filterRowsByDateRange(aoa, dateFrom, dateTo);
+    if (!rows) throw new Error('לא זוהתה עמודת תאריך בקובץ — ייצא ללא סינון');
+    if (rows.length <= 1) throw new Error('אין שורות בטווח התאריכים שנבחר');
+    await exportAoaXlsx(rows, `credit-${exportType}-${mosadNumber}-${dateFrom || 'start'}-${dateTo || 'today'}.xlsx`);
+  };
+
   const doExport = async (exportType) => {
     setExp(true);
     try {
-      if (type === 'credit') await exportCreditOrders(mosadNumber, exportType);
+      if (type === 'credit') {
+        if (hasRange) await exportCreditFiltered(exportType);
+        else await exportCreditOrders(mosadNumber, exportType);
+      }
       else await exportBankOrders(mosadNumber, exportType, dateFrom, dateTo);
     } catch (e) { alert(`שגיאה: ${e.message}`); }
     setExp(false); setOpen(false);
@@ -172,9 +201,20 @@ function ExportMenu({ mosadNumber, type }) {
         <div className={styles.exportMenu}>
           {type === 'credit' ? (
             <>
-              <button onClick={() => doExport('orders')}>הוראות קבע (CSV)</button>
-              <button onClick={() => doExport('business')}>עסקים (CSV)</button>
-              <button onClick={() => doExport('refusals')}>סירובים (CSV)</button>
+              <div className={styles.exportDateRow}>
+                <span>סינון:</span>
+                <input type="date" value={dateFrom} onChange={e => setFrom(e.target.value)} className={styles.dateInput} />
+                <span>עד</span>
+                <input type="date" value={dateTo} onChange={e => setTo(e.target.value)} className={styles.dateInput} />
+              </div>
+              <div className={styles.exportPresets}>
+                <button onClick={() => { const r = monthRange(0);  setFrom(r.from); setTo(r.to); }}>החודש</button>
+                <button onClick={() => { const r = monthRange(-1); setFrom(r.from); setTo(r.to); }}>חודש שעבר</button>
+                {hasRange && <button onClick={() => { setFrom(''); setTo(''); }}>✕ נקה</button>}
+              </div>
+              <button onClick={() => doExport('orders')}>הוראות קבע {hasRange ? '(Excel מסונן)' : '(CSV)'}</button>
+              <button onClick={() => doExport('business')}>עסקים {hasRange ? '(Excel מסונן)' : '(CSV)'}</button>
+              <button onClick={() => doExport('refusals')}>סירובים {hasRange ? '(Excel מסונן)' : '(CSV)'}</button>
             </>
           ) : (
             <>
