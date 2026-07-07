@@ -170,10 +170,21 @@ function ExportMenu({ mosadNumber, type }) {
   const exportCreditFiltered = async (exportType) => {
     const res = await authFetch(`/api/standing-orders?mosad_number=${encodeURIComponent(mosadNumber)}&export=${exportType}`);
     if (!res.ok) throw new Error('Export failed');
-    const text = await res.text();
+    // Nedarim serves this CSV as UTF-16LE (BOM ÿþ) — res.text() would decode
+    // it as UTF-8 and garble every character, so no date column would parse.
+    const buf = new Uint8Array(await res.arrayBuffer());
+    const text = (buf[0] === 0xFF && buf[1] === 0xFE)
+      ? new TextDecoder('utf-16le').decode(buf)
+      : new TextDecoder().decode(buf);
     const XLSX = await import('xlsx');
     const wb = XLSX.read(text, { type: 'string', raw: true });
-    const aoa = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
+    let aoa = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
+    // Nedarim wraps zero-padded values as ="0230" so Excel keeps the leading
+    // zero — unwrap them so the exported file shows the plain value.
+    aoa = aoa.map((row) => row.map((c) => {
+      const m = /^="(.*)"$/.exec(String(c ?? '').trim());
+      return m ? m[1] : (typeof c === 'string' ? c.trim() : c);
+    }));
     const rows = filterRowsByDateRange(aoa, dateFrom, dateTo);
     if (!rows) throw new Error('לא זוהתה עמודת תאריך בקובץ — ייצא ללא סינון');
     if (rows.length <= 1) throw new Error('אין שורות בטווח התאריכים שנבחר');
