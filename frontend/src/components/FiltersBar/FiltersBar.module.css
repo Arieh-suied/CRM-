@@ -213,6 +213,26 @@
   transform: rotate(180deg);
 }
 
+/* Excel export button */
+.exportBtn {
+  height: 34px;
+  padding: 0 12px;
+  border: var(--glass-border);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  transition: all 0.15s;
+  flex-shrink: 0;
+  cursor: pointer;
+  margin-right: auto;
+}
+
+.exportBtn:hover:not(:disabled) { color: var(--color-text); }
+.exportBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
 /* Inline reset button */
 .resetInline {
   height: 34px;

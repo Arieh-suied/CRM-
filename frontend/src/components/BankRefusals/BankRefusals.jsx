@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import styles from './BankRefusals.module.css';
 import { fetchBankRefusals, syncBankRefusals, resolveBankRefusal } from '../../services/api.js';
+import SortTh, { sortRows } from '../shared/SortTh.jsx';
 
 // אור אפרים + חכמי ירושלים — תרומות והשכ"ל, ללא הודעת סירוב אוטומטית (בשונה מאשראי)
 const BANK_REFUSAL_MOSAD_NUMBERS = ['7001725', '7003860', '7001916', '7003862'];
@@ -79,6 +80,14 @@ export default function BankRefusals({ institutions }) {
   const [syncing, setSyncing]         = useState(false);
   const [resolvingId, setResolvingId] = useState(null);
   const [errorMsg, setErrorMsg]       = useState('');
+  const [search, setSearch]           = useState('');
+  const [sort, setSort]               = useState({ col: null, dir: 'asc' });
+
+  const handleSort = useCallback((col) => {
+    setSort((prev) => prev.col === col
+      ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
+      : { col, dir: 'asc' });
+  }, []);
 
   const eligibleInstitutions = useMemo(
     () => (institutions ?? []).filter((i) => BANK_REFUSAL_MOSAD_NUMBERS.includes(i.mosad_number)),
@@ -125,6 +134,17 @@ export default function BankRefusals({ institutions }) {
     setResolvingId(null);
   };
 
+  // Free-text filter + column sort, both client-side (the month's rows are fully loaded)
+  const q = search.trim().toLowerCase();
+  const visibleRows = sortRows(
+    q
+      ? rows.filter((r) =>
+          [r.client_name, r.client_id_number, r.masav_id, r.amount]
+            .some((v) => String(v ?? '').toLowerCase().includes(q)))
+      : rows,
+    sort.col, sort.dir
+  );
+
   return (
     <div className={styles.wrapper}>
       <div className={styles.toolbar}>
@@ -137,10 +157,23 @@ export default function BankRefusals({ institutions }) {
         <input className={styles.monthInput} type="month" value={period} onChange={(e) => setPeriod(e.target.value)} />
         {mosadFilter && (
           <>
+            <div className={styles.searchWrap}>
+              <svg className={styles.searchIcon} viewBox="0 0 20 20" fill="none">
+                <circle cx="9" cy="9" r="6" stroke="currentColor" strokeWidth="1.8"/>
+                <path d="M14 14l3 3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+              </svg>
+              <input
+                className={styles.search}
+                placeholder="חיפוש לפי שם, ת&quot;ז, מספר הוראה..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              {search && <button className={styles.clearBtn} onClick={() => setSearch('')}>✕</button>}
+            </div>
             <button className={styles.syncBtn} onClick={handleSync} disabled={syncing}>
               {syncing ? 'מסנכרן...' : 'סנכרן מנדרים+'}
             </button>
-            <button className={styles.exportBtn} onClick={() => exportCsv(rows, mosadFilter, period)} disabled={!rows.length}>
+            <button className={styles.exportBtn} onClick={() => exportCsv(visibleRows, mosadFilter, period)} disabled={!visibleRows.length}>
               ייצוא CSV
             </button>
           </>
@@ -163,16 +196,18 @@ export default function BankRefusals({ institutions }) {
           <table className={styles.table}>
             <thead>
               <tr>
-                <th>תאריך גביה</th>
-                <th>שם לקוח</th>
-                <th>סכום</th>
-                <th>מספר הוראה</th>
-                <th>סטטוס</th>
+                <SortTh label="תאריך גביה"  col="charge_date" sort={sort} onSort={handleSort} />
+                <SortTh label="שם לקוח"     col="client_name" sort={sort} onSort={handleSort} />
+                <SortTh label="סכום"        col="amount"      sort={sort} onSort={handleSort} />
+                <SortTh label="מספר הוראה"  col="masav_id"    sort={sort} onSort={handleSort} />
+                <SortTh label="סטטוס"       col="status"      sort={sort} onSort={handleSort} />
                 <th>פעולה</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
+              {!visibleRows.length ? (
+                <tr><td colSpan={6} className={styles.empty}>אין תוצאות לחיפוש</td></tr>
+              ) : visibleRows.map((row) => (
                 <tr key={row.id}>
                   <td className={styles.date}>{fmtDate(row.charge_date)}</td>
                   <td className={styles.name}>{row.client_name ?? '—'}</td>

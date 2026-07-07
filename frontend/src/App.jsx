@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react
 import styles from './App.module.css';
 import { useAuth } from './contexts/AuthContext.jsx';
 import { useTransactions } from './hooks/useTransactions.js';
-import { fetchInstitutions, fetchFilterOptions } from './services/api.js';
+import { fetchInstitutions, fetchFilterOptions, fetchTransactions } from './services/api.js';
+import { exportXlsx, dateStamp } from './lib/exportXlsx.js';
 
 // Eager — app shell + the default (transactions) tab, needed on first paint.
 import NavTabs from './components/NavTabs/NavTabs.jsx';
@@ -55,6 +56,7 @@ function Dashboard({ user, signOut, role, allowedMosadim }) {
   const [institutions, setInstitutions]   = useState([]);
   const [filterOptions, setFilterOptions] = useState({ transaction_types: [], group_names: [] });
   const [loadError, setLoadError]         = useState(null);
+  const [exporting, setExporting]         = useState(false);
 
   const { transactions, pagination, loading, error, loadPage } =
     useTransactions(filters, sort);
@@ -90,6 +92,31 @@ function Dashboard({ user, signOut, role, allowedMosadim }) {
     );
   }, []);
 
+  const handleExport = useCallback(async () => {
+    setExporting(true);
+    try {
+      const res = await fetchTransactions({ ...filters, ...sort, all: 1 });
+      const instMap = Object.fromEntries(visibleInstitutions.map((i) => [i.mosad_number, i.mosad_name]));
+      const rows = (res.data ?? []).map((tx) => ({
+        'תאריך':    tx.transaction_time_raw ?? tx.transaction_time_iso ?? '',
+        'שם תורם':  tx.client_name ?? '',
+        'סכום':     tx.amount ?? '',
+        'מטבע':     tx.currency ?? '',
+        'סוג עסקה': tx.transaction_type ?? '',
+        'קבוצה':    tx.group_name ?? '',
+        'מוסד':     instMap[tx.mosad_number] ?? tx.mosad_number ?? '',
+        'טלפון':    tx.phone ?? '',
+        'מייל':     tx.email ?? '',
+        'מס\' קבלה': tx.receipt_doc_num ?? '',
+      }));
+      if (rows.length) await exportXlsx(rows, `transactions-${dateStamp()}.xlsx`, 'עסקאות');
+    } catch (e) {
+      setLoadError(`הייצוא נכשל: ${e.message}`);
+    } finally {
+      setExporting(false);
+    }
+  }, [filters, sort, visibleInstitutions]);
+
   const handleTabChange = useCallback((tab) => {
     // Writing the hash fires 'hashchange', which updates activeTab; when the
     // hash is already the target (e.g. re-click) set it directly.
@@ -121,6 +148,8 @@ function Dashboard({ user, signOut, role, allowedMosadim }) {
               onChange={handleFiltersChange}
               institutions={visibleInstitutions}
               filterOptions={filterOptions}
+              onExport={handleExport}
+              exporting={exporting}
             />
             {error && <div className={styles.error}>שגיאה: {error}</div>}
             <TransactionsTable

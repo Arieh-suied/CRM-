@@ -29,6 +29,50 @@
   cursor: pointer;
 }
 
+.searchWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  max-width: 320px;
+}
+
+.searchIcon {
+  position: absolute;
+  right: 12px;
+  width: 15px;
+  height: 15px;
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+.search {
+  width: 100%;
+  padding: 8px 36px 8px 32px;
+  border: var(--glass-border);
+  border-radius: var(--radius);
+  background: rgba(255,255,255,0.6);
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--color-text);
+  transition: border-color 0.2s;
+}
+
+.search:focus {
+  outline: none;
+  border-color: rgba(79,126,248,0.5);
+}
+
+.clearBtn {
+  position: absolute;
+  left: 8px;
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
 .syncBtn, .exportBtn {
   padding: 7px 16px;
   border: var(--glass-border);

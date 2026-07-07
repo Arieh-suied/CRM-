@@ -2,28 +2,16 @@ import { useState, useEffect, useCallback } from 'react';
 import styles from './BankTransfers.module.css';
 import ReceiptModal from '../ReceiptModal/ReceiptModal.jsx';
 import { authFetch } from '../../services/api.js';
+import SortThBase from '../shared/SortTh.jsx';
+import { exportXlsx, dateStamp } from '../../lib/exportXlsx.js';
+
+const SortTh = (props) => <SortThBase className={styles.sortable} {...props} />;
 
 const fmt = (n, currency = 'ILS') => {
   try {
     return new Intl.NumberFormat('he-IL', { style: 'currency', currency, maximumFractionDigits: 2 }).format(n ?? 0);
   } catch { return `${n ?? 0} ${currency}`; }
 };
-
-function SortTh({ label, col, sort, onSort, className }) {
-  const active = sort.col === col;
-  return (
-    <th
-      className={`${styles.sortable} ${className ?? ''}`}
-      onClick={() => onSort(col)}
-      style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
-    >
-      {label}
-      <span className={styles.sortIcon} style={{ marginRight: 4, opacity: active ? 1 : 0.35, fontSize: 10 }}>
-        {active ? (sort.dir === 'asc' ? '▲' : '▼') : '⇅'}
-      </span>
-    </th>
-  );
-}
 
 export default function BankTransfers({ institutions }) {
   const [data, setData]           = useState([]);
@@ -35,6 +23,7 @@ export default function BankTransfers({ institutions }) {
   const [mosadFilter, setMosadFilter] = useState('');
   const [loading, setLoading]     = useState(false);
   const [receipt, setReceipt]     = useState(null);
+  const [exporting, setExporting] = useState(false);
   const [sort, setSort]           = useState({ col: 'document_date', dir: 'desc' });
 
   const institutionMap = Object.fromEntries(
@@ -65,6 +54,34 @@ export default function BankTransfers({ institutions }) {
   }, [query, mosadFilter, sort]);
 
   useEffect(() => { load(1); }, [load]);
+
+  const exportAll = async () => {
+    setExporting(true);
+    try {
+      const params = { all: 1, sort_by: sort.col, sort_dir: sort.dir };
+      if (query)       params.search       = query;
+      if (mosadFilter) params.mosad_number = mosadFilter;
+      const res  = await authFetch(`/api/bank-transfers?${new URLSearchParams(params)}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Export failed');
+      const rows = (json.data ?? []).map(r => ({
+        'תאריך':   r.document_date_raw ?? r.document_date ?? '',
+        'שם לקוח': r.customer_name ?? '',
+        'ת"ז':     r.customer_id_number ?? '',
+        'מייל':    r.customer_email ?? '',
+        'סכום':    r.transfer_amount ?? '',
+        'מטבע':    r.currency ?? '',
+        'בנק':     r.bank_name ?? '',
+        'סניף':    r.bank_branch ?? '',
+        'חשבון':   r.bank_account ?? '',
+        'מוסד':    institutionMap[r.mosad_number] ?? r.mosad_number ?? '',
+        'מסמך':    r.document_number ?? '',
+        'הערה':    r.document_note ?? '',
+      }));
+      if (rows.length) await exportXlsx(rows, `bank-transfers-${dateStamp()}.xlsx`, 'העברות');
+    } catch (e) { alert(`שגיאה בייצוא: ${e.message}`); }
+    finally { setExporting(false); }
+  };
 
   const s = { col: sort.col, dir: sort.dir };
 
@@ -101,6 +118,10 @@ export default function BankTransfers({ institutions }) {
         </select>
 
         <span className={styles.count}>סה"כ {total.toLocaleString('he-IL')} העברות</span>
+
+        <button className={styles.exportBtn} onClick={exportAll} disabled={exporting || !total}>
+          {exporting ? 'מייצא...' : '⬇ ייצוא אקסל'}
+        </button>
       </div>
 
       <div className={styles.tableWrap}>

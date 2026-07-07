@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import styles from './StripeDonations.module.css';
 import { authFetch } from '../../services/api.js';
+import SortTh from '../shared/SortTh.jsx';
+import { exportXlsx, dateStamp } from '../../lib/exportXlsx.js';
 
 const fmt = (n, currency = 'USD') =>
   new Intl.NumberFormat('he-IL', { style: 'currency', currency, maximumFractionDigits: 2 }).format(n ?? 0);
@@ -17,18 +19,6 @@ function formatDateShort(iso) {
 
 const INTERVAL_MAP = { day: 'יומי', week: 'שבועי', month: 'חודשי', year: 'שנתי' };
 
-function SortTh({ label, col, sort, onSort }) {
-  const active = sort.col === col;
-  return (
-    <th onClick={() => onSort(col)} style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>
-      {label}
-      <span style={{ marginRight: 4, opacity: active ? 1 : 0.35, fontSize: 10 }}>
-        {active ? (sort.dir === 'asc' ? '▲' : '▼') : '⇅'}
-      </span>
-    </th>
-  );
-}
-
 /* ── Donations view ──────────────────────────────────────────────── */
 function DonationsView() {
   const [data, setData]         = useState([]);
@@ -40,6 +30,7 @@ function DonationsView() {
   const [loading, setLoading]   = useState(false);
   const [syncing, setSyncing]   = useState(false);
   const [syncMsg, setSyncMsg]   = useState('');
+  const [exporting, setExporting] = useState(false);
   const [sort, setSort]         = useState({ col: 'paid_at', dir: 'desc' });
 
   const handleSort = useCallback((col) => {
@@ -73,6 +64,27 @@ function DonationsView() {
     finally { setSyncing(false); }
   };
 
+  const exportAll = async () => {
+    setExporting(true);
+    try {
+      const params = { all: 1, sort_by: sort.col, sort_dir: sort.dir };
+      if (query) params.search = query;
+      const res  = await authFetch(`/api/stripe-donations?${new URLSearchParams(params)}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Export failed');
+      const rows = (json.data ?? []).map(r => ({
+        'שם תורם': r.resolved_name ?? r.donor_name ?? '',
+        'מייל':    r.resolved_email ?? r.donor_email ?? '',
+        'סכום':    r.amount ?? '',
+        'מטבע':    r.currency ?? '',
+        'תאריך':   formatDate(r.paid_at),
+        'ID תורם': r.stripe_customer_id ?? '',
+      }));
+      if (rows.length) await exportXlsx(rows, `stripe-donations-${dateStamp()}.xlsx`, 'תרומות');
+    } catch (e) { setSyncMsg(`שגיאה: ${e.message}`); }
+    finally { setExporting(false); }
+  };
+
   const s = sort;
   return (
     <div className={styles.wrapper}>
@@ -89,6 +101,9 @@ function DonationsView() {
         </div>
         <span className={styles.count}>סה"כ {total.toLocaleString('he-IL')} תרומות</span>
         <div className={styles.syncArea}>
+          <button className={styles.syncBtn} onClick={exportAll} disabled={exporting || !total}>
+            {exporting ? 'מייצא...' : '⬇ ייצוא אקסל'}
+          </button>
           <button className={styles.syncBtn} onClick={syncCustomers} disabled={syncing}>
             {syncing ? 'מסנכרן...' : '⟳ סנכרן שמות'}
           </button>
@@ -143,6 +158,7 @@ function SubscriptionsView() {
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
+  const [exporting, setExporting] = useState(false);
   const [search, setSearch]   = useState('');
   const [sort, setSort]       = useState({ col: 'next_billing', dir: 'asc' });
 
@@ -202,6 +218,29 @@ function SubscriptionsView() {
         </div>
         <span className={styles.count}>{total} מנויים פעילים</span>
         <div className={styles.syncArea}>
+          <button
+            className={styles.syncBtn}
+            disabled={exporting || !sorted.length}
+            onClick={async () => {
+              setExporting(true);
+              try {
+                const rows = sorted.map(r => ({
+                  'שם':           r.name ?? '',
+                  'מייל':         r.email ?? '',
+                  'טלפון':        r.phone ?? '',
+                  'סכום':         r.amount ?? '',
+                  'מטבע':         r.currency ?? '',
+                  'תדירות':       INTERVAL_MAP[r.interval] ?? r.interval ?? '',
+                  'חיוב הבא':     formatDateShort(r.next_billing),
+                  'יתרת חיובים': r.total_cycles ?? (r.cancel_at_period_end ? '' : 'מתמשך'),
+                  'סטטוס':        r.cancel_at_period_end ? 'מסתיים בסוף תקופה' : 'פעיל',
+                }));
+                await exportXlsx(rows, `stripe-subscriptions-${dateStamp()}.xlsx`, 'מנויים');
+              } finally { setExporting(false); }
+            }}
+          >
+            {exporting ? 'מייצא...' : '⬇ ייצוא אקסל'}
+          </button>
           <button className={styles.syncBtn} onClick={syncSubs} disabled={syncing}>
             {syncing ? 'מסנכרן...' : '⟳ סנכרן מנויים'}
           </button>

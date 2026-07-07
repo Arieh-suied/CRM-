@@ -61,6 +61,42 @@
   cursor: pointer;
 }
 
+.select, .dateInput {
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid rgba(200, 210, 230, 0.7);
+  border-radius: var(--radius-sm);
+  background-color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.dateRange {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dateSep { color: var(--color-text-muted); font-size: 12px; }
+
+.exportBtn {
+  padding: 7px 16px;
+  border: var(--glass-border);
+  border-radius: 20px;
+  background: rgba(255,255,255,0.5);
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.exportBtn:hover:not(:disabled) { color: var(--color-text); }
+.exportBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
 .count {
   font-size: 13px;
   color: var(--color-text-muted);
@@ -176,6 +212,9 @@
 @media (max-width: 640px) {
   .toolbar { padding: 12px 14px; gap: 8px; }
   .searchWrap { max-width: 100%; flex: 1 1 100%; }
+  .select { height: 44px; flex: 1 1 100%; width: 100%; text-align: right; }
+  .dateRange { flex: 1 1 100%; }
+  .dateInput { height: 44px; flex: 1; }
   .pageBtn { padding: 10px 16px; min-height: 44px; }
   .pagination { flex-wrap: wrap; gap: 8px; }
 }

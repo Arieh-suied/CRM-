@@ -21,7 +21,7 @@ const QUICK_DATES = [
   { label: 'השנה',       from: startOfYear,      to: today },
 ];
 
-export default function FiltersBar({ filters, onChange, institutions, filterOptions }) {
+export default function FiltersBar({ filters, onChange, institutions, filterOptions, onExport, exporting }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [searchText, setSearchText] = useState(filters.search || '');
   const didMount = useRef(false);
@@ -122,6 +122,12 @@ export default function FiltersBar({ filters, onChange, institutions, filterOpti
 
         {hasAnyActive && (
           <button type="button" className={styles.resetInline} onClick={reset}>נקה</button>
+        )}
+
+        {onExport && (
+          <button type="button" className={styles.exportBtn} onClick={onExport} disabled={exporting}>
+            {exporting ? 'מייצא...' : '⬇ ייצוא אקסל'}
+          </button>
         )}
       </div>
 

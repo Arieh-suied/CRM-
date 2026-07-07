@@ -3,6 +3,9 @@ import styles from './StandingOrders.module.css';
 import { fetchStandingOrders, exportCreditOrders, exportBankOrders } from '../../services/api.js';
 import CreditModal from './CreditModal.jsx';
 import BankModal from './BankModal.jsx';
+import SortThBase, { sortRows } from '../shared/SortTh.jsx';
+
+const SortTh = (props) => <SortThBase className={styles.sortable} {...props} />;
 
 const fmt = (n, currency = 'ILS') => {
   try { return new Intl.NumberFormat('he-IL', { style: 'currency', currency, maximumFractionDigits: 2 }).format(n ?? 0); }
@@ -12,26 +15,6 @@ const fmt = (n, currency = 'ILS') => {
 function parseExpiry(raw) {
   if (!raw || raw.length < 4) return raw ?? '—';
   return `${raw.slice(0, 2)}/${raw.slice(2, 4)}`;
-}
-
-function sortRows(rows, col, dir) {
-  if (!col) return rows;
-  return [...rows].sort((a, b) => {
-    const av = a[col] ?? '', bv = b[col] ?? '';
-    const an = parseFloat(av), bn = parseFloat(bv);
-    const cmp = (!isNaN(an) && !isNaN(bn)) ? an - bn : String(av).localeCompare(String(bv), 'he');
-    return dir === 'asc' ? cmp : -cmp;
-  });
-}
-
-function SortTh({ label, col, sort, onSort }) {
-  const active = sort.col === col;
-  return (
-    <th className={styles.sortable} onClick={() => onSort(col)}>
-      {label}
-      <span className={styles.sortIcon}>{active ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ' ⇅'}</span>
-    </th>
-  );
 }
 
 function SummaryBar({ totalMonth, totalYear }) {
@@ -211,6 +194,16 @@ function ExportMenu({ mosadNumber, type }) {
   );
 }
 
+// Rows arrive DataTables-style (numeric string keys), so the free-text search
+// just scans every cell value of the row.
+function filterRows(rows, q) {
+  if (!q) return rows;
+  const needle = q.toLowerCase();
+  return rows.filter((row) =>
+    Object.values(row).some((v) => String(v ?? '').toLowerCase().includes(needle))
+  );
+}
+
 export default function StandingOrders({ institutions }) {
   const [mosadFilter, setMosadFilter] = useState('');
   const [activeType, setActiveType]   = useState('credit');
@@ -218,6 +211,7 @@ export default function StandingOrders({ institutions }) {
   const [bankData, setBankData]       = useState(null);
   const [loading, setLoading]         = useState(false);
   const [errorMsg, setErrorMsg]       = useState('');
+  const [search, setSearch]           = useState('');
 
   const eligibleInstitutions = (institutions ?? []).filter(i => i.has_api_password);
 
@@ -232,8 +226,8 @@ export default function StandingOrders({ institutions }) {
 
   useEffect(load, [load]);
 
-  const creditRows = creditData?.data ?? [];
-  const bankRows   = bankData?.data ?? [];
+  const creditRows = filterRows(creditData?.data ?? [], search.trim());
+  const bankRows   = filterRows(bankData?.data ?? [], search.trim());
 
   return (
     <div className={styles.wrapper}>
@@ -247,6 +241,19 @@ export default function StandingOrders({ institutions }) {
 
         {mosadFilter && !loading && (
           <>
+            <div className={styles.searchWrap}>
+              <svg className={styles.searchIcon} viewBox="0 0 20 20" fill="none">
+                <circle cx="9" cy="9" r="6" stroke="currentColor" strokeWidth="1.8"/>
+                <path d="M14 14l3 3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+              </svg>
+              <input
+                className={styles.search}
+                placeholder="חיפוש בהוראות..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              {search && <button className={styles.clearBtn} onClick={() => setSearch('')}>✕</button>}
+            </div>
             <div className={styles.typeTabs}>
               <button className={`${styles.typeTab} ${activeType === 'credit' ? styles.typeTabActive : ''}`} onClick={() => setActiveType('credit')}>
                 אשראי ({creditRows.length})

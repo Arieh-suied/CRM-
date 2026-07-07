@@ -2,6 +2,10 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase.js';
 import ReceiptModal from '../ReceiptModal/ReceiptModal.jsx';
 import styles from './GrowTransactions.module.css';
+import SortThBase from '../shared/SortTh.jsx';
+import { exportXlsx, dateStamp } from '../../lib/exportXlsx.js';
+
+const SortTh = (props) => <SortThBase className={styles.sortable} {...props} />;
 
 const PAGE_SIZE = 50;
 
@@ -12,18 +16,6 @@ const fmt = (n) => {
 };
 
 const STATUS_LABEL = { received: 'התקבל', success: 'הופקה קבלה', failed: 'נכשל' };
-
-function SortTh({ label, col, sort, onSort }) {
-  const active = sort.col === col;
-  return (
-    <th className={styles.sortable} onClick={() => onSort(col)} style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>
-      {label}
-      <span className={styles.sortIcon} style={{ marginRight: 4, opacity: active ? 1 : 0.35, fontSize: 10 }}>
-        {active ? (sort.dir === 'asc' ? '▲' : '▼') : '⇅'}
-      </span>
-    </th>
-  );
-}
 
 function StatusBadge({ status }) {
   const cls = status === 'success' ? styles.badgeSuccess : status === 'failed' ? styles.badgeFailed : styles.badgeReceived;
@@ -39,6 +31,7 @@ export default function GrowTransactions() {
   const [query, setQuery]     = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [sort, setSort]       = useState({ col: 'created_at', dir: 'desc' });
   const [receipt, setReceipt] = useState(null);
 
@@ -72,6 +65,40 @@ export default function GrowTransactions() {
 
   useEffect(() => { load(1); }, [load]);
 
+  // Export pulls every matching row in 1000-row chunks (Supabase caps each
+  // request), with the same filters and sort as the table.
+  const exportAll = async () => {
+    setExporting(true);
+    try {
+      const CHUNK = 1000;
+      const all = [];
+      for (let from = 0; from < 20000; from += CHUNK) {
+        let q = supabase
+          .from('grow_transactions')
+          .select('*')
+          .order(sort.col, { ascending: sort.dir === 'asc', nullsLast: true })
+          .range(from, from + CHUNK - 1);
+        if (statusFilter) q = q.eq('status', statusFilter);
+        if (query) q = q.or(`full_name.ilike.%${query}%,payer_email.ilike.%${query}%,transaction_code.ilike.%${query}%,asmachta.ilike.%${query}%`);
+        const { data: rows, error } = await q;
+        if (error) throw new Error(error.message);
+        all.push(...(rows ?? []));
+        if (!rows || rows.length < CHUNK) break;
+      }
+      const out = all.map((r) => ({
+        'תאריך':     r.payment_date ?? new Date(r.created_at).toLocaleDateString('he-IL'),
+        'תורם':      r.full_name ?? '',
+        'מייל':      r.payer_email ?? '',
+        'סכום':      r.payment_sum ?? '',
+        'אסמכתא':    r.asmachta ?? '',
+        'סטטוס':     STATUS_LABEL[r.status] ?? r.status ?? '',
+        'מס\' קבלה': r.ezcount_doc_number ?? '',
+      }));
+      if (out.length) await exportXlsx(out, `grow-transactions-${dateStamp()}.xlsx`, 'עסקאות Grow');
+    } catch (e) { alert(`שגיאה בייצוא: ${e.message}`); }
+    finally { setExporting(false); }
+  };
+
   return (
     <>
     <div className={styles.wrapper}>
@@ -99,6 +126,10 @@ export default function GrowTransactions() {
         </select>
 
         <span className={styles.count}>סה"כ {total.toLocaleString('he-IL')} עסקאות</span>
+
+        <button className={styles.exportBtn} onClick={exportAll} disabled={exporting || !total}>
+          {exporting ? 'מייצא...' : '⬇ ייצוא אקסל'}
+        </button>
       </div>
 
       <div className={styles.tableWrap}>

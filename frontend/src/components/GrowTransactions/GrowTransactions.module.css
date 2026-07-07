@@ -87,6 +87,22 @@
   margin-right: auto;
 }
 
+.exportBtn {
+  padding: 7px 16px;
+  border: var(--glass-border);
+  border-radius: 20px;
+  background: rgba(255,255,255,0.5);
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.exportBtn:hover:not(:disabled) { color: var(--color-text); }
+.exportBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
 .tableWrap { overflow-x: auto; }
 
 .table {

@@ -1,4 +1,4 @@
-import { getSupabase, ilikeOr } from './_supabase.js';
+import { getSupabase, ilikeOr, fetchAll } from './_supabase.js';
 import { requireUser, WRITE_ROLES } from './_auth.js';
 
 const PAGE_SIZE = 50;
@@ -24,12 +24,28 @@ async function handleGet(req, res) {
   if (req.query.view === 'subscriptions') return handleSubscriptions(req, res);
 
   try {
-    const { page = 1, search, sort_by = 'paid_at', sort_dir = 'desc' } = req.query;
+    const { page = 1, search, sort_by = 'paid_at', sort_dir = 'desc', all } = req.query;
     const offset = (parseInt(page) - 1) * PAGE_SIZE;
     const supabase = getSupabase();
 
     const col = ALLOWED_SORT.has(sort_by) ? sort_by : 'paid_at';
     const asc = sort_dir === 'asc';
+
+    // all=1 → every matching row, for the Excel export
+    if (all) {
+      const rows = await fetchAll(() => {
+        let q = supabase
+          .from('stripe_donations_enriched')
+          .select('*')
+          .order(col, { ascending: asc, nullsLast: true });
+        if (search) {
+          const orClause = ilikeOr(['donor_name', 'donor_email', 'stripe_customer_id', 'stripe_payment_intent_id'], search);
+          if (orClause) q = q.or(orClause);
+        }
+        return q;
+      });
+      return res.json({ data: rows, total: rows.length });
+    }
 
     let query = supabase
       .from('stripe_donations_enriched')

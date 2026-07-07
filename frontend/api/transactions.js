@@ -1,4 +1,4 @@
-import { getSupabase, ilikeOr } from './_supabase.js';
+import { getSupabase, ilikeOr, fetchAll } from './_supabase.js';
 import { requireUser } from './_auth.js';
 
 const PAGE_SIZE = 50;
@@ -68,13 +68,25 @@ export default async function handler(req, res) {
     const user = await requireUser(req, res, supabase);
     if (!user) return;
 
-    const { action, page = 1, sort_by = 'transaction_time_iso', sort_dir = 'desc', ...filters } = req.query;
+    const { action, page = 1, sort_by = 'transaction_time_iso', sort_dir = 'desc', all, ...filters } = req.query;
 
     if (action === 'filters') return await handleFilters(req, res, supabase);
 
     const offset = (parseInt(page) - 1) * PAGE_SIZE;
     const sortField = SORTABLE.has(sort_by) ? sort_by : 'transaction_time_iso';
     const column = SORT_COLUMN_MAP[sortField] ?? sortField;
+
+    // all=1 → every matching row, for the Excel export
+    if (all) {
+      const rows = await fetchAll(() => applyFilters(
+        supabase
+          .from('transactions_with_parsed_time')
+          .select('*')
+          .order(column, { ascending: sort_dir === 'asc' }),
+        filters
+      ));
+      return res.json({ data: rows, total: rows.length });
+    }
 
     let query = supabase
       .from('transactions_with_parsed_time')
