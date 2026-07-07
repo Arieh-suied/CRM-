@@ -11,6 +11,11 @@ export function isSomechName(name) {
   // "סומך", so it needs an explicit override (confirmed with the user).
   return name?.includes('סומך') || name?.includes('יפה ותמה');
 }
+// מוסד 7016650 — "תולדות ניסים", formerly named "בנות חיל"; refusal emails may
+// still carry either label, so match both.
+export function isToldotNisimName(name) {
+  return name?.includes('תולדות ניסים') || name?.includes('בנות חיל');
+}
 
 // Institutions whose name carries a "שכ\"ל" (school-fee) suffix are tuition
 // accounts; everything else is a donation.
@@ -23,6 +28,9 @@ export function paymentTypeFor(mosadName) {
 export function refusalChatId(institutionName) {
   if (isSomechName(institutionName)) return process.env.TELEGRAM_CHAT_REFUSALS_SOMECH;
   if (isYeshivotName(institutionName)) return process.env.TELEGRAM_CHAT_REFUSALS_YESHIVOT;
+  // תולדות ניסים (מוסד 7016650) refusals go to the same channel as its
+  // successful transactions (TELEGRAM_CHAT_BNOT_CHAYIL).
+  if (isToldotNisimName(institutionName)) return process.env.TELEGRAM_CHAT_BNOT_CHAYIL;
   return null;
 }
 

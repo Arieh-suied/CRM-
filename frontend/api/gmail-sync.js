@@ -11,6 +11,7 @@
 //   (dedicated to the som.noflim@gmail.com mailbox/OAuth client — kept separate
 //   from the older GOOGLE_*/GMAIL_USER vars, which belong to a different account)
 //   TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_REFUSALS_SOMECH, TELEGRAM_CHAT_REFUSALS_YESHIVOT
+//   TELEGRAM_CHAT_BNOT_CHAYIL (תולדות ניסים / mosad 7016650 refusals — shared with its transaction channel)
 
 import { getSupabase } from './_supabase.js';
 import { requireUser } from './_auth.js';
