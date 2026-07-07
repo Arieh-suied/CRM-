@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/standing-orders-sync",
-      "schedule": "*/15 * * * *"
+      "schedule": "* * * * *"
     },
     {
       "path": "/api/refusals-monthly-report",
