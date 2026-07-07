@@ -11,10 +11,13 @@ export function isSomechName(name) {
   // "סומך", so it needs an explicit override (confirmed with the user).
   return name?.includes('סומך') || name?.includes('יפה ותמה');
 }
-// מוסד 7016650 — "תולדות ניסים", formerly named "בנות חיל"; refusal emails may
-// still carry either label, so match both.
+// מוסד 7016650 — "תולדות נסים", formerly named "בנות חיל". Refusal emails label
+// it inconsistently (e.g. "Toldot Nissim - תולדות נסים", and the Hebrew is
+// spelled both נסים and ניסים), so match on the distinctive "תולדות"/"Toldot"
+// token rather than an exact string, and still accept the old "בנות חיל".
 export function isToldotNisimName(name) {
-  return name?.includes('תולדות ניסים') || name?.includes('בנות חיל');
+  if (!name) return false;
+  return name.includes('תולדות') || name.toLowerCase().includes('toldot') || name.includes('בנות חיל');
 }
 
 // Institutions whose name carries a "שכ\"ל" (school-fee) suffix are tuition
