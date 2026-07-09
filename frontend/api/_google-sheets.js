@@ -101,8 +101,47 @@ export async function getFirstSheetTitle(spreadsheetId) {
   return data.sheets?.[0]?.properties?.title ?? null;
 }
 
+// ── User-account Drive token ────────────────────────────────────────────────
+// Service accounts have zero Drive storage quota (Google policy), so they
+// can't own files — a Drive copy made by the service account always fails
+// with "storage quota has been exceeded". When GOOGLE_DRIVE_REFRESH_TOKEN is
+// set, Drive copies run as the real Google user who owns the template, and
+// the new sheet is owned by that account. The OAuth client defaults to the
+// same one used for the som.noflim Gmail sync.
+let cachedUserToken = null;
+
+export function hasUserDriveAuth() {
+  return !!process.env.GOOGLE_DRIVE_REFRESH_TOKEN;
+}
+
+async function getUserDriveToken() {
+  if (cachedUserToken && cachedUserToken.expiresAt > Date.now() + 60_000) {
+    return cachedUserToken.token;
+  }
+  const clientId = process.env.GOOGLE_DRIVE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID_SOM;
+  const clientSecret = process.env.GOOGLE_DRIVE_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET_SOM;
+  const refreshToken = process.env.GOOGLE_DRIVE_REFRESH_TOKEN;
+  if (!clientId || !clientSecret || !refreshToken) {
+    throw new Error('Missing env vars: GOOGLE_DRIVE_REFRESH_TOKEN (+ OAuth client id/secret)');
+  }
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+      grant_type: 'refresh_token',
+    }),
+  });
+  const data = await res.json();
+  if (!data.access_token) throw new Error(`Drive user auth error: ${JSON.stringify(data)}`);
+  cachedUserToken = { token: data.access_token, expiresAt: Date.now() + data.expires_in * 1000 };
+  return data.access_token;
+}
+
 export async function copySpreadsheet(templateId, newTitle) {
-  const token = await getAccessToken();
+  const token = hasUserDriveAuth() ? await getUserDriveToken() : await getAccessToken();
   const copyRes = await fetch(`https://www.googleapis.com/drive/v3/files/${templateId}/copy`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -125,13 +164,16 @@ export async function clearRange(spreadsheetId, sheetName, range) {
   return data;
 }
 
-export async function shareFile(fileId, email) {
-  const token = await getAccessToken();
-  const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/permissions`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ role: 'writer', type: 'user', emailAddress: email }),
-  });
+export async function shareFile(fileId, email, { asUser = false, notify = true } = {}) {
+  const token = asUser ? await getUserDriveToken() : await getAccessToken();
+  const res = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${fileId}/permissions?sendNotificationEmail=${notify}`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: 'writer', type: 'user', emailAddress: email }),
+    }
+  );
   const data = await res.json();
   if (!res.ok) throw new Error(`Drive share error: ${data.error?.message || JSON.stringify(data)}`);
   return data;

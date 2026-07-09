@@ -6,6 +6,9 @@
 //   GOOGLE_SHEETS_CLIENT_EMAIL / GOOGLE_SHEETS_PRIVATE_KEY
 //   FUNDS_TEMPLATE_SPREADSHEET_ID — spreadsheet copied for new funds
 //   FUNDS_SHARE_EMAIL             — Google account the new copy is shared with
+//   GOOGLE_DRIVE_REFRESH_TOKEN    — user-account OAuth token for the Drive copy
+//     (service accounts have no Drive storage quota, so the copy must run as
+//     the real user; the copy is then shared back to the service account)
 
 import { getSupabase } from './_supabase.js';
 import { getRequestUser, requireUser } from './_auth.js';
@@ -16,6 +19,7 @@ import {
   clearRange,
   setValues,
   shareFile,
+  hasUserDriveAuth,
 } from './_google-sheets.js';
 
 const FIELD_LABELS = {
@@ -88,6 +92,14 @@ async function provisionSheet(name) {
   if (!templateId) throw new Error('Missing env var: FUNDS_TEMPLATE_SPREADSHEET_ID');
 
   const newId = await copySpreadsheet(templateId, name);
+
+  // When the copy ran as the real user, the copy is owned by that user and
+  // the service account has no access yet — grant it editor before the
+  // cleanup below (and so transaction routing can append rows later).
+  const asUser = hasUserDriveAuth();
+  const saEmail = process.env.GOOGLE_SHEETS_CLIENT_EMAIL;
+  if (asUser && saEmail) await shareFile(newId, saEmail, { asUser: true, notify: false });
+
   const sheetName = await getFirstSheetTitle(newId);
 
   // The template (a real fund's sheet) carries historical data rows past row 2 —
@@ -97,7 +109,12 @@ async function provisionSheet(name) {
   if (leftoverCheck) throw new Error('ניקוי שורות הנתונים מהתבנית נכשל — לא משתפים את הקובץ');
 
   await setValues(newId, sheetName, 'A2:C2', [['תאריך', 'שם', 'סכום']]);
-  if (shareEmail) await shareFile(newId, shareEmail);
+  if (shareEmail) {
+    // Optional convenience share; when the copy is user-owned this may be a
+    // share-with-self, which Drive rejects — never fail the creation over it.
+    try { await shareFile(newId, shareEmail, { asUser }); }
+    catch (err) { console.warn(`FUNDS_SHARE_EMAIL share skipped: ${err.message}`); }
+  }
 
   return { spreadsheetId: newId, sheetName };
 }
