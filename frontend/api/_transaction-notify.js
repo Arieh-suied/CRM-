@@ -74,6 +74,13 @@ export async function resolveInstitution(row, supabase) {
   if (String(row.mosad_number) === '7016650') {
     return { bucket: 'תולדות ניסים', mosadName: mosadName || 'תולדות ניסים' };
   }
+  // A transaction from any *other* mosad whose category (group_name) names
+  // תולדות נסים (e.g. "Toldot Nissim - תולדות נסים") routes to the same
+  // channel/sheet; label it תולדות ניסים rather than the source mosad so the
+  // channel message reads consistently.
+  if (isToldotNisimName(row.group_name)) {
+    return { bucket: 'תולדות ניסים', mosadName: 'תולדות ניסים' };
+  }
   if (isSomechName(row.comments) || isSomechName(row.group_name) || isSomechName(mosadName)) {
     return { bucket: 'סומך נופלים', mosadName: mosadName || 'סומך נופלים' };
   }
