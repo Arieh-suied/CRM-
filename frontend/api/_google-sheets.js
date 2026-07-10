@@ -47,20 +47,34 @@ async function getAccessToken() {
   return data.access_token;
 }
 
+// Google returns transient 429/5xx errors now and then ("The service is
+// currently unavailable"); without a retry a routed transaction silently
+// misses its fund sheet — appendRow runs unattended from the DB webhook.
+async function fetchWithRetry(url, options, label) {
+  let lastErr;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt) await new Promise((r) => setTimeout(r, attempt * 1500));
+    const res = await fetch(url, options);
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) return data;
+    lastErr = new Error(`${label}: ${data.error?.message || JSON.stringify(data)}`);
+    if (res.status < 500 && res.status !== 429) throw lastErr; // permanent error — don't retry
+  }
+  throw lastErr;
+}
+
 export async function appendRow(spreadsheetId, sheetName, values) {
   const token = await getAccessToken();
   const range = encodeURIComponent(`${sheetName}!A:A`);
-  const res = await fetch(
+  return fetchWithRetry(
     `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}:append?valueInputOption=USER_ENTERED`,
     {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ values: [values] }),
-    }
+    },
+    'Sheets append error'
   );
-  const data = await res.json();
-  if (!res.ok) throw new Error(`Sheets append error: ${data.error?.message || JSON.stringify(data)}`);
-  return data;
 }
 
 export async function getCellValue(spreadsheetId, sheetName, cell) {
