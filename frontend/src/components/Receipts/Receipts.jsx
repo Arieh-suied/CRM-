@@ -2,10 +2,12 @@ import { useState } from 'react';
 import styles from './Receipts.module.css';
 import QuickReceipt from './QuickReceipt.jsx';
 import BatchReceipts from './BatchReceipts.jsx';
+import ExternalTransfers from './ExternalTransfers.jsx';
 
 const VIEWS = [
-  { id: 'quick',   label: 'קבלה מהירה' },
-  { id: 'batch',   label: 'העלאת העברות' },
+  { id: 'quick',    label: 'קבלה מהירה' },
+  { id: 'batch',    label: 'העלאת העברות' },
+  { id: 'external', label: 'העברות מהדף החיצוני' },
 ];
 
 export default function Receipts() {
@@ -28,6 +30,7 @@ export default function Receipts() {
       <div style={{ padding: '20px 18px' }}>
         {view === 'quick' && <QuickReceipt />}
         {view === 'batch' && <BatchReceipts />}
+        {view === 'external' && <ExternalTransfers />}
       </div>
     </div>
   );
