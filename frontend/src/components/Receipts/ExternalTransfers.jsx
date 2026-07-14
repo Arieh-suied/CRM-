@@ -4,6 +4,7 @@ import { authFetch } from '../../services/api.js';
 
 const FIELDS = [
   { key: 'customer_name', label: 'שם השולח', type: 'text' },
+  { key: 'id_number', label: 'תעודת זהות', type: 'text' },
   { key: 'amount', label: 'סכום (₪)', type: 'number' },
   { key: 'transfer_date', label: 'תאריך העברה', type: 'text' },
   { key: 'asmachta', label: 'אסמכתא', type: 'text' },
@@ -135,6 +136,7 @@ export default function ExternalTransfers() {
 function extractFields(r) {
   return {
     customer_name: r.customer_name ?? '',
+    id_number: r.id_number ?? '',
     amount: r.amount != null ? String(r.amount) : '',
     transfer_date: r.transfer_date ?? '',
     asmachta: r.asmachta ?? '',

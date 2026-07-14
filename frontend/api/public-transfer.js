@@ -30,6 +30,7 @@ function buildCaption(fields) {
   const lines = [
     '📥 העברה בנקאית חדשה — תולדות נסים',
     fmt('שם', fields.customer_name),
+    fmt('ת.ז', fields.id_number),
     fields.amount != null ? `סכום: ${fields.amount} ₪` : null,
     fmt('תאריך', fields.transfer_date),
     fmt('אסמכתא', fields.asmachta),
@@ -72,12 +73,15 @@ export default async function handler(req, res) {
 
       const f = fields || {};
       const name = String(f.customer_name || '').trim();
+      const idNumber = String(f.id_number || '').trim();
       const amount = f.amount != null && f.amount !== '' ? Number(f.amount) : null;
       if (name.length < 2) return res.status(400).json({ error: 'חסר שם שולח' });
+      if (!idNumber) return res.status(400).json({ error: 'חסרה תעודת זהות' });
       if (!(amount > 0)) return res.status(400).json({ error: 'סכום לא תקין' });
 
       const clean = {
         customer_name: name,
+        id_number: idNumber,
         amount,
         transfer_date: f.transfer_date ? String(f.transfer_date).trim() : null,
         asmachta:      f.asmachta ? String(f.asmachta).trim() : null,
@@ -114,6 +118,7 @@ export default async function handler(req, res) {
           status: 'new',
           mosad_number: MOSAD_NUMBER,
           customer_name: clean.customer_name,
+          id_number: clean.id_number,
           amount: clean.amount,
           transfer_date: clean.transfer_date,
           asmachta: clean.asmachta,

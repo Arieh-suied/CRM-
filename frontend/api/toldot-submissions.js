@@ -86,8 +86,10 @@ export default async function handler(req, res) {
         // Merge any inline edits from the reviewer over the stored values.
         const f = fields || {};
         const name = String(f.customer_name ?? sub.customer_name ?? '').trim();
+        const idNumber = String(f.id_number ?? sub.id_number ?? '').trim();
         const amount = f.amount != null && f.amount !== '' ? Number(f.amount) : sub.amount;
         if (name.length < 2) return res.status(400).json({ error: 'חסר שם' });
+        if (!idNumber) return res.status(400).json({ error: 'חסרה תעודת זהות' });
         if (!(amount > 0)) return res.status(400).json({ error: 'סכום לא תקין' });
 
         const pick = (k) => (f[k] !== undefined ? (f[k] || null) : (sub[k] ?? null));
@@ -96,7 +98,8 @@ export default async function handler(req, res) {
         const asmachta = pick('asmachta');
 
         const { error: btErr } = await supabase.from('bank_transfers').insert({
-          customer_name:   name,
+          customer_name:      name,
+          customer_id_number: idNumber,
           transfer_amount: amount,
           currency:        'ILS',
           bank_name:       pick('bank_name'),

@@ -7,6 +7,7 @@ create table if not exists external_transfer_submissions (
   status          text not null default 'new',        -- new | approved | rejected
   mosad_number    text default '7016650',             -- תולדות נסים
   customer_name   text,
+  id_number       text,                               -- תעודת זהות (required on the public page)
   amount          numeric,
   transfer_date   text,
   asmachta        text,
@@ -18,6 +19,9 @@ create table if not exists external_transfer_submissions (
   source          text default 'toldot-public',
   created_at      timestamptz default now()
 );
+
+-- Idempotent: adds id_number to a table that may already have been created.
+alter table external_transfer_submissions add column if not exists id_number text;
 
 create index if not exists external_transfer_submissions_status_idx
   on external_transfer_submissions (status);

@@ -44,13 +44,14 @@ async function callApi(action, payload) {
 }
 
 const EMPTY = {
-  customer_name: '', amount: '', transfer_date: '', asmachta: '',
+  customer_name: '', id_number: '', amount: '', transfer_date: '', asmachta: '',
   bank_name: '', bank_branch: '', bank_account: '', notes: '',
 };
 
 const FIELDS = [
-  { key: 'customer_name', label: 'שם השולח', type: 'text' },
-  { key: 'amount', label: 'סכום (₪)', type: 'number' },
+  { key: 'customer_name', label: 'שם השולח', type: 'text', required: true },
+  { key: 'id_number', label: 'תעודת זהות', type: 'text', required: true },
+  { key: 'amount', label: 'סכום (₪)', type: 'number', required: true },
   { key: 'transfer_date', label: 'תאריך העברה', type: 'date' },
   { key: 'asmachta', label: 'אסמכתא', type: 'text' },
   { key: 'bank_name', label: 'בנק', type: 'text' },
@@ -90,6 +91,7 @@ export default function PublicTransfer() {
         const ocr = await callApi('ocr', { image: dataUrl, mimeType: 'image/jpeg' });
         setFields({
           customer_name: ocr.donor_name || ocr.account_name || '',
+          id_number: '', // not present in a transfer screenshot — filled in by hand
           amount: ocr.amount != null ? String(ocr.amount) : '',
           transfer_date: ocr.transfer_date || '',
           asmachta: ocr.asmachta || '',
@@ -118,6 +120,10 @@ export default function PublicTransfer() {
     setError('');
     if (!fields.customer_name.trim() || fields.customer_name.trim().length < 2) {
       setError('יש למלא את שם השולח');
+      return;
+    }
+    if (!fields.id_number.trim()) {
+      setError('יש למלא תעודת זהות');
       return;
     }
     if (!(Number(fields.amount) > 0)) {
@@ -188,12 +194,12 @@ export default function PublicTransfer() {
 
             {(stage === 'form' || stage === 'submitting') && (
               <form className="pt-form" onSubmit={handleSubmit}>
-                {FIELDS.map(({ key, label, type }) => (
+                {FIELDS.map(({ key, label, type, required }) => (
                   <div key={key} className="pt-field">
-                    <label>{label}</label>
+                    <label>{label}{required && <span className="pt-req"> *</span>}</label>
                     <input
                       type={type}
-                      inputMode={type === 'number' ? 'decimal' : undefined}
+                      inputMode={type === 'number' ? 'decimal' : key === 'id_number' ? 'numeric' : undefined}
                       value={fields[key]}
                       onChange={(e) => setField(key, e.target.value)}
                       disabled={stage === 'submitting'}
