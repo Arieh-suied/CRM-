@@ -139,12 +139,22 @@ export default function ExternalTransfers() {
   );
 }
 
+// EZCount needs DD/MM/YYYY — show the reviewer the date in that format too, so
+// what they see matches what gets sent on the receipt.
+function toDmy(raw) {
+  if (!raw) return '';
+  const s = String(raw).trim();
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
+  return s;
+}
+
 function extractFields(r) {
   return {
     customer_name: r.customer_name ?? '',
     id_number: r.id_number ?? '',
     amount: r.amount != null ? String(r.amount) : '',
-    transfer_date: r.transfer_date ?? '',
+    transfer_date: toDmy(r.transfer_date),
     asmachta: r.asmachta ?? '',
     bank_name: r.bank_name ?? '',
     bank_branch: r.bank_branch ?? '',

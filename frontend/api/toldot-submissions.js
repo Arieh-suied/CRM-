@@ -19,6 +19,22 @@ const STORAGE_BUCKET = 'transfer-screenshots';
 const RECEIPT_BRANCH = 'סומך נופלים'; // approvals issue a donation receipt under this branch
 const SIGNED_URL_TTL = 60 * 60; // 1h
 
+// EZCount expects dates as DD/MM/YYYY — a YYYY-MM-DD value (what the date input
+// and OCR produce) fails issuance. Convert to DD/MM/YYYY; pass through anything
+// already in that shape.
+function toDmy(raw) {
+  if (!raw) return raw;
+  const s = String(raw).trim();
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
+  const m = s.match(/^(\d{1,2})[.\/\-](\d{1,2})[.\/\-](\d{2}|\d{4})$/);
+  if (m) {
+    const y = m[3].length === 2 ? `20${m[3]}` : m[3];
+    return `${m[1].padStart(2, '0')}/${m[2].padStart(2, '0')}/${y}`;
+  }
+  return s;
+}
+
 export default async function handler(req, res) {
   const supabase = getSupabase();
 
@@ -85,7 +101,7 @@ export default async function handler(req, res) {
         if (!(amount > 0)) return res.status(400).json({ error: 'סכום לא תקין' });
 
         const pick = (k) => (f[k] !== undefined ? (f[k] || null) : (sub[k] ?? null));
-        const rawDate = pick('transfer_date');
+        const dmyDate = toDmy(pick('transfer_date')); // DD/MM/YYYY for EZCount
         const asmachta = pick('asmachta');
         // Fold the reference number into the receipt comment so it stays on record.
         const notes = [pick('notes'), asmachta ? `אסמכתא: ${asmachta}` : null]
@@ -106,7 +122,7 @@ export default async function handler(req, res) {
             bankName: pick('bank_name'),
             bankBranch: pick('bank_branch'),
             bankAccount: pick('bank_account'),
-            transferDate: rawDate,
+            transferDate: dmyDate,
           }],
         });
 
@@ -143,7 +159,7 @@ export default async function handler(req, res) {
             amount,
             comments:             notes || '',
             group_name:           'תולדות נסים',
-            transaction_time_raw: rawDate || new Date().toISOString().slice(0, 10),
+            transaction_time_raw: dmyDate || toDmy(new Date().toISOString().slice(0, 10)),
             receipt_data:         result.receiptId || '',
           });
         } catch (routeErr) {
