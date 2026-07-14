@@ -115,10 +115,26 @@ export default async function handler(req, res) {
           return res.status(result.status || 502).json({ error: result.error || 'הנפקת הקבלה נכשלה' });
         }
 
+        // Mark approved FIRST (critical). The receipt is already issued, so the
+        // row must not stay 'new' — otherwise a retry would issue a duplicate.
+        const { error: updErr } = await supabase
+          .from('external_transfer_submissions')
+          .update({ status: 'approved' })
+          .eq('id', id);
+        if (updErr) return res.status(500).json({ error: updErr.message });
+
+        // Best-effort: store the receipt number. The doc_number column may not
+        // exist yet if the latest migration hasn't been run — ignore any error
+        // so a missing column never blocks (or duplicates) an approval.
+        await supabase
+          .from('external_transfer_submissions')
+          .update({ doc_number: String(result.docNumber || '') })
+          .eq('id', id);
+
         // Notify the תולדות ניסים (בנות חיל) Telegram channel and append the
         // donation to its fund Google Sheet, reusing the same routing as the
         // automatic transactions webhook. Non-fatal: the receipt is already
-        // issued, so a routing hiccup must not block the approval.
+        // issued and the row already approved, so a routing hiccup can't block it.
         let routing = null;
         try {
           routing = await routeTransaction(supabase, {
@@ -133,12 +149,6 @@ export default async function handler(req, res) {
         } catch (routeErr) {
           console.error('toldot approve routing error:', routeErr);
         }
-
-        const { error: updErr } = await supabase
-          .from('external_transfer_submissions')
-          .update({ status: 'approved', doc_number: String(result.docNumber || '') })
-          .eq('id', id);
-        if (updErr) return res.status(500).json({ error: updErr.message });
 
         return res.json({ success: true, docNumber: result.docNumber, docUrl: result.docUrl, routing });
       }
