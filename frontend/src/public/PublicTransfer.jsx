@@ -3,6 +3,31 @@ import { useState, useRef } from 'react';
 const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 const TOKEN = import.meta.env.VITE_TOLDOT_PUBLIC_TOKEN || '';
 
+// Render a PDF's first page to a JPEG data URL, so a PDF flows through the exact
+// same image pipeline (OCR / storage / Telegram) as a screenshot. pdf.js is
+// loaded lazily — only when the user actually picks a PDF.
+async function pdfToJpegDataUrl(file, maxDim = 1600) {
+  const pdfjs = await import('pdfjs-dist');
+  const workerUrl = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default;
+  pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
+
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjs.getDocument({ data: buf }).promise;
+  const page = await pdf.getPage(1);
+  const base = page.getViewport({ scale: 1 });
+  const scale = Math.min(2, maxDim / Math.max(base.width, base.height));
+  const viewport = page.getViewport({ scale: scale > 0 ? scale : 1 });
+
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(viewport.width);
+  canvas.height = Math.round(viewport.height);
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  await page.render({ canvasContext: ctx, viewport }).promise;
+  return canvas.toDataURL('image/jpeg', 0.85);
+}
+
 // Compress + re-encode to JPEG data URL entirely in the browser (mirrors the
 // internal imageUtils.compressImage, inlined here to keep this bundle free of
 // the Supabase client that imageUtils transitively imports).
@@ -79,14 +104,22 @@ export default function PublicTransfer() {
     const file = e.target.files?.[0];
     if (!file) return;
     setError('');
-    if (!ALLOWED_TYPES.includes(file.type)) {
-      setError('סוג קובץ לא נתמך — יש להעלות תמונה (jpg / png / webp)');
+    const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+    if (!isPdf && !ALLOWED_TYPES.includes(file.type)) {
+      setError('סוג קובץ לא נתמך — יש להעלות תמונה (jpg / png / webp) או PDF');
       return;
     }
     try {
-      const dataUrl = await compressImage(file);
-      setPreview(dataUrl);
       setStage('analyzing');
+      let dataUrl;
+      try {
+        dataUrl = isPdf ? await pdfToJpegDataUrl(file) : await compressImage(file);
+      } catch (convErr) {
+        setError(isPdf ? 'לא הצלחנו לקרוא את קובץ ה-PDF' : convErr.message);
+        setStage('upload');
+        return;
+      }
+      setPreview(dataUrl);
       try {
         const ocr = await callApi('ocr', { image: dataUrl, mimeType: 'image/jpeg' });
         setFields({
@@ -165,14 +198,13 @@ export default function PublicTransfer() {
                 <input
                   ref={fileRef}
                   type="file"
-                  accept="image/*"
-                  capture="environment"
+                  accept="image/*,application/pdf"
                   onChange={handleFile}
                   hidden
                 />
-                <div className="pt-drop-icon">📷</div>
-                <div className="pt-drop-text">לחצו לצילום או לבחירת תמונה</div>
-                <div className="pt-drop-sub">jpg · png · webp</div>
+                <div className="pt-drop-icon">📎</div>
+                <div className="pt-drop-text">לחצו לצילום, בחירה מהגלריה או קובץ</div>
+                <div className="pt-drop-sub">jpg · png · webp · pdf</div>
               </label>
             )}
 
