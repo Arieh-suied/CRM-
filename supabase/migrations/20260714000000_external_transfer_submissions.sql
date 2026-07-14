@@ -17,11 +17,13 @@ create table if not exists external_transfer_submissions (
   notes           text,
   screenshot_path text,                               -- path in the transfer-screenshots storage bucket
   source          text default 'toldot-public',
+  doc_number      text,                               -- EZCount receipt number, set on approval
   created_at      timestamptz default now()
 );
 
--- Idempotent: adds id_number to a table that may already have been created.
-alter table external_transfer_submissions add column if not exists id_number text;
+-- Idempotent: add columns to a table that may already have been created.
+alter table external_transfer_submissions add column if not exists id_number  text;
+alter table external_transfer_submissions add column if not exists doc_number text;
 
 create index if not exists external_transfer_submissions_status_idx
   on external_transfer_submissions (status);

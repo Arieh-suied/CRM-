@@ -1,31 +1,20 @@
 // Authenticated CRM endpoint for reviewing external "תולדות נסים" transfer
-// submissions and recording approved ones into bank_transfers (no receipt).
+// submissions and issuing a donation receipt for approved ones.
 //
 //   GET  → list submissions with status='new' (+ signed screenshot URLs).
 //   POST → { id, action:'approve'|'reject', fields? }
-//          'approve' inserts a bank_transfers row (mosad 7016650, no receipt)
+//          'approve' issues an EZCount donation receipt under "סומך נופלים"
+//                    (which also records it in bank_transfers / issued_receipts)
 //                    and marks the submission 'approved'.
 //          'reject'  marks the submission 'rejected'.
 
 import { getSupabase } from './_supabase.js';
 import { requireUser, WRITE_ROLES } from './_auth.js';
+import { issueReceipt } from './_receipts-core.js';
 
 const STORAGE_BUCKET = 'transfer-screenshots';
-const MOSAD_NUMBER = '7016650'; // תולדות נסים
+const RECEIPT_BRANCH = 'סומך נופלים'; // approvals issue a donation receipt under this branch
 const SIGNED_URL_TTL = 60 * 60; // 1h
-
-// Convert a date to ISO (YYYY-MM-DD) when possible; returns null otherwise.
-function toIso(raw) {
-  if (!raw) return null;
-  const s = String(raw).trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  const m = s.match(/^(\d{1,2})[.\/\-](\d{1,2})[.\/\-](\d{2}|\d{4})$/);
-  if (m) {
-    const y = m[3].length === 2 ? `20${m[3]}` : m[3];
-    return `${y}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
-  }
-  return null;
-}
 
 export default async function handler(req, res) {
   const supabase = getSupabase();
@@ -94,33 +83,42 @@ export default async function handler(req, res) {
 
         const pick = (k) => (f[k] !== undefined ? (f[k] || null) : (sub[k] ?? null));
         const rawDate = pick('transfer_date');
-        const notes = pick('notes');
         const asmachta = pick('asmachta');
+        // Fold the reference number into the receipt comment so it stays on record.
+        const notes = [pick('notes'), asmachta ? `אסמכתא: ${asmachta}` : null]
+          .filter(Boolean).join(' | ') || null;
 
-        const { error: btErr } = await supabase.from('bank_transfers').insert({
-          customer_name:      name,
-          customer_id_number: idNumber,
-          transfer_amount: amount,
-          currency:        'ILS',
-          bank_name:       pick('bank_name'),
-          bank_branch:     pick('bank_branch'),
-          bank_account:    pick('bank_account'),
-          document_number: asmachta ? String(asmachta) : '',
-          document_date:   toIso(rawDate),
-          document_date_raw: rawDate,
-          document_note:   notes,
-          receipt_id:      null,
-          mosad_number:    MOSAD_NUMBER,
+        // Issue an EZCount donation receipt under "סומך נופלים". This also writes
+        // bank_transfers / issued_receipts / customers (shared with the manual
+        // receipts flow), so the transfer is fully recorded with a receipt link.
+        const result = await issueReceipt({
+          branch: RECEIPT_BRANCH,
+          customerName: name,
+          customerId: idNumber,
+          amount,
+          notes,
+          payments: [{
+            paymentMethod: 4, // bank transfer
+            amount,
+            bankName: pick('bank_name'),
+            bankBranch: pick('bank_branch'),
+            bankAccount: pick('bank_account'),
+            transferDate: rawDate,
+          }],
         });
-        if (btErr) return res.status(500).json({ error: btErr.message });
+
+        if (!result.success) {
+          // Leave the submission as 'new' so it can be retried after the error is fixed.
+          return res.status(result.status || 502).json({ error: result.error || 'הנפקת הקבלה נכשלה' });
+        }
 
         const { error: updErr } = await supabase
           .from('external_transfer_submissions')
-          .update({ status: 'approved' })
+          .update({ status: 'approved', doc_number: String(result.docNumber || '') })
           .eq('id', id);
         if (updErr) return res.status(500).json({ error: updErr.message });
 
-        return res.json({ success: true });
+        return res.json({ success: true, docNumber: result.docNumber, docUrl: result.docUrl });
       }
 
       return res.status(400).json({ error: 'פעולה לא ידועה' });

@@ -18,6 +18,7 @@ export default function ExternalTransfers() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [busyId, setBusyId] = useState(null);
 
   const load = useCallback(async () => {
@@ -44,6 +45,7 @@ export default function ExternalTransfers() {
   async function act(row, action) {
     setBusyId(row.id);
     setError('');
+    setSuccess('');
     try {
       const res = await authFetch('/api/toldot-submissions', {
         method: 'POST',
@@ -52,6 +54,9 @@ export default function ExternalTransfers() {
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'שגיאה');
+      if (action === 'approve' && data.docNumber) {
+        setSuccess(`קבלה הונפקה בהצלחה (סומך נופלים) — מספר ${data.docNumber}`);
+      }
       // Drop the handled row from the queue.
       setRows((rs) => rs.filter((r) => r.id !== row.id));
     } catch (err) {
@@ -68,10 +73,11 @@ export default function ExternalTransfers() {
         <button className={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`} onClick={load} disabled={loading}>↻ רענן</button>
       </div>
       <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 0 }}>
-        הגשות שהתקבלו מהדף הציבורי. אישור רושם את ההעברה בלשונית "העברות בנקאיות" (ללא הנפקת קבלה).
+        הגשות שהתקבלו מהדף הציבורי. אישור מנפיק קבלה על תרומה במוסד "סומך נופלים" ורושם את ההעברה במערכת.
       </p>
 
       {error && <div className={styles.errorMsg}>{error}</div>}
+      {success && <div className={styles.successMsg}>{success}</div>}
 
       {loading ? (
         <div className={styles.placeholder}>טוען...</div>
@@ -114,7 +120,7 @@ export default function ExternalTransfers() {
                     onClick={() => act(row, 'approve')}
                     disabled={busyId === row.id}
                   >
-                    {busyId === row.id ? '...' : '✓ אשר ורשום'}
+                    {busyId === row.id ? 'מנפיק...' : '✓ אשר והנפק קבלה'}
                   </button>
                   <button
                     className={`${styles.btn} ${styles.btnDanger} ${styles.btnSm}`}
