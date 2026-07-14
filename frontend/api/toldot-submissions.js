@@ -11,6 +11,9 @@
 import { getSupabase } from './_supabase.js';
 import { requireUser, WRITE_ROLES } from './_auth.js';
 import { issueReceipt } from './_receipts-core.js';
+import { routeTransaction } from './_transaction-route.js';
+
+const TOLDOT_MOSAD = '7016650'; // routes the donation to the תולדות ניסים channel + fund sheet
 
 const STORAGE_BUCKET = 'transfer-screenshots';
 const RECEIPT_BRANCH = 'סומך נופלים'; // approvals issue a donation receipt under this branch
@@ -112,13 +115,32 @@ export default async function handler(req, res) {
           return res.status(result.status || 502).json({ error: result.error || 'הנפקת הקבלה נכשלה' });
         }
 
+        // Notify the תולדות ניסים (בנות חיל) Telegram channel and append the
+        // donation to its fund Google Sheet, reusing the same routing as the
+        // automatic transactions webhook. Non-fatal: the receipt is already
+        // issued, so a routing hiccup must not block the approval.
+        let routing = null;
+        try {
+          routing = await routeTransaction(supabase, {
+            mosad_number:         TOLDOT_MOSAD,
+            client_name:          name,
+            amount,
+            comments:             notes || '',
+            group_name:           'תולדות נסים',
+            transaction_time_raw: rawDate || new Date().toISOString().slice(0, 10),
+            receipt_data:         result.receiptId || '',
+          });
+        } catch (routeErr) {
+          console.error('toldot approve routing error:', routeErr);
+        }
+
         const { error: updErr } = await supabase
           .from('external_transfer_submissions')
           .update({ status: 'approved', doc_number: String(result.docNumber || '') })
           .eq('id', id);
         if (updErr) return res.status(500).json({ error: updErr.message });
 
-        return res.json({ success: true, docNumber: result.docNumber, docUrl: result.docUrl });
+        return res.json({ success: true, docNumber: result.docNumber, docUrl: result.docUrl, routing });
       }
 
       return res.status(400).json({ error: 'פעולה לא ידועה' });

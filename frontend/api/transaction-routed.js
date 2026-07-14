@@ -15,17 +15,7 @@
 //   GOOGLE_SHEETS_CLIENT_EMAIL / GOOGLE_SHEETS_PRIVATE_KEY
 
 import { getSupabase } from './_supabase.js';
-import { sendTelegramMessage } from './_telegram.js';
-import { appendRow } from './_google-sheets.js';
-import { getMatchingFundRules } from './_fund-routing.js';
-import { resolveInstitution, buildTelegramText, receiptUrlFor } from './_transaction-notify.js';
-
-function chatIdForBucket(bucket) {
-  if (bucket === 'סומך נופלים') return process.env.TELEGRAM_CHAT_SOMECH;
-  if (bucket === 'ישיבות') return process.env.TELEGRAM_CHAT_YESHIVOT;
-  if (bucket === 'תולדות ניסים') return process.env.TELEGRAM_CHAT_BNOT_CHAYIL;
-  return null;
-}
+import { routeTransaction } from './_transaction-route.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -41,33 +31,6 @@ export default async function handler(req, res) {
   }
 
   const supabase = getSupabase();
-  const results = { telegram: null, sheets: [] };
-
-  try {
-    const target = await resolveInstitution(record, supabase);
-    const chatId = target && chatIdForBucket(target.bucket);
-    if (chatId) {
-      const text = buildTelegramText(record, target.mosadName);
-      await sendTelegramMessage(chatId, text, { receiptUrl: receiptUrlFor(record) });
-      results.telegram = { sent: true, channel: target.mosadName };
-    } else {
-      results.telegram = { sent: false, reason: 'no matching institution/channel' };
-    }
-  } catch (err) {
-    console.error('transaction-routed telegram error:', err);
-    results.telegram = { sent: false, error: err.message };
-  }
-
-  const matchingRules = await getMatchingFundRules(supabase, record);
-  for (const rule of matchingRules) {
-    try {
-      await appendRow(rule.spreadsheetId, rule.sheetName, rule.buildRow(record));
-      results.sheets.push({ fund: rule.name, ok: true });
-    } catch (err) {
-      console.error(`transaction-routed sheets error [${rule.id}]:`, err);
-      results.sheets.push({ fund: rule.name, ok: false, error: err.message });
-    }
-  }
-
+  const results = await routeTransaction(supabase, record);
   return res.status(200).json(results);
 }
