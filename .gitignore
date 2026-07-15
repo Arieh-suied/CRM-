@@ -23,3 +23,6 @@ Thumbs.db
 
 # Supabase temp
 supabase/.temp/
+
+# Vercel CLI link
+.vercel
