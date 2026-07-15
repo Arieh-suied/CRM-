@@ -18,6 +18,14 @@ const SAMPLE_TX = {
 const CAN_EDIT = new Set(['admin', 'editor']);
 const MAX_FILE_BYTES = 3.5 * 1024 * 1024;
 
+// Only these institutions get thank-you email templates.
+const PICKER_INSTITUTIONS = new Set([
+  'ישיבת אור אפרים',
+  'ישיבת חכמי ירושלים',
+  'כולל חכמי ירושלים',
+  'סומך נופלים',
+]);
+
 export function readFileAsAttachment(file) {
   return new Promise((resolve, reject) => {
     if (file.size > MAX_FILE_BYTES) return reject(new Error('הקובץ גדול מדי (מקסימום 3.5MB)'));
@@ -145,10 +153,10 @@ export default function EmailTemplate({ institutions = [] }) {
 
   if (loading) return <div className={styles.loading}>טוען תבניות…</div>;
 
-  // The שכ"ל bookkeeping variants of אור אפרים / חכמי ירושלים are not real
-  // recipients for thank-you templates — keep only the actual institutions.
-  const pickerInstitutions = institutions.filter(
-    (i) => !/שכ["״]ל/.test(i.mosad_name || '')
+  // Thank-you templates are only relevant for these institutions — the rest
+  // (bookkeeping שכ"ל variants, funds, campaign entities) are hidden here.
+  const pickerInstitutions = institutions.filter((i) =>
+    PICKER_INSTITUTIONS.has((i.mosad_name || '').trim())
   );
 
   const previewSubject = fillTemplate(subject, SAMPLE_TX);
