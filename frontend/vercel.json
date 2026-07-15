@@ -11,6 +11,10 @@
     {
       "path": "/api/refusals-monthly-report",
       "schedule": "0 6 15 * *"
+    },
+    {
+      "path": "/api/nedarim-recovery",
+      "schedule": "*/5 * * * *"
     }
   ]
 }
