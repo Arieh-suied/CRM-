@@ -23,7 +23,7 @@ export default async function handler(req, res) {
     if (mosad) {
       const { data, error } = await supabase
         .from('email_templates')
-        .select('mosad_number, subject, body, auto_send, updated_by, updated_at')
+        .select('mosad_number, subject, body, auto_send, attach_receipt, updated_by, updated_at')
         .eq('mosad_number', String(mosad))
         .maybeSingle();
       if (error) return res.status(500).json({ error: error.message });
@@ -32,7 +32,7 @@ export default async function handler(req, res) {
 
     const { data, error } = await supabase
       .from('email_templates')
-      .select('mosad_number, subject, body, auto_send, updated_by, updated_at')
+      .select('mosad_number, subject, body, auto_send, attach_receipt, updated_by, updated_at')
       .order('mosad_number');
     if (error) return res.status(500).json({ error: error.message });
     return res.json(data ?? []);
@@ -42,7 +42,7 @@ export default async function handler(req, res) {
     const user = await requireUser(req, res, supabase, { roles: WRITE_ROLES });
     if (!user) return;
 
-    const { mosad_number, subject, body, auto_send } = req.body || {};
+    const { mosad_number, subject, body, auto_send, attach_receipt } = req.body || {};
     if (!mosad_number || !String(mosad_number).trim()) {
       return res.status(400).json({ error: 'חסר מספר מוסד' });
     }
@@ -56,10 +56,11 @@ export default async function handler(req, res) {
         subject: subject.trim(),
         body,
         auto_send: Boolean(auto_send),
+        attach_receipt: Boolean(attach_receipt),
         updated_by: user.email,
         updated_at: new Date().toISOString(),
       })
-      .select('mosad_number, subject, body, auto_send, updated_by, updated_at')
+      .select('mosad_number, subject, body, auto_send, attach_receipt, updated_by, updated_at')
       .single();
     if (error) return res.status(500).json({ error: error.message });
     return res.json(data);

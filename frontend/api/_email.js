@@ -68,18 +68,65 @@ export function bodyToHtml(filledText) {
   return `<div dir="rtl" style="font-family:Arial,sans-serif;font-size:15px;line-height:1.6;color:#222">${escaped}</div>`;
 }
 
-export async function sendGmail({ to, subject, html }) {
+// RFC 2045 caps base64 lines at 76 chars.
+function b64lines(buffer) {
+  return Buffer.from(buffer).toString('base64').replace(/(.{76})/g, '$1\r\n');
+}
+
+// The EZCount receipt PDF for a transaction's receipt_data id (same source as
+// receipt-proxy.js). Returns a sendGmail attachment, throws on failure.
+const MAX_ATTACHMENT_BYTES = 4 * 1024 * 1024; // Gmail JSON send caps raw at ~5MB
+
+export async function fetchReceiptPdf(receiptData, docNum) {
+  const res = await fetch(`https://files.ezcount.co.il/front/documents/get/${receiptData}`);
+  if (!res.ok) throw new Error(`EZCount receipt fetch failed (${res.status})`);
+  const buffer = Buffer.from(await res.arrayBuffer());
+  if (!buffer.length) throw new Error('EZCount returned an empty receipt');
+  if (buffer.length > MAX_ATTACHMENT_BYTES) throw new Error('Receipt PDF too large to attach');
+  const safeDocNum = String(docNum || '').replace(/[^\w-]/g, '');
+  return {
+    filename: safeDocNum ? `receipt-${safeDocNum}.pdf` : 'receipt.pdf',
+    mimeType: res.headers.get('content-type')?.split(';')[0] || 'application/pdf',
+    content: buffer,
+  };
+}
+
+export async function sendGmail({ to, subject, html, attachment }) {
   const token = await getGmailAccessToken();
-  const mime = [
+  const headers = [
     `To: ${to}`,
     `From: ${encodeHeaderWord(FROM_NAME)} <${FROM_ADDRESS}>`,
     `Subject: ${encodeHeaderWord(subject)}`,
     'MIME-Version: 1.0',
+  ];
+  const htmlPart = [
     'Content-Type: text/html; charset=UTF-8',
     'Content-Transfer-Encoding: base64',
     '',
-    Buffer.from(html, 'utf8').toString('base64'),
+    b64lines(Buffer.from(html, 'utf8')),
   ].join('\r\n');
+
+  let mime;
+  if (attachment) {
+    const boundary = `----=_donorshub_${Date.now().toString(36)}`;
+    mime = [
+      ...headers,
+      `Content-Type: multipart/mixed; boundary="${boundary}"`,
+      '',
+      `--${boundary}`,
+      htmlPart,
+      `--${boundary}`,
+      `Content-Type: ${attachment.mimeType}; name="${attachment.filename}"`,
+      `Content-Disposition: attachment; filename="${attachment.filename}"`,
+      'Content-Transfer-Encoding: base64',
+      '',
+      b64lines(attachment.content),
+      `--${boundary}--`,
+    ].join('\r\n');
+  } else {
+    mime = [...headers, htmlPart].join('\r\n');
+  }
+
   const raw = Buffer.from(mime).toString('base64url');
   return gmailPost('messages/send', token, { raw }); // → { id, threadId }
 }
@@ -112,7 +159,7 @@ export async function sendDonorThanksIfEnabled(supabase, record) {
 
   const { data: tpl, error: tplErr } = await supabase
     .from('email_templates')
-    .select('subject, body, auto_send')
+    .select('subject, body, auto_send, attach_receipt')
     .eq('mosad_number', mosad)
     .maybeSingle();
   if (tplErr) throw tplErr;
@@ -144,12 +191,25 @@ export async function sendDonorThanksIfEnabled(supabase, record) {
     throw claimErr;
   }
 
+  // Receipt attachment is best-effort on the auto path: a missing/failed PDF
+  // must not cost the donor their thank-you email.
+  let attachment = null;
+  let attachError = null;
+  if (tpl.attach_receipt && record.receipt_data) {
+    try {
+      attachment = await fetchReceiptPdf(record.receipt_data, record.receipt_doc_num);
+    } catch (err) {
+      attachError = err.message;
+      console.error(`auto-email receipt attach failed (tx ${dedupKey}):`, err);
+    }
+  }
+
   try {
-    const sent = await sendGmail({ to, subject, html: bodyToHtml(body) });
+    const sent = await sendGmail({ to, subject, html: bodyToHtml(body), attachment });
     await supabase.from('email_log')
-      .update({ status: 'sent', gmail_message_id: sent.id })
+      .update({ status: 'sent', gmail_message_id: sent.id, error: attachError ? `sent without receipt: ${attachError}` : null })
       .eq('id', claim.id);
-    return { sent: true, recipient: to, gmailMessageId: sent.id };
+    return { sent: true, recipient: to, gmailMessageId: sent.id, receiptAttached: Boolean(attachment), attachError };
   } catch (err) {
     await supabase.from('email_log')
       .update({ status: 'failed', error: err.message })

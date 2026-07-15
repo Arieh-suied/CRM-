@@ -8,12 +8,13 @@
 -- the UI are unlimited.
 
 create table if not exists email_templates (
-  mosad_number  text primary key,
-  subject       text not null,
-  body          text not null,   -- plain text with {שם}/{סכום}/{קרן}/{תאריך} placeholders
-  auto_send     boolean not null default false,
-  updated_by    text,
-  updated_at    timestamptz not null default now()
+  mosad_number    text primary key,
+  subject         text not null,
+  body            text not null,   -- plain text with {שם}/{סכום}/{קרן}/{תאריך} placeholders
+  auto_send       boolean not null default false,
+  attach_receipt  boolean not null default false,  -- attach the EZCount receipt PDF when the transaction has one
+  updated_by      text,
+  updated_at      timestamptz not null default now()
 );
 
 alter table email_templates enable row level security;

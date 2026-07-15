@@ -55,7 +55,7 @@ async function handleDonorSearch(req, res, supabase) {
 
   let query = supabase
     .from('transactions_with_parsed_time')
-    .select('id, client_name, email, phone, amount, currency, group_name, mosad_number, transaction_time_raw, external_transaction_id')
+    .select('id, client_name, email, phone, amount, currency, group_name, mosad_number, transaction_time_raw, external_transaction_id, receipt_data, receipt_doc_num')
     .not('email', 'is', null)
     .neq('email', '')
     .order('transaction_time_parsed', { ascending: false })

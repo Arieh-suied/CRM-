@@ -16,6 +16,7 @@ export default function SendEmailModal({ tx: initialTx = null, institutionName, 
   const [subject, setSubject] = useState('');
   const [body, setBody]       = useState('');
   const [loading, setLoading] = useState(Boolean(initialTx));
+  const [attach, setAttach]   = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [sending, setSending] = useState(false);
   const [msg, setMsg]         = useState(null); // { text, ok }
@@ -37,6 +38,7 @@ export default function SendEmailModal({ tx: initialTx = null, institutionName, 
     const prefill = (tpl) => {
       setSubject(fillTemplate(tpl.subject, tx, fundName));
       setBody(fillTemplate(tpl.body, tx, fundName));
+      setAttach(Boolean(tpl.attach_receipt) && Boolean(tx.receipt_data));
     };
     if (!tx.mosad_number) {
       prefill(DEFAULT_TEMPLATE);
@@ -84,7 +86,7 @@ export default function SendEmailModal({ tx: initialTx = null, institutionName, 
     setSending(true);
     setMsg(null);
     try {
-      await sendDonorEmail({ transactionId: tx?.id, to, subject, body });
+      await sendDonorEmail({ transactionId: tx?.id, to, subject, body, attachReceipt: attach });
       setMsg({ text: `המייל נשלח בהצלחה אל ${to}`, ok: true });
       setConfirming(false);
     } catch (e) {
@@ -176,6 +178,20 @@ export default function SendEmailModal({ tx: initialTx = null, institutionName, 
                   dir="rtl"
                 />
               </label>
+              {tx.receipt_data ? (
+                <label className={styles.attachRow}>
+                  <input
+                    type="checkbox"
+                    checked={attach}
+                    onChange={(e) => setAttach(e.target.checked)}
+                  />
+                  <span>צרף את הקבלה {tx.receipt_doc_num ? `(מס' ${tx.receipt_doc_num}) ` : ''}כקובץ PDF</span>
+                </label>
+              ) : (
+                <div className={styles.attachRow}>
+                  <span className={styles.attachMuted}>לעסקה זו אין קבלה במערכת לצירוף</span>
+                </div>
+              )}
             </>
           )}
 

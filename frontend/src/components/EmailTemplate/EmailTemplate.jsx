@@ -25,6 +25,7 @@ export default function EmailTemplate({ institutions = [] }) {
   const [subject, setSubject]     = useState('');
   const [body, setBody]           = useState('');
   const [autoSend, setAutoSend]   = useState(false);
+  const [attachReceipt, setAttachReceipt] = useState(false);
   const [meta, setMeta]           = useState(null);
   const [loading, setLoading]     = useState(true);
   const [saving, setSaving]       = useState(false);
@@ -50,6 +51,7 @@ export default function EmailTemplate({ institutions = [] }) {
     setSubject(tpl?.subject ?? DEFAULT_TEMPLATE.subject);
     setBody(tpl?.body ?? DEFAULT_TEMPLATE.body);
     setAutoSend(Boolean(tpl?.auto_send));
+    setAttachReceipt(Boolean(tpl?.attach_receipt));
     setMeta(tpl ? { updated_by: tpl.updated_by, updated_at: tpl.updated_at } : null);
   }
 
@@ -70,7 +72,7 @@ export default function EmailTemplate({ institutions = [] }) {
     setSaving(true);
     setMsg(null);
     try {
-      const saved = await saveEmailTemplate({ mosad_number: mosad, subject, body, auto_send: autoSend });
+      const saved = await saveEmailTemplate({ mosad_number: mosad, subject, body, auto_send: autoSend, attach_receipt: attachReceipt });
       setTemplates((prev) => ({ ...prev, [mosad]: saved }));
       setMeta({ updated_by: saved.updated_by, updated_at: saved.updated_at });
       setMsg({ text: 'התבנית נשמרה בהצלחה', ok: true });
@@ -93,6 +95,7 @@ export default function EmailTemplate({ institutions = [] }) {
         return next;
       });
       setAutoSend(false);
+      setAttachReceipt(false);
       setMeta(null);
       setMsg({ text: 'התבנית נמחקה — לא יישלחו יותר מיילים אוטומטיים למוסד הזה', ok: true });
     } catch (e) {
@@ -195,6 +198,18 @@ export default function EmailTemplate({ institutions = [] }) {
                 <span className={styles.toggleWarn}>
                   {' '}— כשמופעל, כל עסקה חדשה של המוסד עם כתובת מייל תקבל את המייל מיד
                 </span>
+              </span>
+            </label>
+
+            <label className={styles.toggleRow}>
+              <input
+                type="checkbox"
+                checked={attachReceipt}
+                onChange={(e) => setAttachReceipt(e.target.checked)}
+                disabled={!canEdit}
+              />
+              <span>
+                צירוף הקבלה למייל — כשלעסקה יש קבלה (EZCount), קובץ ה-PDF יצורף אוטומטית
               </span>
             </label>
 

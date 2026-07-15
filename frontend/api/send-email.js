@@ -9,7 +9,7 @@
 
 import { getSupabase } from './_supabase.js';
 import { requireUser, WRITE_ROLES } from './_auth.js';
-import { sendGmail, bodyToHtml } from './_email.js';
+import { sendGmail, bodyToHtml, fetchReceiptPdf } from './_email.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -18,11 +18,30 @@ export default async function handler(req, res) {
   const user = await requireUser(req, res, supabase, { roles: WRITE_ROLES });
   if (!user) return;
 
-  const { transactionId, to, subject, body } = req.body || {};
+  const { transactionId, to, subject, body, attachReceipt } = req.body || {};
   const recipient = String(to || '').trim();
   if (!recipient.includes('@')) return res.status(400).json({ error: 'כתובת מייל לא תקינה' });
   if (!subject?.trim()) return res.status(400).json({ error: 'חסר נושא למייל' });
   if (!body?.trim()) return res.status(400).json({ error: 'חסר תוכן להודעה' });
+
+  // Attaching the receipt was explicitly requested — unlike the auto path,
+  // fail loudly instead of silently sending without it.
+  let attachment = null;
+  if (attachReceipt) {
+    if (!transactionId) return res.status(400).json({ error: 'צירוף קבלה דורש עסקה מהמערכת' });
+    const { data: tx, error: txErr } = await supabase
+      .from('transactions')
+      .select('receipt_data, receipt_doc_num')
+      .eq('id', transactionId)
+      .maybeSingle();
+    if (txErr) return res.status(500).json({ error: txErr.message });
+    if (!tx?.receipt_data) return res.status(400).json({ error: 'לעסקה הזו אין קבלה במערכת' });
+    try {
+      attachment = await fetchReceiptPdf(tx.receipt_data, tx.receipt_doc_num);
+    } catch (err) {
+      return res.status(502).json({ error: `משיכת הקבלה נכשלה: ${err.message}` });
+    }
+  }
 
   const { data: logRow, error: logErr } = await supabase
     .from('email_log')
@@ -41,7 +60,7 @@ export default async function handler(req, res) {
   if (logErr) return res.status(500).json({ error: logErr.message });
 
   try {
-    const sent = await sendGmail({ to: recipient, subject: subject.trim(), html: bodyToHtml(body) });
+    const sent = await sendGmail({ to: recipient, subject: subject.trim(), html: bodyToHtml(body), attachment });
     await supabase.from('email_log')
       .update({ status: 'sent', gmail_message_id: sent.id })
       .eq('id', logRow.id);
