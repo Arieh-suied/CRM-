@@ -35,6 +35,20 @@ export async function gmailFetch(path, token) {
   return data;
 }
 
+// Requires the gmail.send scope on GOOGLE_REFRESH_TOKEN_SOM (the token must be
+// minted with both gmail.readonly and gmail.send — see
+// backend/scripts/get-gmail-refresh-token-som.js).
+export async function gmailPost(path, token, body) {
+  const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/${path}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(`Gmail API error: ${data.error?.message || JSON.stringify(data)}`);
+  return data;
+}
+
 function decodeBase64Url(data) {
   if (!data) return '';
   return Buffer.from(data.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');

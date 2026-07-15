@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import styles from './NavTabs.module.css';
 
-const TABS = [
+// Tabs without `roles` are visible to everyone; otherwise only to the listed roles.
+const ALL_TABS = [
   { id: 'transactions', label: 'עסקאות' },
   { id: 'stripe',       label: 'Stripe' },
   { id: 'bank',         label: 'העברות בנקאיות' },
@@ -11,13 +12,13 @@ const TABS = [
   { id: 'funds',        label: 'ניהול קרנות' },
   { id: 'failures',     label: 'סירובים' },
   { id: 'bank-refusals', label: 'סירובים בנקאי' },
+  { id: 'email-template', label: 'תבנית מייל', roles: ['admin', 'editor'] },
+  { id: 'users',        label: 'ניהול משתמשים', roles: ['admin'] },
 ];
-
-const ADMIN_TAB = { id: 'users', label: 'ניהול משתמשים' };
 
 export default function NavTabs({ active, onChange, role }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const tabs = role === 'admin' ? [...TABS, ADMIN_TAB] : TABS;
+  const tabs = ALL_TABS.filter((t) => !t.roles || t.roles.includes(role));
   const activeTab = tabs.find((t) => t.id === active);
 
   function handleChange(id) {

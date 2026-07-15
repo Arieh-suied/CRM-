@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import styles from './TransactionsTable.module.css';
 import ReceiptModal from '../ReceiptModal/ReceiptModal.jsx';
+import SendEmailModal from '../SendEmailModal/SendEmailModal.jsx';
 
 const COLUMNS = [
   { key: 'transaction_time_iso', label: 'תאריך' },
@@ -10,7 +11,10 @@ const COLUMNS = [
   { key: 'group_name',           label: 'קבוצה' },
   { key: 'mosad_number',         label: 'מוסד' },
   { key: null,                   label: 'קבלה' },
+  { key: null,                   label: 'מייל' },
 ];
+
+const EMAIL_ROLES = new Set(['admin', 'editor']);
 
 function SortIcon({ active, dir }) {
   if (!active) return <span className={styles.sortIcon}>⇅</span>;
@@ -51,8 +55,10 @@ function ReceiptBtn({ receiptData, receiptDocNum, clientName, onPreview }) {
   );
 }
 
-export default function TransactionsTable({ transactions, institutions, loading, pagination, sort, onSort, onPageChange }) {
+export default function TransactionsTable({ transactions, institutions, loading, pagination, sort, onSort, onPageChange, role }) {
   const [receipt, setReceipt] = useState(null);
+  const [emailTx, setEmailTx] = useState(null);
+  const canEmail = EMAIL_ROLES.has(role);
   const institutionMap = Object.fromEntries(
     institutions.map((i) => [i.mosad_number, i.mosad_name])
   );
@@ -102,6 +108,19 @@ export default function TransactionsTable({ transactions, institutions, loading,
                     onPreview={setReceipt}
                   />
                 </td>
+                <td>
+                  {canEmail && tx.email ? (
+                    <button
+                      className={styles.receiptLink}
+                      onClick={() => setEmailTx(tx)}
+                      title={`שלח מייל אל ${tx.email}`}
+                    >
+                      ✉ שלח
+                    </button>
+                  ) : (
+                    <span className={styles.muted}>—</span>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -127,6 +146,14 @@ export default function TransactionsTable({ transactions, institutions, loading,
           url={receipt.url}
           title={receipt.title}
           onClose={() => setReceipt(null)}
+        />
+      )}
+
+      {emailTx && (
+        <SendEmailModal
+          tx={emailTx}
+          institutionName={institutionMap[emailTx.mosad_number]}
+          onClose={() => setEmailTx(null)}
         />
       )}
     </div>

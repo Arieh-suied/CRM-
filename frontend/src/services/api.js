@@ -166,6 +166,23 @@ export async function exportBankOrders(mosadNumber, type, from, to) {
   URL.revokeObjectURL(blobUrl);
 }
 
+// Donor thank-you emails — template + manual send
+export function fetchEmailTemplate() {
+  return request('/email-template');
+}
+
+export function saveEmailTemplate(body) {
+  return request('/email-template', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+export function sendDonorEmail(body) {
+  return postJson('/send-email', body);
+}
+
 // Bank standing-order refusals — monthly reconciliation
 export function fetchBankRefusals(mosadNumber, period) {
   return request(`/bank-refusals?mosad_number=${encodeURIComponent(mosadNumber)}&period=${encodeURIComponent(period)}`);

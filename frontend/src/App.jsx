@@ -24,6 +24,7 @@ const FundsManagement  = lazy(() => import('./components/Funds/FundsManagement.j
 const PaymentFailures  = lazy(() => import('./components/PaymentFailures/PaymentFailures.jsx'));
 const BankRefusals     = lazy(() => import('./components/BankRefusals/BankRefusals.jsx'));
 const AIAssistant      = lazy(() => import('./components/AIAssistant/AIAssistant.jsx'));
+const EmailTemplate    = lazy(() => import('./components/EmailTemplate/EmailTemplate.jsx'));
 
 const EMPTY_FILTERS = {
   mosad_number: '', transaction_type: '', group_name: '',
@@ -36,7 +37,7 @@ const DEFAULT_SORT = { sort_by: 'transaction_time_iso', sort_dir: 'desc' };
 // or back/forward keeps you on the same screen instead of resetting to עסקאות.
 const VALID_TABS = new Set([
   'transactions', 'stripe', 'bank', 'keva', 'grow',
-  'receipts', 'funds', 'failures', 'bank-refusals', 'users',
+  'receipts', 'funds', 'failures', 'bank-refusals', 'email-template', 'users',
 ]);
 
 function tabFromHash() {
@@ -160,6 +161,7 @@ function Dashboard({ user, signOut, role, allowedMosadim }) {
               sort={sort}
               onSort={handleSort}
               onPageChange={loadPage}
+              role={role}
             />
           </>
         )}
@@ -173,6 +175,7 @@ function Dashboard({ user, signOut, role, allowedMosadim }) {
           {activeTab === 'funds'     && <FundsManagement />}
           {activeTab === 'failures'  && <PaymentFailures />}
           {activeTab === 'bank-refusals' && <BankRefusals institutions={visibleInstitutions} />}
+          {activeTab === 'email-template' && ['admin', 'editor'].includes(role) && <EmailTemplate />}
           {activeTab === 'users' && role === 'admin' && (
             <UserManagement institutions={institutions} />
           )}

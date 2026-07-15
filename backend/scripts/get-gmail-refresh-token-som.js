@@ -39,7 +39,10 @@ const oauth2Client = new google.auth.OAuth2(
 const authUrl = oauth2Client.generateAuthUrl({
   access_type: "offline",
   prompt: "consent", // force a fresh refresh_token even if one was granted before
-  scope: ["https://www.googleapis.com/auth/gmail.readonly"],
+  scope: [
+    "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/gmail.send", // donor thank-you emails (frontend/api/_email.js)
+  ],
 });
 
 console.log("\n1. Open this URL in your browser and sign in as som.noflim@gmail.com:\n");
