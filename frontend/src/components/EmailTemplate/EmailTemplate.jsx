@@ -145,6 +145,12 @@ export default function EmailTemplate({ institutions = [] }) {
 
   if (loading) return <div className={styles.loading}>טוען תבניות…</div>;
 
+  // The שכ"ל bookkeeping variants of אור אפרים / חכמי ירושלים are not real
+  // recipients for thank-you templates — keep only the actual institutions.
+  const pickerInstitutions = institutions.filter(
+    (i) => !/שכ["״]ל/.test(i.mosad_name || '')
+  );
+
   const previewSubject = fillTemplate(subject, SAMPLE_TX);
   const previewBody = fillTemplateHtml(body, SAMPLE_TX);
   const attachedFileName = newFile ? newFile.name : (!removeFile && existingFile) || null;
@@ -173,7 +179,7 @@ export default function EmailTemplate({ institutions = [] }) {
             onChange={(e) => selectMosad(e.target.value)}
           >
             <option value="">— בחר מוסד —</option>
-            {institutions.map((i) => {
+            {pickerInstitutions.map((i) => {
               const tpl = templates[i.mosad_number];
               const marker = tpl ? (tpl.auto_send ? ' ✓ אוטומטי' : ' • יש תבנית') : '';
               return (
