@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import styles from './EmailTemplate.module.css';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import { fetchEmailTemplates, saveEmailTemplate, deleteEmailTemplate } from '../../services/api.js';
-import { fillTemplate, PLACEHOLDERS, DEFAULT_TEMPLATE } from '../../lib/emailTemplate.js';
+import { fillTemplate, fillTemplateHtml, ensureHtml, htmlIsEmpty, PLACEHOLDERS, DEFAULT_TEMPLATE } from '../../lib/emailTemplate.js';
+import RichTextEditor from '../RichTextEditor/RichTextEditor.jsx';
 import SendEmailModal from '../SendEmailModal/SendEmailModal.jsx';
 
 // Sample transaction for the live preview
@@ -15,6 +16,21 @@ const SAMPLE_TX = {
 };
 
 const CAN_EDIT = new Set(['admin', 'editor']);
+const MAX_FILE_BYTES = 3.5 * 1024 * 1024;
+
+export function readFileAsAttachment(file) {
+  return new Promise((resolve, reject) => {
+    if (file.size > MAX_FILE_BYTES) return reject(new Error('הקובץ גדול מדי (מקסימום 3.5MB)'));
+    const reader = new FileReader();
+    reader.onload = () => resolve({
+      name: file.name,
+      mime: file.type || 'application/octet-stream',
+      dataBase64: String(reader.result).split(',')[1] || '',
+    });
+    reader.onerror = () => reject(new Error('קריאת הקובץ נכשלה'));
+    reader.readAsDataURL(file);
+  });
+}
 
 export default function EmailTemplate({ institutions = [] }) {
   const { role } = useAuth();
@@ -23,15 +39,19 @@ export default function EmailTemplate({ institutions = [] }) {
   const [templates, setTemplates] = useState({}); // mosad_number → template row
   const [mosad, setMosad]         = useState('');
   const [subject, setSubject]     = useState('');
-  const [body, setBody]           = useState('');
+  const [body, setBody]           = useState(''); // HTML
   const [autoSend, setAutoSend]   = useState(false);
   const [attachReceipt, setAttachReceipt] = useState(false);
+  const [existingFile, setExistingFile]   = useState(null); // attachment_name from DB
+  const [newFile, setNewFile]             = useState(null); // { name, mime, dataBase64 }
+  const [removeFile, setRemoveFile]       = useState(false);
   const [meta, setMeta]           = useState(null);
   const [loading, setLoading]     = useState(true);
   const [saving, setSaving]       = useState(false);
   const [msg, setMsg]             = useState(null); // { text, ok }
   const [sendOpen, setSendOpen]   = useState(false);
-  const bodyRef = useRef(null);
+  const editorRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     fetchEmailTemplates()
@@ -49,31 +69,46 @@ export default function EmailTemplate({ institutions = [] }) {
     setMsg(null);
     const tpl = templates[m];
     setSubject(tpl?.subject ?? DEFAULT_TEMPLATE.subject);
-    setBody(tpl?.body ?? DEFAULT_TEMPLATE.body);
+    setBody(ensureHtml(tpl?.body ?? DEFAULT_TEMPLATE.body));
     setAutoSend(Boolean(tpl?.auto_send));
     setAttachReceipt(Boolean(tpl?.attach_receipt));
+    setExistingFile(tpl?.attachment_name || null);
+    setNewFile(null);
+    setRemoveFile(false);
     setMeta(tpl ? { updated_by: tpl.updated_by, updated_at: tpl.updated_at } : null);
   }
 
-  function insertPlaceholder(ph) {
-    const el = bodyRef.current;
-    if (!el) return setBody((prev) => prev + ph);
-    const start = el.selectionStart ?? body.length;
-    const end = el.selectionEnd ?? body.length;
-    const next = body.slice(0, start) + ph + body.slice(end);
-    setBody(next);
-    requestAnimationFrame(() => {
-      el.focus();
-      el.selectionStart = el.selectionEnd = start + ph.length;
-    });
+  async function onPickFile(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      setNewFile(await readFileAsAttachment(file));
+      setRemoveFile(false);
+      setMsg(null);
+    } catch (err) {
+      setMsg({ text: err.message, ok: false });
+    }
   }
 
   async function save() {
+    if (htmlIsEmpty(body)) return setMsg({ text: 'חסר תוכן להודעה', ok: false });
     setSaving(true);
     setMsg(null);
     try {
-      const saved = await saveEmailTemplate({ mosad_number: mosad, subject, body, auto_send: autoSend, attach_receipt: attachReceipt });
+      const saved = await saveEmailTemplate({
+        mosad_number: mosad,
+        subject,
+        body,
+        auto_send: autoSend,
+        attach_receipt: attachReceipt,
+        ...(newFile ? { attachment: newFile } : {}),
+        ...(removeFile && !newFile ? { remove_attachment: true } : {}),
+      });
       setTemplates((prev) => ({ ...prev, [mosad]: saved }));
+      setExistingFile(saved.attachment_name || null);
+      setNewFile(null);
+      setRemoveFile(false);
       setMeta({ updated_by: saved.updated_by, updated_at: saved.updated_at });
       setMsg({ text: 'התבנית נשמרה בהצלחה', ok: true });
     } catch (e) {
@@ -96,6 +131,9 @@ export default function EmailTemplate({ institutions = [] }) {
       });
       setAutoSend(false);
       setAttachReceipt(false);
+      setExistingFile(null);
+      setNewFile(null);
+      setRemoveFile(false);
       setMeta(null);
       setMsg({ text: 'התבנית נמחקה — לא יישלחו יותר מיילים אוטומטיים למוסד הזה', ok: true });
     } catch (e) {
@@ -108,7 +146,8 @@ export default function EmailTemplate({ institutions = [] }) {
   if (loading) return <div className={styles.loading}>טוען תבניות…</div>;
 
   const previewSubject = fillTemplate(subject, SAMPLE_TX);
-  const previewBody = fillTemplate(body, SAMPLE_TX);
+  const previewBody = fillTemplateHtml(body, SAMPLE_TX);
+  const attachedFileName = newFile ? newFile.name : (!removeFile && existingFile) || null;
 
   return (
     <div className={styles.wrapper}>
@@ -154,7 +193,7 @@ export default function EmailTemplate({ institutions = [] }) {
                   key={ph}
                   type="button"
                   className={styles.chip}
-                  onClick={() => insertPlaceholder(ph)}
+                  onClick={() => editorRef.current?.insertText(ph)}
                   disabled={!canEdit}
                 >
                   {ph}
@@ -173,18 +212,42 @@ export default function EmailTemplate({ institutions = [] }) {
               />
             </label>
 
-            <label className={styles.label}>
+            <div className={styles.label}>
               תוכן ההודעה
-              <textarea
-                ref={bodyRef}
-                className={styles.textarea}
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                rows={10}
-                disabled={!canEdit}
-                dir="rtl"
-              />
-            </label>
+              <RichTextEditor ref={editorRef} value={body} onChange={setBody} disabled={!canEdit} />
+            </div>
+
+            <div className={styles.fileRow}>
+              <input ref={fileInputRef} type="file" hidden onChange={onPickFile} />
+              {attachedFileName ? (
+                <>
+                  <span className={styles.fileName}>📎 {attachedFileName}</span>
+                  {canEdit && (
+                    <>
+                      <button type="button" className={styles.fileBtn} onClick={() => fileInputRef.current?.click()}>
+                        החלף קובץ
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.fileRemoveBtn}
+                        onClick={() => { setNewFile(null); setRemoveFile(true); }}
+                      >
+                        הסר
+                      </button>
+                    </>
+                  )}
+                </>
+              ) : (
+                canEdit && (
+                  <button type="button" className={styles.fileBtn} onClick={() => fileInputRef.current?.click()}>
+                    📎 צרף תמונה או קובץ לתבנית
+                  </button>
+                )
+              )}
+            </div>
+            <p className={styles.fileHint}>
+              הקובץ יצורף לכל מייל שנשלח מהתבנית הזו (עד 3.5MB).
+            </p>
 
             <label className={styles.toggleRow}>
               <input
@@ -246,14 +309,14 @@ export default function EmailTemplate({ institutions = [] }) {
           <div className={styles.previewCard}>
             <div className={styles.previewSubject}>{previewSubject || '(ללא נושא)'}</div>
             <div className={styles.previewFrom}>מאת: סומך נופלים &lt;som.noflim@gmail.com&gt;</div>
-            <div className={styles.previewBody} dir="rtl">
-              {previewBody.split('\n').map((line, i) => (
-                <span key={i}>
-                  {line}
-                  <br />
-                </span>
-              ))}
-            </div>
+            <div
+              className={styles.previewBody}
+              dir="rtl"
+              dangerouslySetInnerHTML={{ __html: previewBody }}
+            />
+            {attachedFileName && (
+              <div className={styles.previewAttachment}>📎 {attachedFileName}</div>
+            )}
           </div>
         </div>
       )}

@@ -1,25 +1,34 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import styles from './SendEmailModal.module.css';
 import { fetchEmailTemplate, sendDonorEmail, searchDonors } from '../../services/api.js';
-import { fillTemplate, DEFAULT_TEMPLATE } from '../../lib/emailTemplate.js';
+import { fillTemplate, fillTemplateHtml, ensureHtml, htmlIsEmpty, DEFAULT_TEMPLATE } from '../../lib/emailTemplate.js';
+import RichTextEditor from '../RichTextEditor/RichTextEditor.jsx';
+import { readFileAsAttachment } from '../EmailTemplate/EmailTemplate.jsx';
 
-// Manual "send email to donor" modal. Two entry points:
+// Manual "send email to donor" modal. Entry points:
 //   - with `tx`   (transactions table row) — straight to compose
 //   - without `tx` (template tab)          — donor search step first; picking a
 //     donor uses their latest transaction so placeholders and the mosad
-//     template match their most recent donation.
+//     template match their most recent donation. A free-typed address is also
+//     possible for recipients that don't exist in the system.
 // Compose is prefilled from the transaction's institution template (generic
-// default when the mosad has none), everything editable, confirm before send.
+// default when the mosad has none), body is rich-text HTML, everything
+// editable, confirm before send. Attachments: EZCount receipt, the template's
+// stored file, and/or one ad-hoc uploaded file.
 export default function SendEmailModal({ tx: initialTx = null, institutionName, institutions = [], onClose }) {
   const [tx, setTx]           = useState(initialTx);
   const [to, setTo]           = useState(initialTx?.email || '');
   const [subject, setSubject] = useState('');
-  const [body, setBody]       = useState('');
+  const [body, setBody]       = useState(''); // HTML
   const [loading, setLoading] = useState(Boolean(initialTx));
-  const [attach, setAttach]   = useState(false);
+  const [attachReceipt, setAttachReceipt] = useState(false);
+  const [templateFileName, setTemplateFileName] = useState(null);
+  const [attachTemplateFile, setAttachTemplateFile] = useState(false);
+  const [customFile, setCustomFile]   = useState(null); // { name, mime, dataBase64 }
   const [confirming, setConfirming] = useState(false);
   const [sending, setSending] = useState(false);
   const [msg, setMsg]         = useState(null); // { text, ok }
+  const fileInputRef = useRef(null);
 
   // Donor-search step (only when opened without a transaction)
   const [query, setQuery]     = useState('');
@@ -37,9 +46,18 @@ export default function SendEmailModal({ tx: initialTx = null, institutionName, 
     const fundName = tx.group_name || instName;
     const prefill = (tpl) => {
       setSubject(fillTemplate(tpl.subject, tx, fundName));
-      setBody(fillTemplate(tpl.body, tx, fundName));
-      setAttach(Boolean(tpl.attach_receipt) && Boolean(tx.receipt_data));
+      setBody(fillTemplateHtml(ensureHtml(tpl.body), tx, fundName));
+      setAttachReceipt(Boolean(tpl.attach_receipt) && Boolean(tx.receipt_data));
+      setTemplateFileName(tpl.attachment_name || null);
+      setAttachTemplateFile(Boolean(tpl.attachment_name));
     };
+    if (tx.freeform) {
+      // No transaction to fill placeholders from — start from a clean generic text.
+      setSubject(DEFAULT_TEMPLATE.subject);
+      setBody(ensureHtml('שלום,\n\nתודה רבה על תרומתך.\nתרומתך מסייעת לנו להמשיך בפעילותנו.\n\nבברכה,\nסומך נופלים'));
+      setLoading(false);
+      return;
+    }
     if (!tx.mosad_number) {
       prefill(DEFAULT_TEMPLATE);
       setLoading(false);
@@ -82,11 +100,40 @@ export default function SendEmailModal({ tx: initialTx = null, institutionName, 
     setMsg(null);
   }
 
+  // Recipient that doesn't exist in the system — compose with the generic
+  // default template and a free-typed address.
+  function pickFreeform() {
+    setTx({ freeform: true });
+    setTo(query.trim().includes('@') ? query.trim() : '');
+    setMsg(null);
+  }
+
+  async function onPickFile(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      setCustomFile(await readFileAsAttachment(file));
+      setMsg(null);
+    } catch (err) {
+      setMsg({ text: err.message, ok: false });
+    }
+  }
+
   async function send() {
     setSending(true);
     setMsg(null);
     try {
-      await sendDonorEmail({ transactionId: tx?.id, to, subject, body, attachReceipt: attach });
+      await sendDonorEmail({
+        transactionId: tx?.id,
+        to,
+        subject,
+        body,
+        attachReceipt,
+        attachTemplateFile: attachTemplateFile && Boolean(templateFileName),
+        mosadNumber: tx?.mosad_number,
+        customFile: customFile || undefined,
+      });
       setMsg({ text: `המייל נשלח בהצלחה אל ${to}`, ok: true });
       setConfirming(false);
     } catch (e) {
@@ -97,15 +144,16 @@ export default function SendEmailModal({ tx: initialTx = null, institutionName, 
     }
   }
 
-  const canSend = to.trim().includes('@') && subject.trim() && body.trim();
+  const canSend = to.trim().includes('@') && subject.trim() && !htmlIsEmpty(body);
   const searchStep = !tx;
+  const isFreeform = Boolean(tx?.freeform);
 
   return (
     <div className={styles.overlay} onClick={onClose}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="שליחת מייל לתורם">
         <div className={styles.header}>
           <span className={styles.title}>
-            {searchStep ? 'שליחת מייל לתורם' : `שליחת מייל — ${tx.client_name || 'תורם'}`}
+            {searchStep ? 'שליחת מייל לתורם' : isFreeform ? 'שליחת מייל לכתובת חופשית' : `שליחת מייל — ${tx.client_name || 'תורם'}`}
           </span>
           <button className={styles.closeBtn} onClick={onClose} aria-label="סגור">✕</button>
         </div>
@@ -140,14 +188,17 @@ export default function SendEmailModal({ tx: initialTx = null, institutionName, 
                   </button>
                 ))}
               </div>
+              <button type="button" className={styles.freeformBtn} onClick={pickFreeform}>
+                ✍ שליחה לכתובת שלא קיימת במערכת
+              </button>
             </>
           ) : loading ? (
             <div className={styles.loading}>טוען תבנית…</div>
           ) : (
             <>
               {!initialTx && (
-                <button type="button" className={styles.backBtn} onClick={() => { setTx(null); setMsg(null); }}>
-                  ‹ החלף תורם
+                <button type="button" className={styles.backBtn} onClick={() => { setTx(null); setMsg(null); setCustomFile(null); }}>
+                  ‹ חזרה לחיפוש
                 </button>
               )}
               <label className={styles.label}>
@@ -156,7 +207,9 @@ export default function SendEmailModal({ tx: initialTx = null, institutionName, 
                   className={styles.input}
                   value={to}
                   onChange={(e) => setTo(e.target.value)}
+                  placeholder="name@example.com"
                   dir="ltr"
+                  autoFocus={isFreeform && !to}
                 />
               </label>
               <label className={styles.label}>
@@ -168,22 +221,17 @@ export default function SendEmailModal({ tx: initialTx = null, institutionName, 
                   dir="rtl"
                 />
               </label>
-              <label className={styles.label}>
+              <div className={styles.label}>
                 תוכן ההודעה
-                <textarea
-                  className={styles.textarea}
-                  value={body}
-                  onChange={(e) => setBody(e.target.value)}
-                  rows={9}
-                  dir="rtl"
-                />
-              </label>
-              {tx.receipt_data ? (
+                <RichTextEditor value={body} onChange={setBody} />
+              </div>
+
+              {!isFreeform && (tx.receipt_data ? (
                 <label className={styles.attachRow}>
                   <input
                     type="checkbox"
-                    checked={attach}
-                    onChange={(e) => setAttach(e.target.checked)}
+                    checked={attachReceipt}
+                    onChange={(e) => setAttachReceipt(e.target.checked)}
                   />
                   <span>צרף את הקבלה {tx.receipt_doc_num ? `(מס' ${tx.receipt_doc_num}) ` : ''}כקובץ PDF</span>
                 </label>
@@ -191,7 +239,34 @@ export default function SendEmailModal({ tx: initialTx = null, institutionName, 
                 <div className={styles.attachRow}>
                   <span className={styles.attachMuted}>לעסקה זו אין קבלה במערכת לצירוף</span>
                 </div>
+              ))}
+
+              {templateFileName && (
+                <label className={styles.attachRow}>
+                  <input
+                    type="checkbox"
+                    checked={attachTemplateFile}
+                    onChange={(e) => setAttachTemplateFile(e.target.checked)}
+                  />
+                  <span>צרף את הקובץ מהתבנית ({templateFileName})</span>
+                </label>
               )}
+
+              <div className={styles.attachRow}>
+                <input ref={fileInputRef} type="file" hidden onChange={onPickFile} />
+                {customFile ? (
+                  <>
+                    <span>📎 {customFile.name}</span>
+                    <button type="button" className={styles.fileRemoveBtn} onClick={() => setCustomFile(null)}>
+                      הסר
+                    </button>
+                  </>
+                ) : (
+                  <button type="button" className={styles.fileBtn} onClick={() => fileInputRef.current?.click()}>
+                    📎 צרף תמונה או קובץ
+                  </button>
+                )}
+              </div>
             </>
           )}
 

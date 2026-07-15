@@ -1,8 +1,9 @@
-// Client-side mirror of the placeholder filling in frontend/api/_email.js —
+// Client-side mirror of the placeholder/HTML handling in frontend/api/_email.js —
 // used for the template screen's live preview and to prefill the manual
-// SendEmailModal. Keep the placeholder set in sync with the server.
+// SendEmailModal. Keep the placeholder set and HTML rules in sync with the server.
 
 const VALID_CURRENCIES = new Set(['ILS', 'USD', 'EUR', 'GBP']);
+const PLACEHOLDER_RE = /\{(שם|סכום|קרן|תאריך)\}/g;
 
 export const PLACEHOLDERS = ['{שם}', '{סכום}', '{קרן}', '{תאריך}'];
 
@@ -23,12 +24,49 @@ export function formatAmount(amount, currency) {
   }).format(amount);
 }
 
-export function fillTemplate(text, tx, fundName) {
-  const values = {
+function templateValues(tx, fundName) {
+  return {
     'שם': tx.client_name || 'תורם יקר',
     'סכום': formatAmount(tx.amount, tx.currency),
     'קרן': fundName || tx.group_name || '',
     'תאריך': tx.transaction_time_raw || '',
   };
-  return String(text || '').replace(/\{(שם|סכום|קרן|תאריך)\}/g, (_, key) => values[key]);
+}
+
+export function escapeHtml(text) {
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+export function isHtmlBody(text) {
+  return /<[a-z][^>]*>/i.test(String(text || ''));
+}
+
+// Legacy plain-text template bodies → HTML, so the rich editor can host them.
+export function ensureHtml(body) {
+  if (isHtmlBody(body)) return body;
+  return escapeHtml(body || '').replace(/\r?\n/g, '<br>');
+}
+
+// Plain-text fill (subjects).
+export function fillTemplate(text, tx, fundName) {
+  const values = templateValues(tx, fundName);
+  return String(text || '').replace(PLACEHOLDER_RE, (_, key) => values[key]);
+}
+
+// HTML fill — placeholder values are escaped before substitution so donor
+// names can't inject markup.
+export function fillTemplateHtml(html, tx, fundName) {
+  const values = templateValues(tx, fundName);
+  return String(html || '').replace(PLACEHOLDER_RE, (_, key) => escapeHtml(values[key]));
+}
+
+export function htmlIsEmpty(html) {
+  return !String(html || '')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .trim();
 }

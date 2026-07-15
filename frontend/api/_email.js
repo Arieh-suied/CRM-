@@ -1,8 +1,11 @@
 // Donor thank-you email sender, via the som.noflim@gmail.com Gmail account.
-// Fills the editable template from email_templates (placeholders {שם} {סכום}
-// {קרן} {תאריך}), builds an RFC-822 HTML message and sends it through the
-// Gmail API. Used automatically by transaction-routed.js on every new
-// transaction, and manually by send-email.js from the UI.
+// Fills the editable per-mosad template from email_templates (placeholders
+// {שם} {סכום} {קרן} {תאריך}), builds an RFC-822 HTML message (rich-text HTML
+// bodies from the CRM editor, or legacy plain text) with any number of
+// attachments (template file from Storage, EZCount receipt PDF, ad-hoc file)
+// and sends it through the Gmail API. Used automatically by
+// transaction-routed.js on every new transaction, and manually by
+// send-email.js from the UI.
 //
 // Env vars required:
 //   GOOGLE_CLIENT_ID_SOM, GOOGLE_CLIENT_SECRET_SOM, GOOGLE_REDIRECT_URI_SOM,
@@ -14,6 +17,11 @@ import { getGmailAccessToken, gmailPost } from './_gmail.js';
 const FROM_NAME = 'סומך נופלים';
 const FROM_ADDRESS = 'som.noflim@gmail.com';
 const VALID_CURRENCIES = new Set(['ILS', 'USD', 'EUR', 'GBP']);
+const PLACEHOLDER_RE = /\{(שם|סכום|קרן|תאריך)\}/g;
+
+export const ATTACHMENTS_BUCKET = 'email-attachments';
+export const MAX_ATTACHMENT_BYTES = 3.5 * 1024 * 1024;  // per file
+const MAX_TOTAL_ATTACHMENT_BYTES = 4 * 1024 * 1024;     // Gmail JSON send caps raw at ~5MB
 
 // RFC 2047 encoded-word for non-ASCII header values (Subject/From). Each word
 // is capped at 75 chars, so chunk the UTF-8 bytes — stepping back when a chunk
@@ -42,30 +50,57 @@ export function formatAmount(amount, currency) {
   }).format(amount);
 }
 
-// Fills {שם} {סכום} {קרן} {תאריך} from a transactions row. Output is plain
-// text — callers must escape AFTER filling (donor-controlled client_name must
-// never reach the HTML unescaped).
-export function fillTemplate(text, tx, fundName) {
-  const values = {
+function templateValues(tx, fundName) {
+  return {
     'שם': tx.client_name || 'תורם יקר',
     'סכום': formatAmount(tx.amount, tx.currency),
     'קרן': fundName || tx.group_name || '',
     'תאריך': tx.transaction_time_raw || '',
   };
-  return String(text || '').replace(/\{(שם|סכום|קרן|תאריך)\}/g, (_, key) => values[key]);
+}
+
+// Plain-text placeholder fill (subjects, legacy plain bodies). Output is plain
+// text — callers must escape AFTER filling.
+export function fillTemplate(text, tx, fundName) {
+  const values = templateValues(tx, fundName);
+  return String(text || '').replace(PLACEHOLDER_RE, (_, key) => values[key]);
 }
 
 function escapeHtml(text) {
-  return text
+  return String(text)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 }
 
-export function bodyToHtml(filledText) {
-  const escaped = escapeHtml(filledText).replace(/\r?\n/g, '<br>');
-  return `<div dir="rtl" style="font-family:Arial,sans-serif;font-size:15px;line-height:1.6;color:#222">${escaped}</div>`;
+// Rich-text bodies from the CRM editor are HTML; templates saved before the
+// editor existed are plain text.
+export function isHtmlBody(text) {
+  return /<[a-z][^>]*>/i.test(String(text || ''));
+}
+
+function wrapRtl(html) {
+  return `<div dir="rtl" style="font-family:Arial,sans-serif;font-size:15px;line-height:1.6;color:#222">${html}</div>`;
+}
+
+// Final email HTML for a body that has already had its placeholders filled
+// (manual sends — the client fills before the user edits).
+export function bodyToHtml(body) {
+  if (isHtmlBody(body)) return wrapRtl(body);
+  return wrapRtl(escapeHtml(body).replace(/\r?\n/g, '<br>'));
+}
+
+// Final email HTML for a raw template body + transaction (auto path). In HTML
+// bodies the placeholder VALUES are escaped before substitution — the template
+// itself is trusted (written by admin/editor), donor-controlled fields are not.
+export function renderBody(body, tx, fundName) {
+  const values = templateValues(tx, fundName);
+  if (isHtmlBody(body)) {
+    return wrapRtl(String(body).replace(PLACEHOLDER_RE, (_, key) => escapeHtml(values[key])));
+  }
+  const filled = String(body || '').replace(PLACEHOLDER_RE, (_, key) => values[key]);
+  return wrapRtl(escapeHtml(filled).replace(/\r?\n/g, '<br>'));
 }
 
 // RFC 2045 caps base64 lines at 76 chars.
@@ -75,8 +110,6 @@ function b64lines(buffer) {
 
 // The EZCount receipt PDF for a transaction's receipt_data id (same source as
 // receipt-proxy.js). Returns a sendGmail attachment, throws on failure.
-const MAX_ATTACHMENT_BYTES = 4 * 1024 * 1024; // Gmail JSON send caps raw at ~5MB
-
 export async function fetchReceiptPdf(receiptData, docNum) {
   const res = await fetch(`https://files.ezcount.co.il/front/documents/get/${receiptData}`);
   if (!res.ok) throw new Error(`EZCount receipt fetch failed (${res.status})`);
@@ -91,7 +124,29 @@ export async function fetchReceiptPdf(receiptData, docNum) {
   };
 }
 
-export async function sendGmail({ to, subject, html, attachment }) {
+// The template's stored file from the email-attachments Storage bucket.
+// Returns null when the template has none, throws on download failure.
+export async function fetchTemplateAttachment(supabase, tpl) {
+  if (!tpl?.attachment_path) return null;
+  const { data, error } = await supabase.storage
+    .from(ATTACHMENTS_BUCKET)
+    .download(tpl.attachment_path);
+  if (error) throw new Error(`Storage download failed: ${error.message}`);
+  const buffer = Buffer.from(await data.arrayBuffer());
+  return {
+    filename: tpl.attachment_name || 'attachment',
+    mimeType: tpl.attachment_mime || 'application/octet-stream',
+    content: buffer,
+  };
+}
+
+export async function sendGmail({ to, subject, html, attachments = [] }) {
+  const files = attachments.filter(Boolean);
+  const total = files.reduce((sum, a) => sum + a.content.length, 0);
+  if (total > MAX_TOTAL_ATTACHMENT_BYTES) {
+    throw new Error('סך הקבצים המצורפים חורג מהמגבלה (4MB)');
+  }
+
   const token = await getGmailAccessToken();
   const headers = [
     `To: ${to}`,
@@ -107,21 +162,28 @@ export async function sendGmail({ to, subject, html, attachment }) {
   ].join('\r\n');
 
   let mime;
-  if (attachment) {
+  if (files.length) {
     const boundary = `----=_donorshub_${Date.now().toString(36)}`;
+    const parts = [`--${boundary}`, htmlPart];
+    for (const file of files) {
+      // RFC 2231 for non-ASCII filenames; plain name kept as a fallback.
+      const asciiName = file.filename.replace(/[^\x20-\x7e]/g, '_').replace(/"/g, "'");
+      const encodedName = encodeURIComponent(file.filename);
+      parts.push(
+        `--${boundary}`,
+        `Content-Type: ${file.mimeType}; name="${asciiName}"`,
+        `Content-Disposition: attachment; filename="${asciiName}"; filename*=UTF-8''${encodedName}`,
+        'Content-Transfer-Encoding: base64',
+        '',
+        b64lines(file.content),
+      );
+    }
+    parts.push(`--${boundary}--`);
     mime = [
       ...headers,
       `Content-Type: multipart/mixed; boundary="${boundary}"`,
       '',
-      `--${boundary}`,
-      htmlPart,
-      `--${boundary}`,
-      `Content-Type: ${attachment.mimeType}; name="${attachment.filename}"`,
-      `Content-Disposition: attachment; filename="${attachment.filename}"`,
-      'Content-Transfer-Encoding: base64',
-      '',
-      b64lines(attachment.content),
-      `--${boundary}--`,
+      ...parts,
     ].join('\r\n');
   } else {
     mime = [...headers, htmlPart].join('\r\n');
@@ -159,7 +221,7 @@ export async function sendDonorThanksIfEnabled(supabase, record) {
 
   const { data: tpl, error: tplErr } = await supabase
     .from('email_templates')
-    .select('subject, body, auto_send, attach_receipt')
+    .select('subject, body, auto_send, attach_receipt, attachment_path, attachment_name, attachment_mime')
     .eq('mosad_number', mosad)
     .maybeSingle();
   if (tplErr) throw tplErr;
@@ -171,7 +233,7 @@ export async function sendDonorThanksIfEnabled(supabase, record) {
 
   const fundName = await lookupFundName(supabase, record).catch(() => '');
   const subject = fillTemplate(tpl.subject, record, fundName);
-  const body = fillTemplate(tpl.body, record, fundName);
+  const html = renderBody(tpl.body, record, fundName);
 
   const { data: claim, error: claimErr } = await supabase
     .from('email_log')
@@ -180,7 +242,7 @@ export async function sendDonorThanksIfEnabled(supabase, record) {
       transaction_id: String(record.id ?? ''),
       recipient: to,
       subject,
-      body,
+      body: tpl.body,
       trigger: 'auto',
       status: 'pending',
     })
@@ -191,25 +253,37 @@ export async function sendDonorThanksIfEnabled(supabase, record) {
     throw claimErr;
   }
 
-  // Receipt attachment is best-effort on the auto path: a missing/failed PDF
-  // must not cost the donor their thank-you email.
-  let attachment = null;
-  let attachError = null;
+  // Attachments are best-effort on the auto path: a missing/failed file must
+  // not cost the donor their thank-you email.
+  const attachments = [];
+  const attachErrors = [];
   if (tpl.attach_receipt && record.receipt_data) {
     try {
-      attachment = await fetchReceiptPdf(record.receipt_data, record.receipt_doc_num);
+      attachments.push(await fetchReceiptPdf(record.receipt_data, record.receipt_doc_num));
     } catch (err) {
-      attachError = err.message;
+      attachErrors.push(`receipt: ${err.message}`);
       console.error(`auto-email receipt attach failed (tx ${dedupKey}):`, err);
+    }
+  }
+  if (tpl.attachment_path) {
+    try {
+      attachments.push(await fetchTemplateAttachment(supabase, tpl));
+    } catch (err) {
+      attachErrors.push(`template file: ${err.message}`);
+      console.error(`auto-email template attach failed (tx ${dedupKey}):`, err);
     }
   }
 
   try {
-    const sent = await sendGmail({ to, subject, html: bodyToHtml(body), attachment });
+    const sent = await sendGmail({ to, subject, html, attachments });
     await supabase.from('email_log')
-      .update({ status: 'sent', gmail_message_id: sent.id, error: attachError ? `sent without receipt: ${attachError}` : null })
+      .update({
+        status: 'sent',
+        gmail_message_id: sent.id,
+        error: attachErrors.length ? `sent without: ${attachErrors.join('; ')}` : null,
+      })
       .eq('id', claim.id);
-    return { sent: true, recipient: to, gmailMessageId: sent.id, receiptAttached: Boolean(attachment), attachError };
+    return { sent: true, recipient: to, gmailMessageId: sent.id, attachments: attachments.length, attachErrors };
   } catch (err) {
     await supabase.from('email_log')
       .update({ status: 'failed', error: err.message })

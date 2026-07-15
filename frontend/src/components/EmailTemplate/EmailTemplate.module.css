@@ -196,6 +196,57 @@
   color: var(--color-text-muted);
 }
 
+.fileRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.fileName {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.fileBtn {
+  padding: 6px 14px;
+  border: 1px dashed var(--color-border);
+  border-radius: 20px;
+  background: transparent;
+  color: var(--color-primary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.fileBtn:hover {
+  border-color: var(--color-primary);
+}
+
+.fileRemoveBtn {
+  border: none;
+  background: none;
+  color: var(--color-danger, #f25c5c);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.fileHint {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin: -6px 0 0;
+}
+
+.previewAttachment {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-border);
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
 .preview {
   position: sticky;
   top: 16px;
