@@ -110,6 +110,31 @@
   color: var(--color-danger, #f25c5c);
 }
 
+.btnRow {
+  display: flex;
+  gap: 10px;
+}
+
+.deleteBtn {
+  padding: 9px 18px;
+  border: 1px solid rgba(242, 92, 92, 0.4);
+  border-radius: 20px;
+  background: transparent;
+  color: var(--color-danger, #f25c5c);
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.deleteBtn:hover:not(:disabled) {
+  background: rgba(242, 92, 92, 0.08);
+}
+
+.deleteBtn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .saveBtn {
   align-self: flex-start;
   padding: 9px 24px;

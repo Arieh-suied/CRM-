@@ -166,9 +166,13 @@ export async function exportBankOrders(mosadNumber, type, from, to) {
   URL.revokeObjectURL(blobUrl);
 }
 
-// Donor thank-you emails — template + manual send
-export function fetchEmailTemplate() {
+// Donor thank-you emails — per-institution templates + manual send
+export function fetchEmailTemplates() {
   return request('/email-template');
+}
+
+export function fetchEmailTemplate(mosadNumber) {
+  return request(`/email-template?mosad_number=${encodeURIComponent(mosadNumber)}`);
 }
 
 export function saveEmailTemplate(body) {
@@ -177,6 +181,10 @@ export function saveEmailTemplate(body) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
+}
+
+export function deleteEmailTemplate(mosadNumber) {
+  return request(`/email-template?mosad_number=${encodeURIComponent(mosadNumber)}`, { method: 'DELETE' });
 }
 
 export function sendDonorEmail(body) {

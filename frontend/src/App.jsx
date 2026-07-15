@@ -175,7 +175,9 @@ function Dashboard({ user, signOut, role, allowedMosadim }) {
           {activeTab === 'funds'     && <FundsManagement />}
           {activeTab === 'failures'  && <PaymentFailures />}
           {activeTab === 'bank-refusals' && <BankRefusals institutions={visibleInstitutions} />}
-          {activeTab === 'email-template' && ['admin', 'editor'].includes(role) && <EmailTemplate />}
+          {activeTab === 'email-template' && ['admin', 'editor'].includes(role) && (
+            <EmailTemplate institutions={visibleInstitutions} />
+          )}
           {activeTab === 'users' && role === 'admin' && (
             <UserManagement institutions={institutions} />
           )}

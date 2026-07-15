@@ -95,24 +95,29 @@ async function lookupFundName(supabase, record) {
   return data?.mosad_name || '';
 }
 
-// Automatic thank-you email for a freshly inserted transaction. Dedup works by
-// claiming a row in email_log BEFORE sending: the partial unique index
-// uq_email_log_auto rejects a second claim for the same transaction (Supabase
-// webhook deliveries can be retried by pg_net), so at most one auto email ever
-// goes out per transaction. A failed send stays claimed on purpose — no
-// auto-retry that could spam a donor; it's visible in the log and can be
-// re-sent manually from the UI.
+// Automatic thank-you email for a freshly inserted transaction. Templates are
+// per institution: only a transaction whose mosad_number has a template with
+// auto_send=true triggers an email. Dedup works by claiming a row in email_log
+// BEFORE sending: the partial unique index uq_email_log_auto rejects a second
+// claim for the same transaction (Supabase webhook deliveries can be retried
+// by pg_net), so at most one auto email ever goes out per transaction. A
+// failed send stays claimed on purpose — no auto-retry that could spam a
+// donor; it's visible in the log and can be re-sent manually from the UI.
 export async function sendDonorThanksIfEnabled(supabase, record) {
   const to = String(record.email || '').trim();
   if (!to.includes('@')) return { sent: false, reason: 'no email' };
 
+  const mosad = record.mosad_number ? String(record.mosad_number) : '';
+  if (!mosad) return { sent: false, reason: 'no mosad_number' };
+
   const { data: tpl, error: tplErr } = await supabase
     .from('email_templates')
     .select('subject, body, auto_send')
-    .eq('id', 'donor_thanks')
+    .eq('mosad_number', mosad)
     .maybeSingle();
   if (tplErr) throw tplErr;
-  if (!tpl?.auto_send) return { sent: false, reason: 'auto_send disabled' };
+  if (!tpl) return { sent: false, reason: 'no template for mosad' };
+  if (!tpl.auto_send) return { sent: false, reason: 'auto_send disabled for mosad' };
 
   const dedupKey = record.external_transaction_id || String(record.id ?? '');
   if (!dedupKey) return { sent: false, reason: 'no dedup key' };

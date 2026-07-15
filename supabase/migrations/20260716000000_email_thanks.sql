@@ -1,34 +1,24 @@
--- Donor thank-you emails: editable template (single row) + send log.
--- The template is edited from the CRM's "תבנית מייל" tab; the auto-send hook in
--- frontend/api/transaction-routed.js sends it on every new transaction that has
--- an email address, and email_log's partial unique index guarantees at most one
--- automatic email per transaction even when the Database Webhook is retried
--- (pg_net retries on timeout). Manual sends from the UI are unlimited.
+-- Donor thank-you emails: per-institution editable templates + send log.
+-- One template row per mosad, edited from the CRM's "תבנית מייל" tab; the
+-- auto-send hook in frontend/api/transaction-routed.js sends the matching
+-- institution's template on every new transaction that has an email address
+-- (only for institutions whose auto_send is on). email_log's partial unique
+-- index guarantees at most one automatic email per transaction even when the
+-- Database Webhook is retried (pg_net retries on timeout). Manual sends from
+-- the UI are unlimited.
 
 create table if not exists email_templates (
-  id          text primary key,
-  subject     text not null,
-  body        text not null,   -- plain text with {שם}/{סכום}/{קרן}/{תאריך} placeholders
-  auto_send   boolean not null default false,
-  updated_by  text,
-  updated_at  timestamptz not null default now()
+  mosad_number  text primary key,
+  subject       text not null,
+  body          text not null,   -- plain text with {שם}/{סכום}/{קרן}/{תאריך} placeholders
+  auto_send     boolean not null default false,
+  updated_by    text,
+  updated_at    timestamptz not null default now()
 );
 
 alter table email_templates enable row level security;
 drop policy if exists "auth_all_email_templates" on email_templates;
 create policy "auth_all_email_templates" on email_templates for all to authenticated using (true) with check (true);
-
--- Ships disabled — enable auto_send from the UI only after a manual test send.
-insert into email_templates (id, subject, body, auto_send) values (
-  'donor_thanks',
-  'תודה על תרומתך',
-  'שלום {שם},' || chr(10) || chr(10) ||
-  'תודה רבה על תרומתך בסך {סכום} עבור {קרן}.' || chr(10) ||
-  'תרומתך מסייעת לנו להמשיך בפעילותנו.' || chr(10) || chr(10) ||
-  'בברכה,' || chr(10) ||
-  'סומך נופלים',
-  false
-) on conflict (id) do nothing;
 
 create table if not exists email_log (
   id                uuid primary key default gen_random_uuid(),

@@ -6,6 +6,13 @@ const VALID_CURRENCIES = new Set(['ILS', 'USD', 'EUR', 'GBP']);
 
 export const PLACEHOLDERS = ['{שם}', '{סכום}', '{קרן}', '{תאריך}'];
 
+// Starting point for a mosad that has no template yet (new template in the
+// settings tab, or a manual send for an institution without one).
+export const DEFAULT_TEMPLATE = {
+  subject: 'תודה על תרומתך',
+  body: 'שלום {שם},\n\nתודה רבה על תרומתך בסך {סכום} עבור {קרן}.\nתרומתך מסייעת לנו להמשיך בפעילותנו.\n\nבברכה,\nסומך נופלים',
+};
+
 export function formatAmount(amount, currency) {
   if (amount == null) return '';
   const code = VALID_CURRENCIES.has(currency) ? currency : 'ILS';

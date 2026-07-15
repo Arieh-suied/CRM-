@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import styles from './SendEmailModal.module.css';
 import { fetchEmailTemplate, sendDonorEmail } from '../../services/api.js';
-import { fillTemplate } from '../../lib/emailTemplate.js';
+import { fillTemplate, DEFAULT_TEMPLATE } from '../../lib/emailTemplate.js';
 
-// Manual "send email to donor" modal — prefilled from the editable template,
+// Manual "send email to donor" modal — prefilled from the transaction's
+// institution template (or a generic default when the mosad has none),
 // everything editable, with an explicit confirm step before sending.
 export default function SendEmailModal({ tx, institutionName, onClose }) {
   const [to, setTo]           = useState(tx.email || '');
@@ -16,12 +17,18 @@ export default function SendEmailModal({ tx, institutionName, onClose }) {
 
   useEffect(() => {
     const fundName = tx.group_name || institutionName || '';
-    fetchEmailTemplate()
-      .then((tpl) => {
-        setSubject(fillTemplate(tpl.subject, tx, fundName));
-        setBody(fillTemplate(tpl.body, tx, fundName));
-      })
-      .catch((e) => setMsg({ text: `שגיאה בטעינת התבנית: ${e.message}`, ok: false }))
+    const prefill = (tpl) => {
+      setSubject(fillTemplate(tpl.subject, tx, fundName));
+      setBody(fillTemplate(tpl.body, tx, fundName));
+    };
+    if (!tx.mosad_number) {
+      prefill(DEFAULT_TEMPLATE);
+      setLoading(false);
+      return;
+    }
+    fetchEmailTemplate(tx.mosad_number)
+      .then((tpl) => prefill(tpl || DEFAULT_TEMPLATE))
+      .catch(() => prefill(DEFAULT_TEMPLATE))
       .finally(() => setLoading(false));
   }, [tx, institutionName]);
 
