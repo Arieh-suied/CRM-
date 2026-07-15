@@ -13,6 +13,20 @@ const fmt = (n, currency = 'ILS') => {
   } catch { return `${n ?? 0} ${currency}`; }
 };
 
+// raw dates arrive in mixed formats (YYYY-MM-DD / DD/MM/YYYY / D.M.YY) — normalize to DD/MM/YYYY
+const fmtDate = (raw, iso) => {
+  const s = String(raw ?? iso ?? '').trim();
+  if (!s) return '';
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) return `${m[3].padStart(2, '0')}/${m[2].padStart(2, '0')}/${m[1]}`;
+  m = s.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})/);
+  if (m) {
+    const y = m[3].length === 2 ? `20${m[3]}` : m[3];
+    return `${m[1].padStart(2, '0')}/${m[2].padStart(2, '0')}/${y}`;
+  }
+  return s;
+};
+
 export default function BankTransfers({ institutions }) {
   const [data, setData]           = useState([]);
   const [total, setTotal]         = useState(0);
@@ -65,7 +79,7 @@ export default function BankTransfers({ institutions }) {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Export failed');
       const rows = (json.data ?? []).map(r => ({
-        'תאריך':   r.document_date_raw ?? r.document_date ?? '',
+        'תאריך':   fmtDate(r.document_date_raw, r.document_date),
         'שם לקוח': r.customer_name ?? '',
         'ת"ז':     r.customer_id_number ?? '',
         'מייל':    r.customer_email ?? '',
@@ -149,7 +163,7 @@ export default function BankTransfers({ institutions }) {
               <tr><td colSpan={12} className={styles.center}>אין נתונים</td></tr>
             ) : data.map((row) => (
               <tr key={row.id}>
-                <td className={styles.date}>{row.document_date_raw ?? row.document_date ?? '—'}</td>
+                <td className={styles.date}>{fmtDate(row.document_date_raw, row.document_date) || '—'}</td>
                 <td className={styles.name}>{row.customer_name ?? '—'}</td>
                 <td className={styles.muted}>{row.customer_id_number ?? '—'}</td>
                 <td className={styles.muted}>{row.customer_email ?? '—'}</td>
