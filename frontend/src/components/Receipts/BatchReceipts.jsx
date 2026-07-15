@@ -102,6 +102,10 @@ export default function BatchReceipts() {
   const [showCpForm, setShowCpForm]   = useState(false);
   const [cpDraft, setCpDraft]         = useState({ customer_name: '', amount: '', reference_number: '', bank_account: '' });
 
+  // Excel import preview — rows wait here for user confirmation before hitting the DB
+  const [importPreview, setImportPreview] = useState(null);
+  const [importing, setImporting]         = useState(false);
+
   const xlsxRef = useRef(null);
   const imagesRef = useRef(null);
   const [imgAnalyzing, setImgAnalyzing] = useState(false);
@@ -248,9 +252,25 @@ export default function BatchReceipts() {
     }
 
     if (!allInserts.length) { alert('לא נמצאו שורות חדשות לייבוא'); return; }
-    const { error } = await supabase.from('pending_receipts').insert(allInserts);
-    if (!error) { fetchEntries(); if (xlsxRef.current) xlsxRef.current.value = ''; }
-    else alert('שגיאה בשמירה: ' + error.message);
+    setImportPreview(allInserts);
+    if (xlsxRef.current) xlsxRef.current.value = '';
+  };
+
+  const confirmImport = async () => {
+    if (!importPreview?.length || importing) return;
+    setImporting(true);
+    const { error } = await supabase.from('pending_receipts').insert(importPreview);
+    setImporting(false);
+    if (error) { alert('שגיאה בשמירה: ' + error.message); return; }
+    setImportPreview(null);
+    fetchEntries();
+  };
+
+  const removePreviewRow = (idx) => {
+    setImportPreview(prev => {
+      const next = prev.filter((_, i) => i !== idx);
+      return next.length ? next : null;
+    });
   };
 
   // Screenshot upload — analyze multiple bank-transfer screenshots and queue them as pending receipts
@@ -470,6 +490,51 @@ export default function BatchReceipts() {
           </div>
         )}
       </div>
+
+      {/* Excel import preview — nothing is saved until the user confirms */}
+      {importPreview && (
+        <div className={styles.card} style={{ marginBottom: 14, border: '1px solid var(--color-primary, #4f7ef8)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
+            <span style={{ fontSize: 14, fontWeight: 700 }}>אימות לפני ייבוא</span>
+            <span style={{ fontSize: 13 }}>
+              {importPreview.length} שורות · סה"כ ₪{importPreview.reduce((s, r) => s + (r.amount || 0), 0).toLocaleString('he-IL')}
+            </span>
+            <div style={{ display: 'flex', gap: 8, marginRight: 'auto' }}>
+              <button className={`${styles.btn} ${styles.btnPrimary} ${styles.btnSm}`} disabled={importing} onClick={confirmImport}>
+                {importing ? 'מייבא...' : `✓ אשר ייבוא (${importPreview.length})`}
+              </button>
+              <button className={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`} disabled={importing} onClick={() => setImportPreview(null)}>
+                ביטול
+              </button>
+            </div>
+          </div>
+          <div className={styles.tableWrap} style={{ maxHeight: 340, overflowY: 'auto' }}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>שם</th><th>סכום</th><th>תאריך</th><th>בנק</th><th>חשבון</th><th>אסמכתא</th><th>מוסד</th><th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {importPreview.map((r, i) => (
+                  <tr key={i}>
+                    <td>{r.customer_name || '—'}</td>
+                    <td>₪{r.amount}</td>
+                    <td>{r.transfer_date || '—'}</td>
+                    <td>{r.bank_name || '—'}</td>
+                    <td>{r.bank_account || '—'}</td>
+                    <td>{r.reference_number || '—'}</td>
+                    <td>{r.branch || '—'}</td>
+                    <td>
+                      <button className={styles.btnIconDanger} title="הסר שורה מהייבוא" onClick={() => removePreviewRow(i)}>✕</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Checkpoint */}
       <div style={{ marginBottom: 14 }}>
