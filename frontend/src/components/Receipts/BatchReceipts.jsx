@@ -92,6 +92,7 @@ export default function BatchReceipts() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [idFilter, setIdFilter]       = useState('all');
   const [sortBy, setSortBy]           = useState('name');
+  const [search, setSearch]           = useState('');
 
   // Name autocomplete (per entry row)
   const [nameSuggestions, setNameSuggestions]     = useState({});
@@ -259,9 +260,14 @@ export default function BatchReceipts() {
   const confirmImport = async () => {
     if (!importPreview?.length || importing) return;
     setImporting(true);
-    const { error } = await supabase.from('pending_receipts').insert(importPreview);
+    const rows = importPreview.map(({ _uncertain, ...r }) => r);
+    const { data: inserted, error } = await supabase.from('pending_receipts').insert(rows).select('id');
     setImporting(false);
     if (error) { alert('שגיאה בשמירה: ' + error.message); return; }
+    if (inserted) {
+      const newUncertainIds = inserted.filter((row, i) => importPreview[i]?._uncertain).map(row => row.id);
+      if (newUncertainIds.length) setUncertainNameIds(prev => new Set([...prev, ...newUncertainIds]));
+    }
     setImportPreview(null);
     fetchEntries();
   };
@@ -283,7 +289,6 @@ export default function BatchReceipts() {
     setImgErrors([]);
 
     const inserts = [];
-    const uncertainFlags = [];
     const errors = [];
 
     for (let i = 0; i < files.length; i++) {
@@ -310,8 +315,8 @@ export default function BatchReceipts() {
           // Discount Bank's "מחויב" confirmation screen always belongs to חכמי ירושלים
           branch: data.is_discount_chachmei_screen ? 'חכמי ירושלים' : '',
           status: 'pending',
+          _uncertain: nameUncertain,
         });
-        uncertainFlags.push(nameUncertain);
       } catch (err) {
         errors.push({ fileName: files[i].name, error: err.message });
       }
@@ -322,18 +327,7 @@ export default function BatchReceipts() {
     if (imagesRef.current) imagesRef.current.value = '';
 
     if (!inserts.length) return;
-    const { data: inserted, error } = await supabase.from('pending_receipts').insert(inserts).select('id');
-    if (!error) {
-      if (inserted) {
-        const newUncertainIds = inserted.filter((row, i) => uncertainFlags[i]).map(row => row.id);
-        if (newUncertainIds.length) {
-          setUncertainNameIds(prev => new Set([...prev, ...newUncertainIds]));
-        }
-      }
-      fetchEntries();
-    } else {
-      alert('שגיאה בשמירה: ' + error.message);
-    }
+    setImportPreview(prev => (prev?.length ? [...prev, ...inserts] : inserts));
   };
 
   const updateField = async (id, field, value) => {
@@ -444,6 +438,12 @@ export default function BatchReceipts() {
 
   const filteredEntries = entries
     .filter(e => { if (idFilter === 'has_id') return hasId(e); if (idFilter === 'no_id') return !hasId(e); return true; })
+    .filter(e => {
+      const q = search.trim().toLowerCase();
+      if (!q) return true;
+      return [e.customer_name, e.customer_id, e.customer_email, e.reference_number, e.bank_account, e.bank_name, e.notes, e.amount != null ? String(e.amount) : '']
+        .some(v => v && String(v).toLowerCase().includes(q));
+    })
     .sort((a, b) => {
       if (sortBy === 'name')   return (a.customer_name || '').localeCompare(b.customer_name || '', 'he');
       if (sortBy === 'branch') { const c = (a.branch || '').localeCompare(b.branch || '', 'he'); return c !== 0 ? c : (a.customer_name || '').localeCompare(b.customer_name || '', 'he'); }
@@ -518,7 +518,10 @@ export default function BatchReceipts() {
               <tbody>
                 {importPreview.map((r, i) => (
                   <tr key={i}>
-                    <td>{r.customer_name || '—'}</td>
+                    <td>
+                      {r.customer_name || '—'}
+                      {r._uncertain && <span title="שם לא מאומת מהצילום (שם בעל החשבון) - יש לבדוק" style={{ marginRight: 4 }}>⚠</span>}
+                    </td>
                     <td>₪{r.amount}</td>
                     <td>{r.transfer_date || '—'}</td>
                     <td>{r.bank_name || '—'}</td>
@@ -587,6 +590,13 @@ export default function BatchReceipts() {
           {/* Toolbar */}
           <div className={styles.toolbar}>
             <span style={{ fontSize: 13, fontWeight: 600 }}>{filteredEntries.length} העברות ממתינות</span>
+            <input
+              className={styles.fieldInput}
+              style={{ height: 32, width: 200, fontSize: 13 }}
+              placeholder="🔍 חיפוש: שם, ת.ז, סכום, אסמכתא..."
+              value={search}
+              onChange={e => { setSearch(e.target.value); setSelectedIds(new Set()); }}
+            />
             <div className={styles.filterBtns}>
               {(['all','has_id','no_id']).map(f => (
                 <button key={f} className={`${styles.filterBtn} ${idFilter === f ? styles.filterBtnActive : ''}`}
