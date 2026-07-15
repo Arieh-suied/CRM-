@@ -7,6 +7,10 @@ import { exportXlsx, dateStamp } from '../../lib/exportXlsx.js';
 
 const SortTh = (props) => <SortThBase className={styles.sortable} {...props} />;
 
+// Only the 5 receipt-issuing institutions appear in the mosad filter:
+// סומך נופלים, אור אפרים (+שכ"ל), חכמי ירושלים (+שכ"ל)
+const FILTER_MOSAD_NUMBERS = new Set(['7001671', '7001725', '7003860', '7001916', '7003862']);
+
 const fmt = (n, currency = 'ILS') => {
   try {
     return new Intl.NumberFormat('he-IL', { style: 'currency', currency, maximumFractionDigits: 2 }).format(n ?? 0);
@@ -126,9 +130,11 @@ export default function BankTransfers({ institutions }) {
           onChange={(e) => setMosadFilter(e.target.value)}
         >
           <option value="">כל המוסדות</option>
-          {(institutions ?? []).map((i) => (
-            <option key={i.mosad_number} value={i.mosad_number}>{i.mosad_name}</option>
-          ))}
+          {(institutions ?? [])
+            .filter((i) => FILTER_MOSAD_NUMBERS.has(String(i.mosad_number)))
+            .map((i) => (
+              <option key={i.mosad_number} value={i.mosad_number}>{i.mosad_name}</option>
+            ))}
         </select>
 
         <span className={styles.count}>סה"כ {total.toLocaleString('he-IL')} העברות</span>
