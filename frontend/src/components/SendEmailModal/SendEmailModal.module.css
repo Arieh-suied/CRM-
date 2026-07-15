@@ -118,6 +118,64 @@
   line-height: 1.6;
 }
 
+.searchHint {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.results {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.resultRow {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 8px);
+  background: #fff;
+  cursor: pointer;
+  text-align: start;
+  transition: all 0.15s;
+}
+
+.resultRow:hover {
+  border-color: var(--color-primary);
+  background: rgba(79, 126, 248, 0.04);
+}
+
+.resultName {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.resultEmail {
+  font-size: 12px;
+  color: var(--color-primary);
+}
+
+.resultMeta {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.backBtn {
+  align-self: flex-start;
+  border: none;
+  background: none;
+  color: var(--color-primary);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0;
+}
+
 .msgOk {
   font-size: 13px;
   color: #1a9c5d;

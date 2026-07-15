@@ -46,6 +46,38 @@ async function fetchDistinct(supabase, column) {
   return [...values].sort();
 }
 
+// Donor picker for the manual-email modal: search donors that have an email,
+// deduped by address (latest transaction wins, so placeholder values like
+// {סכום} and the mosad template match the donor's most recent donation).
+async function handleDonorSearch(req, res, supabase) {
+  const search = String(req.query?.search || '').trim();
+  if (search.length < 2) return res.json([]);
+
+  let query = supabase
+    .from('transactions_with_parsed_time')
+    .select('id, client_name, email, phone, amount, currency, group_name, mosad_number, transaction_time_raw, external_transaction_id')
+    .not('email', 'is', null)
+    .neq('email', '')
+    .order('transaction_time_parsed', { ascending: false })
+    .limit(60);
+  const orClause = ilikeOr(['client_name', 'email', 'phone'], search);
+  if (orClause) query = query.or(orClause);
+
+  const { data, error } = await query;
+  if (error) return res.status(500).json({ error: error.message });
+
+  const seen = new Set();
+  const donors = [];
+  for (const row of data ?? []) {
+    const key = row.email.trim().toLowerCase();
+    if (!key.includes('@') || seen.has(key)) continue;
+    seen.add(key);
+    donors.push(row);
+    if (donors.length >= 10) break;
+  }
+  return res.json(donors);
+}
+
 async function handleFilters(_req, res, supabase) {
   if (filterOptionsCache.data && filterOptionsCache.expires > Date.now()) {
     return res.json(filterOptionsCache.data);
@@ -71,6 +103,7 @@ export default async function handler(req, res) {
     const { action, page = 1, sort_by = 'transaction_time_iso', sort_dir = 'desc', all, ...filters } = req.query;
 
     if (action === 'filters') return await handleFilters(req, res, supabase);
+    if (action === 'donor-search') return await handleDonorSearch(req, res, supabase);
 
     const offset = (parseInt(page) - 1) * PAGE_SIZE;
     const sortField = SORTABLE.has(sort_by) ? sort_by : 'transaction_time_iso';

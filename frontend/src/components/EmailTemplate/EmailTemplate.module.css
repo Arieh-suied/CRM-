@@ -22,11 +22,35 @@
   gap: 14px;
 }
 
+.headRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .heading {
   font-size: 17px;
   font-weight: 700;
   color: var(--color-text);
   margin: 0;
+}
+
+.sendToDonorBtn {
+  padding: 7px 16px;
+  border: 1px solid rgba(79, 126, 248, 0.35);
+  border-radius: 20px;
+  background: rgba(79, 126, 248, 0.06);
+  color: var(--color-primary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.sendToDonorBtn:hover {
+  background: rgba(79, 126, 248, 0.14);
 }
 
 .hint {

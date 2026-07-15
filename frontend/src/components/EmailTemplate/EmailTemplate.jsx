@@ -3,6 +3,7 @@ import styles from './EmailTemplate.module.css';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import { fetchEmailTemplates, saveEmailTemplate, deleteEmailTemplate } from '../../services/api.js';
 import { fillTemplate, PLACEHOLDERS, DEFAULT_TEMPLATE } from '../../lib/emailTemplate.js';
+import SendEmailModal from '../SendEmailModal/SendEmailModal.jsx';
 
 // Sample transaction for the live preview
 const SAMPLE_TX = {
@@ -28,6 +29,7 @@ export default function EmailTemplate({ institutions = [] }) {
   const [loading, setLoading]     = useState(true);
   const [saving, setSaving]       = useState(false);
   const [msg, setMsg]             = useState(null); // { text, ok }
+  const [sendOpen, setSendOpen]   = useState(false);
   const bodyRef = useRef(null);
 
   useEffect(() => {
@@ -108,7 +110,14 @@ export default function EmailTemplate({ institutions = [] }) {
   return (
     <div className={styles.wrapper}>
       <div className={styles.editor}>
-        <h2 className={styles.heading}>תבניות מייל תודה לפי מוסד</h2>
+        <div className={styles.headRow}>
+          <h2 className={styles.heading}>תבניות מייל תודה לפי מוסד</h2>
+          {canEdit && (
+            <button type="button" className={styles.sendToDonorBtn} onClick={() => setSendOpen(true)}>
+              ✉ שליחת מייל לתורם
+            </button>
+          )}
+        </div>
         <p className={styles.hint}>
           לכל מוסד תבנית משלו. מייל אוטומטי נשלח רק לתורמים של מוסדות שבהם
           "שליחה אוטומטית" מופעלת. המיילים נשלחים מהכתובת som.noflim@gmail.com.
@@ -232,6 +241,13 @@ export default function EmailTemplate({ institutions = [] }) {
             </div>
           </div>
         </div>
+      )}
+
+      {sendOpen && (
+        <SendEmailModal
+          institutions={institutions}
+          onClose={() => setSendOpen(false)}
+        />
       )}
     </div>
   );

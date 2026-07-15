@@ -191,6 +191,10 @@ export function sendDonorEmail(body) {
   return postJson('/send-email', body);
 }
 
+export function searchDonors(search) {
+  return request(`/transactions?action=donor-search&search=${encodeURIComponent(search)}`);
+}
+
 // Bank standing-order refusals — monthly reconciliation
 export function fetchBankRefusals(mosadNumber, period) {
   return request(`/bank-refusals?mosad_number=${encodeURIComponent(mosadNumber)}&period=${encodeURIComponent(period)}`);
