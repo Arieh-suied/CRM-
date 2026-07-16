@@ -101,6 +101,9 @@ export default async function handler(req, res) {
         if (!(amount > 0)) return res.status(400).json({ error: 'סכום לא תקין' });
 
         const pick = (k) => (f[k] !== undefined ? (f[k] || null) : (sub[k] ?? null));
+        const email = pick('email');
+        const phone = pick('phone');
+        const address = pick('address');
         const dmyDate = toDmy(pick('transfer_date')); // DD/MM/YYYY for EZCount
         const asmachta = pick('asmachta');
         // Fold the reference number into the receipt comment so it stays on record.
@@ -114,6 +117,9 @@ export default async function handler(req, res) {
           branch: RECEIPT_BRANCH,
           customerName: name,
           customerId: idNumber,
+          customerEmail: email,
+          customerPhone: phone,
+          customerAddress: address,
           amount,
           notes,
           payments: [{
@@ -161,6 +167,8 @@ export default async function handler(req, res) {
             group_name:           'תולדות נסים',
             transaction_time_raw: dmyDate || toDmy(new Date().toISOString().slice(0, 10)),
             receipt_data:         result.receiptId || '',
+            skip_fee:             true, // bank transfer — no fee deduction in the fund sheet
+
           });
         } catch (routeErr) {
           console.error('toldot approve routing error:', routeErr);

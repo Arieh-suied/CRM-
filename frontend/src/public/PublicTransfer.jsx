@@ -69,13 +69,17 @@ async function callApi(action, payload) {
 }
 
 const EMPTY = {
-  customer_name: '', id_number: '', amount: '', transfer_date: '', asmachta: '',
+  customer_name: '', id_number: '', email: '', phone: '', address: '',
+  amount: '', transfer_date: '', asmachta: '',
   bank_name: '', bank_branch: '', bank_account: '', notes: '',
 };
 
 const FIELDS = [
   { key: 'customer_name', label: 'שם השולח', type: 'text', required: true },
   { key: 'id_number', label: 'תעודת זהות', type: 'text', required: true },
+  { key: 'email', label: 'כתובת מייל', type: 'email' },
+  { key: 'phone', label: 'מספר טלפון', type: 'tel' },
+  { key: 'address', label: 'כתובת מגורים', type: 'text' },
   { key: 'amount', label: 'סכום (₪)', type: 'number', required: true },
   { key: 'transfer_date', label: 'תאריך העברה', type: 'date' },
   { key: 'asmachta', label: 'אסמכתא', type: 'text' },
@@ -123,8 +127,8 @@ export default function PublicTransfer() {
       try {
         const ocr = await callApi('ocr', { image: dataUrl, mimeType: 'image/jpeg' });
         setFields({
+          ...EMPTY, // contact fields (email/phone/address) aren't in a screenshot — filled in by hand
           customer_name: ocr.donor_name || ocr.account_name || '',
-          id_number: '', // not present in a transfer screenshot — filled in by hand
           amount: ocr.amount != null ? String(ocr.amount) : '',
           transfer_date: ocr.transfer_date || '',
           asmachta: ocr.asmachta || '',

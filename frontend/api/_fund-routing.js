@@ -34,7 +34,9 @@ function buildRowValues(row, columns) {
       case 'comments': return row.comments;
       case 'group_name': return row.group_name;
       case 'literal': return col.text;
-      case 'amount': return fee(row.amount, col.fee_pct, col.fee_mult);
+      // skip_fee: bank transfers carry no processing fee, so approval flows set
+      // it to write the full amount in every amount column.
+      case 'amount': return row.skip_fee ? fee(row.amount, 0, 0) : fee(row.amount, col.fee_pct, col.fee_mult);
       case 'receipt': {
         const url = row.receipt_data
           ? `https://files.ezcount.co.il/front/documents/get/${row.receipt_data}`

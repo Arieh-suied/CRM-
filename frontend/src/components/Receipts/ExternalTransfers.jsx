@@ -5,6 +5,9 @@ import { authFetch } from '../../services/api.js';
 const FIELDS = [
   { key: 'customer_name', label: 'שם השולח', type: 'text' },
   { key: 'id_number', label: 'תעודת זהות', type: 'text' },
+  { key: 'email', label: 'כתובת מייל', type: 'email' },
+  { key: 'phone', label: 'מספר טלפון', type: 'tel' },
+  { key: 'address', label: 'כתובת מגורים', type: 'text' },
   { key: 'amount', label: 'סכום (₪)', type: 'number' },
   { key: 'transfer_date', label: 'תאריך העברה', type: 'text' },
   { key: 'asmachta', label: 'אסמכתא', type: 'text' },
@@ -153,6 +156,9 @@ function extractFields(r) {
   return {
     customer_name: r.customer_name ?? '',
     id_number: r.id_number ?? '',
+    email: r.email ?? '',
+    phone: r.phone ?? '',
+    address: r.address ?? '',
     amount: r.amount != null ? String(r.amount) : '',
     transfer_date: toDmy(r.transfer_date),
     asmachta: r.asmachta ?? '',

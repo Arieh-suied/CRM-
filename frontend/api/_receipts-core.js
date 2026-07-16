@@ -61,7 +61,7 @@ function buildPayment(pm, sum, bankName, bankBranch, bankAccount, checkNumber, t
 // payload mirrors the /api/receipts POST body shape
 export async function issueReceipt(payload) {
   const {
-    customerName, customerId, customerPhone, customerEmail,
+    customerName, customerId, customerPhone, customerEmail, customerAddress,
     amount, branch,
     payments: paymentEntries,
     paymentMethod, bankName, bankBranch, bankAccount, checkNumber, transferDate,
@@ -102,6 +102,7 @@ export async function issueReceipt(payload) {
     customer_name: customerName.trim(),
     customer_phone: customerPhone || '',
     customer_email: customerEmail || '',
+    customer_address: customerAddress || '',
     forceItemsIntoNonItemsDocument: true,
     item: [{ details: config.itemDetails, amount: '1', price: amount }],
     payment: paymentArray,
