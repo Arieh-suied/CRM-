@@ -219,6 +219,7 @@ export default async function handler(req, res) {
             transaction_time_raw: dmyDate || toDmy(new Date().toISOString().slice(0, 10)),
             receipt_data:         result.receiptId || '',
             skip_fee:             true, // bank transfer — no fee deduction in the fund sheet
+            transaction_kind:     'העברה בנקאית', // Telegram message reads "התקבלה העברה בנקאית ב..." instead of "עסקה"
           });
         } catch (routeErr) {
           console.error('external-transfer approve routing error:', routeErr);

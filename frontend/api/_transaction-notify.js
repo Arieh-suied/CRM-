@@ -52,8 +52,13 @@ export function receiptUrlFor(row) {
 }
 
 export function buildTelegramText(row, mosadName) {
+  // transaction_kind lets a caller override the generic "עסקה" header — e.g.
+  // the external bank-transfer approval flow (toldot-submissions.js) passes
+  // 'העברה בנקאית' so the channel message reads correctly; the automatic
+  // transactions webhook leaves it unset and keeps the original wording.
+  const kind = row.transaction_kind || 'עסקה';
   return [
-    `התקבלה עסקה ב${mosadName}`,
+    `התקבלה ${kind} ב${mosadName}`,
     '',
     `שם: ${row.client_name || '—'}`,
     `סכום: ${row.amount}₪`,
