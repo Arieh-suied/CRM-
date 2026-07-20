@@ -79,7 +79,7 @@ const EMPTY = {
 const FIELDS = [
   { key: 'institution_id', label: 'מוסד', type: 'select', required: true },
   { key: 'customer_name', label: 'שם השולח', type: 'text', required: true },
-  { key: 'id_number', label: 'תעודת זהות', type: 'text', required: true },
+  { key: 'id_number', label: 'תעודת זהות', type: 'text' },
   { key: 'email', label: 'כתובת מייל', type: 'email' },
   { key: 'phone', label: 'מספר טלפון', type: 'tel' },
   { key: 'address', label: 'כתובת מגורים', type: 'text' },
@@ -164,10 +164,6 @@ export default function PublicTransfer() {
     }
     if (!fields.customer_name.trim() || fields.customer_name.trim().length < 2) {
       setError('יש למלא את שם השולח');
-      return;
-    }
-    if (!fields.id_number.trim()) {
-      setError('יש למלא תעודת זהות');
       return;
     }
     if (!(Number(fields.amount) > 0)) {

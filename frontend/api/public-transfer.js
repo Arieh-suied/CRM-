@@ -82,12 +82,11 @@ export default async function handler(req, res) {
       const amount = f.amount != null && f.amount !== '' ? Number(f.amount) : null;
       if (!institution) return res.status(400).json({ error: 'יש לבחור מוסד' });
       if (name.length < 2) return res.status(400).json({ error: 'חסר שם שולח' });
-      if (!idNumber) return res.status(400).json({ error: 'חסרה תעודת זהות' });
       if (!(amount > 0)) return res.status(400).json({ error: 'סכום לא תקין' });
 
       const clean = {
         customer_name: name,
-        id_number: idNumber,
+        id_number: idNumber || null,
         email:   f.email ? String(f.email).trim() : null,
         phone:   f.phone ? String(f.phone).trim() : null,
         address: f.address ? String(f.address).trim() : null,
