@@ -2,9 +2,9 @@
 // (any institution — see _transfer-institutions.js) and issuing a receipt for
 // approved ones.
 //
-//   GET  → list submissions with status='new' (+ signed screenshot URLs, and a
-//          silently-suggested id_number when one is missing — see
-//          suggestIdNumber below).
+//   GET  → list submissions with status='new' (+ signed screenshot URLs, and
+//          silently-suggested id_number/email when either is missing — see
+//          suggestCustomerMatch below).
 //   POST → { id, action:'approve'|'reject', fields? }
 //          'approve' issues an EZCount receipt under the submission's chosen
 //                    institution/branch (which also records it in
@@ -37,34 +37,33 @@ function toDmy(raw) {
   return s;
 }
 
-// A missing id_number is the main thing blocking approval, so before showing
-// a submission to the reviewer, try to fill it in from an existing customer
-// record — matched by donor name first, then by bank account — but only when
-// the match is unambiguous (exactly one candidate). Silent (no confirmation
-// step): the reviewer sees the field already filled and can still edit it.
-async function suggestIdNumber(supabase, sub) {
-  if (sub.id_number) return null;
+// A missing id_number/email is the main thing blocking approval (and losing
+// touch with the donor), so before showing a submission to the reviewer, try
+// to fill them in from an existing customer record — matched by donor name
+// first, then by bank account — but only when the match is unambiguous
+// (exactly one customer with that name/account). Silent (no confirmation
+// step): the reviewer sees the fields already filled and can still edit them.
+async function suggestCustomerMatch(supabase, sub) {
+  if (sub.id_number && sub.email) return null; // nothing missing to suggest
   try {
     const name = (sub.customer_name || '').trim();
     if (name) {
       const { data } = await supabase
         .from('customers')
-        .select('id_number')
-        .ilike('name', name)
-        .not('id_number', 'is', null);
-      if (data?.length === 1) return data[0].id_number;
+        .select('id_number, email')
+        .ilike('name', name);
+      if (data?.length === 1) return data[0];
     }
     const account = (sub.bank_account || '').trim();
     if (account) {
       const { data } = await supabase
         .from('customers')
-        .select('id_number')
-        .eq('bank_account', account)
-        .not('id_number', 'is', null);
-      if (data?.length === 1) return data[0].id_number;
+        .select('id_number, email')
+        .eq('bank_account', account);
+      if (data?.length === 1) return data[0];
     }
   } catch (err) {
-    console.error('suggestIdNumber lookup error:', err.message);
+    console.error('suggestCustomerMatch lookup error:', err.message);
   }
   return null;
 }
@@ -85,7 +84,7 @@ export default async function handler(req, res) {
       if (error) return res.status(500).json({ error: error.message });
 
       // Attach a short-lived signed URL for each stored screenshot, plus a
-      // suggested id_number when the submission is missing one.
+      // suggested id_number/email when the submission is missing either.
       const rows = await Promise.all((data ?? []).map(async (row) => {
         let screenshot_url = null;
         if (row.screenshot_path) {
@@ -94,8 +93,13 @@ export default async function handler(req, res) {
             .createSignedUrl(row.screenshot_path, SIGNED_URL_TTL);
           screenshot_url = signed?.signedUrl ?? null;
         }
-        const suggested_id_number = await suggestIdNumber(supabase, row);
-        return { ...row, screenshot_url, suggested_id_number };
+        const match = await suggestCustomerMatch(supabase, row);
+        return {
+          ...row,
+          screenshot_url,
+          suggested_id_number: !row.id_number && match?.id_number ? match.id_number : null,
+          suggested_email: !row.email && match?.email ? match.email : null,
+        };
       }));
 
       return res.json({ data: rows });

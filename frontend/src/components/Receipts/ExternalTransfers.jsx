@@ -1,11 +1,12 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import styles from './Receipts.module.css';
 import { authFetch } from '../../services/api.js';
+import { supabase } from '../../lib/supabase.js';
 import { TRANSFER_INSTITUTIONS } from '../../constants/transferInstitutions.js';
 
 const FIELDS = [
   { key: 'institution_id', label: 'מוסד', type: 'select' },
-  { key: 'customer_name', label: 'שם השולח', type: 'text' },
+  { key: 'customer_name', label: 'שם השולח', type: 'autocomplete' },
   { key: 'id_number', label: 'תעודת זהות', type: 'text' },
   { key: 'email', label: 'כתובת מייל', type: 'email' },
   { key: 'phone', label: 'מספר טלפון', type: 'tel' },
@@ -19,6 +20,64 @@ const FIELDS = [
   { key: 'bank_account', label: 'חשבון', type: 'text' },
   { key: 'notes', label: 'הערות', type: 'text' },
 ];
+
+// Free-text "שם השולח" input that also searches the existing customers table
+// as the reviewer types, so they can pick a known donor from a dropdown
+// instead of retyping details already on file (mirrors QuickReceipt.jsx's
+// customer autocomplete). Selecting one fills id_number/email/phone/bank
+// details via onSelect, without overwriting anything already filled in.
+function CustomerNameField({ value, onChange, onSelect, disabled }) {
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSugg, setShowSugg] = useState(false);
+  const wrapRef = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setShowSugg(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  async function search(q) {
+    if (q.trim().length < 2) { setSuggestions([]); setShowSugg(false); return; }
+    const { data } = await supabase.from('customers')
+      .select('*')
+      .or(`name.ilike.%${q}%,bank_account.ilike.%${q}%,id_number.ilike.%${q}%`)
+      .limit(6);
+    if (data?.length) { setSuggestions(data); setShowSugg(true); }
+    else { setSuggestions([]); setShowSugg(false); }
+  }
+
+  return (
+    <div ref={wrapRef} style={{ position: 'relative' }}>
+      <input
+        className={styles.fieldInput}
+        value={value}
+        onChange={(e) => { onChange(e.target.value); search(e.target.value); }}
+        onFocus={() => suggestions.length > 0 && setShowSugg(true)}
+        disabled={disabled}
+        autoComplete="off"
+      />
+      {showSugg && suggestions.length > 0 && (
+        <div className={styles.autocompleteDropdown}>
+          {suggestions.map((c) => (
+            <div
+              key={c.id}
+              className={styles.autocompleteItem}
+              onClick={() => { onSelect(c); setShowSugg(false); }}
+            >
+              <div className={styles.autocompleteItemName}>{c.name}</div>
+              <div className={styles.autocompleteItemSub}>
+                {[c.id_number, c.bank_account, c.email].filter(Boolean).join(' · ')}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function ExternalTransfers() {
   const [rows, setRows] = useState([]);
@@ -46,6 +105,23 @@ export default function ExternalTransfers() {
 
   function setField(id, key, value) {
     setRows((rs) => rs.map((r) => (r.id === id ? { ...r, _fields: { ...r._fields, [key]: value } } : r)));
+  }
+
+  // Applies a picked customer over the row's fields — fills name always, and
+  // fills id_number/email/phone/bank details only where the reviewer hasn't
+  // already entered something, so a manual edit is never clobbered.
+  function selectCustomer(id, c) {
+    setRows((rs) => rs.map((r) => {
+      if (r.id !== id) return r;
+      const f = { ...r._fields, customer_name: c.name };
+      if (!f.id_number && c.id_number)       f.id_number = c.id_number;
+      if (!f.email && c.email)               f.email = c.email;
+      if (!f.phone && c.phone)               f.phone = c.phone;
+      if (!f.bank_name && c.bank_name)       f.bank_name = c.bank_name;
+      if (!f.bank_branch && c.bank_branch)   f.bank_branch = c.bank_branch;
+      if (!f.bank_account && c.bank_account) f.bank_account = c.bank_account;
+      return { ...r, _fields: f };
+    }));
   }
 
   async function act(row, action) {
@@ -121,6 +197,13 @@ export default function ExternalTransfers() {
                             <option key={inst.id} value={inst.id}>{inst.label}</option>
                           ))}
                         </select>
+                      ) : type === 'autocomplete' ? (
+                        <CustomerNameField
+                          value={row._fields[key] ?? ''}
+                          onChange={(v) => setField(row.id, key, v)}
+                          onSelect={(c) => selectCustomer(row.id, c)}
+                          disabled={busyId === row.id}
+                        />
                       ) : (
                         <input
                           className={styles.fieldInput}
@@ -131,6 +214,11 @@ export default function ExternalTransfers() {
                         />
                       )}
                       {key === 'id_number' && !row.id_number && row.suggested_id_number && (
+                        <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+                          מולא אוטומטית לפי לקוח קיים — ניתן לערוך
+                        </div>
+                      )}
+                      {key === 'email' && !row.email && row.suggested_email && (
                         <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
                           מולא אוטומטית לפי לקוח קיים — ניתן לערוך
                         </div>
@@ -178,7 +266,7 @@ function extractFields(r) {
     institution_id: r.institution_id || 'toldot', // rows submitted before multi-institution support
     customer_name: r.customer_name ?? '',
     id_number: r.id_number || r.suggested_id_number || '',
-    email: r.email ?? '',
+    email: r.email || r.suggested_email || '',
     phone: r.phone ?? '',
     address: r.address ?? '',
     amount: r.amount != null ? String(r.amount) : '',
