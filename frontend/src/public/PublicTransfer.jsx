@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { TRANSFER_INSTITUTIONS } from '../constants/transferInstitutions.js';
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 const TOKEN = import.meta.env.VITE_TOLDOT_PUBLIC_TOKEN || '';
@@ -69,12 +70,14 @@ async function callApi(action, payload) {
 }
 
 const EMPTY = {
+  institution_id: '',
   customer_name: '', id_number: '', email: '', phone: '', address: '',
   amount: '', transfer_date: '', asmachta: '',
   bank_name: '', bank_branch: '', bank_account: '', notes: '',
 };
 
 const FIELDS = [
+  { key: 'institution_id', label: 'מוסד', type: 'select', required: true },
   { key: 'customer_name', label: 'שם השולח', type: 'text', required: true },
   { key: 'id_number', label: 'תעודת זהות', type: 'text', required: true },
   { key: 'email', label: 'כתובת מייל', type: 'email' },
@@ -155,6 +158,10 @@ export default function PublicTransfer() {
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
+    if (!fields.institution_id) {
+      setError('יש לבחור מוסד');
+      return;
+    }
     if (!fields.customer_name.trim() || fields.customer_name.trim().length < 2) {
       setError('יש למלא את שם השולח');
       return;
@@ -182,8 +189,8 @@ export default function PublicTransfer() {
       <div className="pt-card">
         <header className="pt-header">
           <div className="pt-logo">🏦</div>
-          <h1>תולדות נסים</h1>
-          <p>העלאת צילום מסך של העברה בנקאית</p>
+          <h1>העלאת העברה בנקאית</h1>
+          <p>העלאת צילום מסך של העברה בנקאית לעדכון המערכת</p>
         </header>
 
         {error && <div className="pt-error">{error}</div>}
@@ -233,13 +240,26 @@ export default function PublicTransfer() {
                 {FIELDS.map(({ key, label, type, required }) => (
                   <div key={key} className="pt-field">
                     <label>{label}{required && <span className="pt-req"> *</span>}</label>
-                    <input
-                      type={type}
-                      inputMode={type === 'number' ? 'decimal' : key === 'id_number' ? 'numeric' : undefined}
-                      value={fields[key]}
-                      onChange={(e) => setField(key, e.target.value)}
-                      disabled={stage === 'submitting'}
-                    />
+                    {type === 'select' ? (
+                      <select
+                        value={fields[key]}
+                        onChange={(e) => setField(key, e.target.value)}
+                        disabled={stage === 'submitting'}
+                      >
+                        <option value="">בחר מוסד</option>
+                        {TRANSFER_INSTITUTIONS.map((inst) => (
+                          <option key={inst.id} value={inst.id}>{inst.label}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type={type}
+                        inputMode={type === 'number' ? 'decimal' : key === 'id_number' ? 'numeric' : undefined}
+                        value={fields[key]}
+                        onChange={(e) => setField(key, e.target.value)}
+                        disabled={stage === 'submitting'}
+                      />
+                    )}
                   </div>
                 ))}
                 <button className="pt-btn" type="submit" disabled={stage === 'submitting'}>

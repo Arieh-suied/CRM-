@@ -1,22 +1,24 @@
-// Authenticated CRM endpoint for reviewing external "תולדות נסים" transfer
-// submissions and issuing a donation receipt for approved ones.
+// Authenticated CRM endpoint for reviewing external bank-transfer submissions
+// (any institution — see _transfer-institutions.js) and issuing a receipt for
+// approved ones.
 //
-//   GET  → list submissions with status='new' (+ signed screenshot URLs).
+//   GET  → list submissions with status='new' (+ signed screenshot URLs, and a
+//          silently-suggested id_number when one is missing — see
+//          suggestIdNumber below).
 //   POST → { id, action:'approve'|'reject', fields? }
-//          'approve' issues an EZCount donation receipt under "סומך נופלים"
-//                    (which also records it in bank_transfers / issued_receipts)
-//                    and marks the submission 'approved'.
+//          'approve' issues an EZCount receipt under the submission's chosen
+//                    institution/branch (which also records it in
+//                    bank_transfers / issued_receipts) and marks the
+//                    submission 'approved'.
 //          'reject'  marks the submission 'rejected'.
 
 import { getSupabase } from './_supabase.js';
 import { requireUser, WRITE_ROLES } from './_auth.js';
 import { issueReceipt } from './_receipts-core.js';
 import { routeTransaction } from './_transaction-route.js';
-
-const TOLDOT_MOSAD = '7016650'; // routes the donation to the תולדות ניסים channel + fund sheet
+import { institutionById } from './_transfer-institutions.js';
 
 const STORAGE_BUCKET = 'transfer-screenshots';
-const RECEIPT_BRANCH = 'סומך נופלים'; // approvals issue a donation receipt under this branch
 const SIGNED_URL_TTL = 60 * 60; // 1h
 
 // EZCount expects dates as DD/MM/YYYY — a YYYY-MM-DD value (what the date input
@@ -35,6 +37,38 @@ function toDmy(raw) {
   return s;
 }
 
+// A missing id_number is the main thing blocking approval, so before showing
+// a submission to the reviewer, try to fill it in from an existing customer
+// record — matched by donor name first, then by bank account — but only when
+// the match is unambiguous (exactly one candidate). Silent (no confirmation
+// step): the reviewer sees the field already filled and can still edit it.
+async function suggestIdNumber(supabase, sub) {
+  if (sub.id_number) return null;
+  try {
+    const name = (sub.customer_name || '').trim();
+    if (name) {
+      const { data } = await supabase
+        .from('customers')
+        .select('id_number')
+        .ilike('name', name)
+        .not('id_number', 'is', null);
+      if (data?.length === 1) return data[0].id_number;
+    }
+    const account = (sub.bank_account || '').trim();
+    if (account) {
+      const { data } = await supabase
+        .from('customers')
+        .select('id_number')
+        .eq('bank_account', account)
+        .not('id_number', 'is', null);
+      if (data?.length === 1) return data[0].id_number;
+    }
+  } catch (err) {
+    console.error('suggestIdNumber lookup error:', err.message);
+  }
+  return null;
+}
+
 export default async function handler(req, res) {
   const supabase = getSupabase();
 
@@ -50,7 +84,8 @@ export default async function handler(req, res) {
         .order('created_at', { ascending: false });
       if (error) return res.status(500).json({ error: error.message });
 
-      // Attach a short-lived signed URL for each stored screenshot.
+      // Attach a short-lived signed URL for each stored screenshot, plus a
+      // suggested id_number when the submission is missing one.
       const rows = await Promise.all((data ?? []).map(async (row) => {
         let screenshot_url = null;
         if (row.screenshot_path) {
@@ -59,7 +94,8 @@ export default async function handler(req, res) {
             .createSignedUrl(row.screenshot_path, SIGNED_URL_TTL);
           screenshot_url = signed?.signedUrl ?? null;
         }
-        return { ...row, screenshot_url };
+        const suggested_id_number = await suggestIdNumber(supabase, row);
+        return { ...row, screenshot_url, suggested_id_number };
       }));
 
       return res.json({ data: rows });
@@ -93,6 +129,9 @@ export default async function handler(req, res) {
       if (action === 'approve') {
         // Merge any inline edits from the reviewer over the stored values.
         const f = fields || {};
+        const institution = institutionById(f.institution_id ?? sub.institution_id);
+        if (!institution) return res.status(400).json({ error: 'מוסד לא תקין' });
+
         const name = String(f.customer_name ?? sub.customer_name ?? '').trim();
         const idNumber = String(f.id_number ?? sub.id_number ?? '').trim();
         const amount = f.amount != null && f.amount !== '' ? Number(f.amount) : sub.amount;
@@ -106,15 +145,21 @@ export default async function handler(req, res) {
         const address = pick('address');
         const dmyDate = toDmy(pick('transfer_date')); // DD/MM/YYYY for EZCount
         const asmachta = pick('asmachta');
-        // Fold the reference number into the receipt comment so it stays on record.
-        const notes = [pick('notes'), asmachta ? `אסמכתא: ${asmachta}` : null]
-          .filter(Boolean).join(' | ') || null;
+        const category = f.category ? String(f.category).trim() : null;
+        // Fold the reference number and category into the receipt comment so
+        // both stay on record even though they aren't dedicated EZCount fields.
+        const notes = [
+          pick('notes'),
+          asmachta ? `אסמכתא: ${asmachta}` : null,
+          category ? `קטגוריה: ${category}` : null,
+        ].filter(Boolean).join(' | ') || null;
 
-        // Issue an EZCount donation receipt under "סומך נופלים". This also writes
-        // bank_transfers / issued_receipts / customers (shared with the manual
-        // receipts flow), so the transfer is fully recorded with a receipt link.
+        // Issue an EZCount receipt under the chosen institution/branch. This
+        // also writes bank_transfers / issued_receipts / customers (shared
+        // with the manual receipts flow), so the transfer is fully recorded
+        // with a receipt link.
         const result = await issueReceipt({
-          branch: RECEIPT_BRANCH,
+          branch: institution.branch,
           customerName: name,
           customerId: idNumber,
           customerEmail: email,
@@ -153,28 +198,35 @@ export default async function handler(req, res) {
           .update({ doc_number: String(result.docNumber || '') })
           .eq('id', id);
 
-        // Notify the תולדות ניסים (בנות חיל) Telegram channel and append the
-        // donation to its fund Google Sheet, reusing the same routing as the
-        // automatic transactions webhook. Non-fatal: the receipt is already
-        // issued and the row already approved, so a routing hiccup can't block it.
+        // Notify the institution's Telegram channel and append the donation to
+        // its fund Google Sheet (if one is configured — institutions without a
+        // matching fund rule, e.g. חכמי ירושלים, simply get no sheet row),
+        // reusing the same routing as the automatic transactions webhook.
+        // Non-fatal: the receipt is already issued and the row already
+        // approved, so a routing hiccup can't block it.
         let routing = null;
         try {
           routing = await routeTransaction(supabase, {
-            mosad_number:         TOLDOT_MOSAD,
+            mosad_number:         institution.mosadNumber,
             client_name:          name,
             amount,
             comments:             notes || '',
-            group_name:           'תולדות נסים',
+            group_name:           category || institution.label,
             transaction_time_raw: dmyDate || toDmy(new Date().toISOString().slice(0, 10)),
             receipt_data:         result.receiptId || '',
             skip_fee:             true, // bank transfer — no fee deduction in the fund sheet
-
           });
         } catch (routeErr) {
-          console.error('toldot approve routing error:', routeErr);
+          console.error('external-transfer approve routing error:', routeErr);
         }
 
-        return res.json({ success: true, docNumber: result.docNumber, docUrl: result.docUrl, routing });
+        return res.json({
+          success: true,
+          docNumber: result.docNumber,
+          docUrl: result.docUrl,
+          institutionLabel: institution.label,
+          routing,
+        });
       }
 
       return res.status(400).json({ error: 'פעולה לא ידועה' });

@@ -1,4 +1,5 @@
-// PUBLIC endpoint for the external "תולדות נסים" bank-transfer upload page.
+// PUBLIC endpoint for the shared external bank-transfer upload page (any
+// institution — see _transfer-institutions.js for the list).
 // No Supabase login — the external contact has no account. Guarded by a shared
 // secret (TOLDOT_PUBLIC_TOKEN), mirroring the grow-webhook.js pattern.
 //
@@ -13,12 +14,12 @@
 import { randomUUID } from 'crypto';
 import { getSupabase } from './_supabase.js';
 import { sendTelegramMessage, sendTelegramPhoto } from './_telegram.js';
+import { institutionById } from './_transfer-institutions.js';
 import {
   parseTransferImage, validateImageInput, ParseTransferError, ALLOWED_MIME,
 } from './_parse-transfer-core.js';
 
 const STORAGE_BUCKET = 'transfer-screenshots';
-const MOSAD_NUMBER = '7016650'; // תולדות נסים
 // Default alert destination (Telegram channel). Overridable via env var.
 const DEFAULT_ADMIN_CHAT = '-1004432425929';
 
@@ -26,9 +27,9 @@ function fmt(label, value) {
   return value ? `${label}: ${value}` : null;
 }
 
-function buildCaption(fields) {
+function buildCaption(fields, institutionLabel) {
   const lines = [
-    '📥 העברה בנקאית חדשה — תולדות נסים',
+    `📥 העברה בנקאית חדשה — ${institutionLabel}`,
     fmt('שם', fields.customer_name),
     fmt('ת.ז', fields.id_number),
     fmt('מייל', fields.email),
@@ -75,9 +76,11 @@ export default async function handler(req, res) {
       }
 
       const f = fields || {};
+      const institution = institutionById(f.institution_id);
       const name = String(f.customer_name || '').trim();
       const idNumber = String(f.id_number || '').trim();
       const amount = f.amount != null && f.amount !== '' ? Number(f.amount) : null;
+      if (!institution) return res.status(400).json({ error: 'יש לבחור מוסד' });
       if (name.length < 2) return res.status(400).json({ error: 'חסר שם שולח' });
       if (!idNumber) return res.status(400).json({ error: 'חסרה תעודת זהות' });
       if (!(amount > 0)) return res.status(400).json({ error: 'סכום לא תקין' });
@@ -122,7 +125,8 @@ export default async function handler(req, res) {
         .from('external_transfer_submissions')
         .insert({
           status: 'new',
-          mosad_number: MOSAD_NUMBER,
+          institution_id: institution.id,
+          mosad_number: institution.mosadNumber,
           customer_name: clean.customer_name,
           id_number: clean.id_number,
           email: clean.email,
@@ -136,7 +140,7 @@ export default async function handler(req, res) {
           bank_account: clean.bank_account,
           notes: clean.notes,
           screenshot_path: screenshotPath,
-          source: 'toldot-public',
+          source: 'public-transfer',
         })
         .select('id')
         .single();
@@ -145,7 +149,7 @@ export default async function handler(req, res) {
       // Personal Telegram alert (photo + details). Non-fatal on failure.
       const adminChat = process.env.TELEGRAM_CHAT_TOLDOT_ADMIN || DEFAULT_ADMIN_CHAT;
       if (adminChat) {
-        const caption = buildCaption(clean);
+        const caption = buildCaption(clean, institution.label);
         try {
           await sendTelegramPhoto(adminChat, { base64: image, mimeType }, caption);
         } catch (tgErr) {

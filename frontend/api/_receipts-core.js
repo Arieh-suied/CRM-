@@ -1,14 +1,23 @@
 // Direct EZCount API integration — no Lovable dependency
 // Env vars required: EZCOUNT_API_KEY, EZCOUNT_API_KEY_OR_EFRAIM, EZCOUNT_API_KEY_CHACHMEI
+//
+// docType 405 = קבלה על תרומה (donation receipt). docType 400 = קבלה רגילה —
+// used both for the שכ"ל (tuition) branches and for the plain "קבלה רגיל"
+// branches added for institutions that need a non-donation receipt option
+// (confirmed with the user: 400 is EZCount's plain-receipt type, not tied to
+// tuition specifically — `receiptTypeLabel` records what each branch's 400
+// actually represents so issued_receipts.receipt_type reads correctly for both).
 
 import { getSupabase } from './_supabase.js';
 
 export const BRANCH_CONFIG = {
-  'סומך נופלים':           { envKey: 'EZCOUNT_API_KEY',            docType: 405, itemDetails: 'תרומה',      mosadNumber: '7001671' },
-  'אור אפרים':             { envKey: 'EZCOUNT_API_KEY_OR_EFRAIM',   docType: 405, itemDetails: 'תרומה',      mosadNumber: '7001725' },
-  'אור אפרים שכ"ל':       { envKey: 'EZCOUNT_API_KEY_OR_EFRAIM',   docType: 400, itemDetails: 'שכר לימוד', mosadNumber: '7003860' },
-  'חכמי ירושלים':          { envKey: 'EZCOUNT_API_KEY_CHACHMEI',    docType: 405, itemDetails: 'תרומה',      mosadNumber: '7001916' },
-  'חכמי ירושלים שכ"ל':    { envKey: 'EZCOUNT_API_KEY_CHACHMEI',    docType: 400, itemDetails: 'שכר לימוד', mosadNumber: '7003862' },
+  'סומך נופלים':             { envKey: 'EZCOUNT_API_KEY',           docType: 405, itemDetails: 'תרומה',      mosadNumber: '7001671', receiptTypeLabel: 'קבלה על תרומה' },
+  'אור אפרים':               { envKey: 'EZCOUNT_API_KEY_OR_EFRAIM', docType: 405, itemDetails: 'תרומה',      mosadNumber: '7001725', receiptTypeLabel: 'קבלה על תרומה' },
+  'אור אפרים שכ"ל':         { envKey: 'EZCOUNT_API_KEY_OR_EFRAIM', docType: 400, itemDetails: 'שכר לימוד', mosadNumber: '7003860', receiptTypeLabel: 'חשבונית מס קבלה' },
+  'אור אפרים קבלה רגיל':    { envKey: 'EZCOUNT_API_KEY_OR_EFRAIM', docType: 400, itemDetails: 'תרומה',      mosadNumber: '7001725', receiptTypeLabel: 'קבלה רגילה' },
+  'חכמי ירושלים':            { envKey: 'EZCOUNT_API_KEY_CHACHMEI',  docType: 405, itemDetails: 'תרומה',      mosadNumber: '7001916', receiptTypeLabel: 'קבלה על תרומה' },
+  'חכמי ירושלים שכ"ל':      { envKey: 'EZCOUNT_API_KEY_CHACHMEI',  docType: 400, itemDetails: 'שכר לימוד', mosadNumber: '7003862', receiptTypeLabel: 'חשבונית מס קבלה' },
+  'חכמי ירושלים קבלה רגיל': { envKey: 'EZCOUNT_API_KEY_CHACHMEI',  docType: 400, itemDetails: 'תרומה',      mosadNumber: '7001916', receiptTypeLabel: 'קבלה רגילה' },
 };
 
 export function branchByMosadNumber(mosadNumber) {
@@ -160,7 +169,7 @@ export async function issueReceipt(payload) {
       external_receipt_id: `ezcount-${branch}-${docNumber}`,
       receipt_number:      String(docNumber || ''),
       institution_name:    branch,
-      receipt_type:        config.docType === 400 ? 'חשבונית מס קבלה' : 'קבלה לתרומה',
+      receipt_type:        config.receiptTypeLabel || (config.docType === 400 ? 'חשבונית מס קבלה' : 'קבלה לתרומה'),
       customer_name:       customerName.trim(),
       customer_id_number:  customerId || null,
       customer_email:      customerEmail || null,

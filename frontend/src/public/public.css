@@ -97,13 +97,13 @@ body {
 .pt-field { display: flex; flex-direction: column; gap: 4px; }
 .pt-field label { font-size: 13px; font-weight: 600; color: var(--pt-muted); }
 .pt-req { color: var(--pt-error); }
-.pt-field input {
+.pt-field input, .pt-field select {
   font-family: inherit; font-size: 16px;
   padding: 10px 12px;
   border: 1px solid var(--pt-border); border-radius: 10px;
   background: #fbfcff; color: var(--pt-text);
 }
-.pt-field input:focus { outline: none; border-color: var(--pt-blue); background: #fff; }
+.pt-field input:focus, .pt-field select:focus { outline: none; border-color: var(--pt-blue); background: #fff; }
 
 .pt-btn {
   margin-top: 8px;
@@ -138,6 +138,6 @@ body {
     --pt-error: #ff8a80;
   }
   .pt-drop:hover { background: #222a3b; }
-  .pt-field input { background: #222a3b; }
-  .pt-field input:focus { background: #262f42; }
+  .pt-field input, .pt-field select { background: #222a3b; }
+  .pt-field input:focus, .pt-field select:focus { background: #262f42; }
 }

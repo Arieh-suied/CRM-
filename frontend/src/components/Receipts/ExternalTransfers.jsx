@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import styles from './Receipts.module.css';
 import { authFetch } from '../../services/api.js';
+import { TRANSFER_INSTITUTIONS } from '../../constants/transferInstitutions.js';
 
 const FIELDS = [
+  { key: 'institution_id', label: 'מוסד', type: 'select' },
   { key: 'customer_name', label: 'שם השולח', type: 'text' },
   { key: 'id_number', label: 'תעודת זהות', type: 'text' },
   { key: 'email', label: 'כתובת מייל', type: 'email' },
@@ -11,6 +13,7 @@ const FIELDS = [
   { key: 'amount', label: 'סכום (₪)', type: 'number' },
   { key: 'transfer_date', label: 'תאריך העברה', type: 'text' },
   { key: 'asmachta', label: 'אסמכתא', type: 'text' },
+  { key: 'category', label: 'קטגוריה', type: 'text' },
   { key: 'bank_name', label: 'בנק', type: 'text' },
   { key: 'bank_branch', label: 'סניף', type: 'text' },
   { key: 'bank_account', label: 'חשבון', type: 'text' },
@@ -58,7 +61,7 @@ export default function ExternalTransfers() {
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'שגיאה');
       if (action === 'approve' && data.docNumber) {
-        setSuccess(`קבלה הונפקה בהצלחה (סומך נופלים) — מספר ${data.docNumber}`);
+        setSuccess(`קבלה הונפקה בהצלחה (${data.institutionLabel || ''}) — מספר ${data.docNumber}`);
       }
       // Drop the handled row from the queue.
       setRows((rs) => rs.filter((r) => r.id !== row.id));
@@ -72,11 +75,11 @@ export default function ExternalTransfers() {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-        <h3 className={styles.sectionTitle} style={{ margin: 0 }}>העברות מהדף החיצוני — תולדות נסים</h3>
+        <h3 className={styles.sectionTitle} style={{ margin: 0 }}>העברות מהדף החיצוני</h3>
         <button className={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`} onClick={load} disabled={loading}>↻ רענן</button>
       </div>
       <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 0 }}>
-        הגשות שהתקבלו מהדף הציבורי. אישור מנפיק קבלה על תרומה במוסד "סומך נופלים" ורושם את ההעברה במערכת.
+        הגשות שהתקבלו מהדף הציבורי. אישור מנפיק קבלה במוסד שנבחר ורושם את ההעברה במערכת.
       </p>
 
       {error && <div className={styles.errorMsg}>{error}</div>}
@@ -107,13 +110,31 @@ export default function ExternalTransfers() {
                   {FIELDS.map(({ key, label, type }) => (
                     <div key={key} className={styles.fieldGroup}>
                       <label className={styles.fieldLabel}>{label}</label>
-                      <input
-                        className={styles.fieldInput}
-                        type={type}
-                        value={row._fields[key] ?? ''}
-                        onChange={(e) => setField(row.id, key, e.target.value)}
-                        disabled={busyId === row.id}
-                      />
+                      {type === 'select' ? (
+                        <select
+                          className={styles.fieldSelect}
+                          value={row._fields[key] ?? ''}
+                          onChange={(e) => setField(row.id, key, e.target.value)}
+                          disabled={busyId === row.id}
+                        >
+                          {TRANSFER_INSTITUTIONS.map((inst) => (
+                            <option key={inst.id} value={inst.id}>{inst.label}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          className={styles.fieldInput}
+                          type={type}
+                          value={row._fields[key] ?? ''}
+                          onChange={(e) => setField(row.id, key, e.target.value)}
+                          disabled={busyId === row.id}
+                        />
+                      )}
+                      {key === 'id_number' && !row.id_number && row.suggested_id_number && (
+                        <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+                          מולא אוטומטית לפי לקוח קיים — ניתן לערוך
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -154,14 +175,16 @@ function toDmy(raw) {
 
 function extractFields(r) {
   return {
+    institution_id: r.institution_id || 'toldot', // rows submitted before multi-institution support
     customer_name: r.customer_name ?? '',
-    id_number: r.id_number ?? '',
+    id_number: r.id_number || r.suggested_id_number || '',
     email: r.email ?? '',
     phone: r.phone ?? '',
     address: r.address ?? '',
     amount: r.amount != null ? String(r.amount) : '',
     transfer_date: toDmy(r.transfer_date),
     asmachta: r.asmachta ?? '',
+    category: '',
     bank_name: r.bank_name ?? '',
     bank_branch: r.bank_branch ?? '',
     bank_account: r.bank_account ?? '',
