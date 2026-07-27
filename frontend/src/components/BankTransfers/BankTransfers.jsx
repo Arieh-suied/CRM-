@@ -42,7 +42,7 @@ export default function BankTransfers({ institutions }) {
   const [loading, setLoading]     = useState(false);
   const [receipt, setReceipt]     = useState(null);
   const [exporting, setExporting] = useState(false);
-  const [sort, setSort]           = useState({ col: 'document_date', dir: 'desc' });
+  const [sort, setSort]           = useState({ col: 'created_at', dir: 'desc' });
 
   const institutionMap = Object.fromEntries(
     (institutions ?? []).map((i) => [i.mosad_number, i.mosad_name])
@@ -148,7 +148,7 @@ export default function BankTransfers({ institutions }) {
         <table className={styles.table}>
           <thead>
             <tr>
-              <SortTh label="תאריך"   col="document_date"      sort={s} onSort={handleSort} />
+              <SortTh label="תאריך"   col="created_at"         sort={s} onSort={handleSort} />
               <SortTh label="שם לקוח" col="customer_name"      sort={s} onSort={handleSort} />
               <SortTh label='ת"ז'     col="customer_id_number" sort={s} onSort={handleSort} />
               <SortTh label="מייל"    col="customer_email"     sort={s} onSort={handleSort} />

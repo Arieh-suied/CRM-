@@ -3,7 +3,7 @@ import { requireUser } from './_auth.js';
 
 const PAGE_SIZE = 50;
 const ALLOWED_SORT = new Set([
-  'document_date', 'customer_name', 'customer_id_number',
+  'created_at', 'document_date', 'customer_name', 'customer_id_number',
   'customer_email', 'transfer_amount', 'bank_name', 'bank_branch',
   'bank_account', 'document_number', 'mosad_number',
 ]);
@@ -15,10 +15,10 @@ export default async function handler(req, res) {
     const user = await requireUser(req, res, supabase);
     if (!user) return;
 
-    const { page = 1, search, mosad_number, sort_by = 'document_date', sort_dir = 'desc', all } = req.query;
+    const { page = 1, search, mosad_number, sort_by = 'created_at', sort_dir = 'desc', all } = req.query;
     const offset = (parseInt(page) - 1) * PAGE_SIZE;
 
-    const col = ALLOWED_SORT.has(sort_by) ? sort_by : 'document_date';
+    const col = ALLOWED_SORT.has(sort_by) ? sort_by : 'created_at';
     const asc = sort_dir === 'asc';
 
     // all=1 → every matching row, for the Excel export
