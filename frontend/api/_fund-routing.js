@@ -34,6 +34,9 @@ function buildRowValues(row, columns) {
       case 'comments': return row.comments;
       case 'group_name': return row.group_name;
       case 'literal': return col.text;
+      // keva_id is only set on charges belonging to a recurring standing order
+      // (Nedarim's "Keva"); its absence means a one-off/web charge.
+      case 'literal_by_keva': return row.keva_id ? col.keva_text : col.web_text;
       // skip_fee: bank transfers carry no processing fee, so approval flows set
       // it to write the full amount in every amount column.
       case 'amount': return row.skip_fee ? fee(row.amount, 0, 0) : fee(row.amount, col.fee_pct, col.fee_mult);
