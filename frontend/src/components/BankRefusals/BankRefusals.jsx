@@ -4,7 +4,9 @@ import { fetchBankRefusals, syncBankRefusals, resolveBankRefusal } from '../../s
 import SortTh, { sortRows } from '../shared/SortTh.jsx';
 
 // אור אפרים + חכמי ירושלים — תרומות והשכ"ל, ללא הודעת סירוב אוטומטית (בשונה מאשראי)
-const BANK_REFUSAL_MOSAD_NUMBERS = ['7001725', '7003860', '7001916', '7003862'];
+// סומך נופלים (כולל יפה ותמה, קרן משנה תחתיו — אותו מוסד/מספר) — כל המיילים
+// על הסירובים מגיעים לאותה תיבת מייל כמו חכמי ירושלים ואור אפרים
+const BANK_REFUSAL_MOSAD_NUMBERS = ['7001725', '7003860', '7001916', '7003862', '7001671'];
 
 const fmt = (n) => {
   try { return new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 }).format(n ?? 0); }
