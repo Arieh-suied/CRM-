@@ -3,6 +3,7 @@ import styles from './PaymentFailures.module.css';
 import { fetchPaymentFailures, syncGmailFailures } from '../../services/api.js';
 import SortTh from '../shared/SortTh.jsx';
 import { exportXlsx, dateStamp } from '../../lib/exportXlsx.js';
+import { useAuth } from '../../contexts/AuthContext.jsx';
 
 const fmt = (n) => {
   if (n == null) return '—';
@@ -28,6 +29,8 @@ const toExportRow = (row) => ({
 });
 
 export default function PaymentFailures() {
+  const { role } = useAuth();
+  const canSync = role !== 'institution'; // syncing pulls Gmail globally — staff-only, the server also 403s this for institution
   const [data, setData]           = useState([]);
   const [total, setTotal]         = useState(0);
   const [page, setPage]           = useState(1);
@@ -151,9 +154,11 @@ export default function PaymentFailures() {
           <button className={styles.exportBtn} onClick={handleExport} disabled={exporting || !total}>
             {exporting ? 'מייצא...' : '⬇ ייצוא אקסל'}
           </button>
-          <button className={styles.syncBtn} onClick={handleSync} disabled={syncing}>
-            {syncing ? 'מסנכרן...' : 'סנכרן'}
-          </button>
+          {canSync && (
+            <button className={styles.syncBtn} onClick={handleSync} disabled={syncing}>
+              {syncing ? 'מסנכרן...' : 'סנכרן'}
+            </button>
+          )}
         </div>
       </div>
 

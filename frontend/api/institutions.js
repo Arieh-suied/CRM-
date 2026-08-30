@@ -1,10 +1,13 @@
 import { getSupabase } from './_supabase.js';
-import { requireUser, WRITE_ROLES } from './_auth.js';
+import { requireUser, WRITE_ROLES, INSTITUTION_READ_ROLES } from './_auth.js';
 
 export default async function handler(req, res) {
   const supabase = getSupabase();
   try {
-    const user = await requireUser(req, res, supabase, req.method === 'GET' ? {} : { roles: WRITE_ROLES });
+    // GET is read-only (mosad_number/mosad_name pairs only, no financial data)
+    // and the institution portal's UI needs it to render its own institution
+    // name — opt institution role into GET only, writes stay staff-only.
+    const user = await requireUser(req, res, supabase, req.method === 'GET' ? { roles: INSTITUTION_READ_ROLES } : { roles: WRITE_ROLES });
     if (!user) return;
 
     if (req.method === 'GET') {
