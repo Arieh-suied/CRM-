@@ -114,7 +114,7 @@ export default async function handler(req, res) {
     }
 
     const {
-      action, page = 1, search, institution, date_from, date_to,
+      action, page = 1, search, institution, date_from, date_to, resolved,
       sort_by = 'created_at', sort_dir = 'desc', all,
     } = req.query;
 
@@ -131,6 +131,7 @@ export default async function handler(req, res) {
       if (institution) query = query.eq('institution_name', institution);
       if (date_from)   query = query.gte('created_at', date_from);
       if (date_to)     query = query.lte('created_at', date_to + 'T23:59:59');
+      if (resolved === 'true' || resolved === 'false') query = query.eq('resolved', resolved === 'true');
       if (search) {
         const orClause = ilikeOr(['customer_name', 'institution_name', 'order_number', 'donor_email'], search);
         if (orClause) query = query.or(orClause);

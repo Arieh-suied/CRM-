@@ -48,6 +48,7 @@ export default function PaymentFailures() {
   const [query, setQuery]         = useState('');
   const [instFilter, setInstFilter] = useState('');
   const [instOptions, setInstOptions] = useState([]);
+  const [resolvedFilter, setResolvedFilter] = useState(''); // '', 'false', 'true'
   const [dateFrom, setDateFrom]   = useState('');
   const [dateTo, setDateTo]       = useState('');
   const [sort, setSort]           = useState({ col: 'created_at', dir: 'desc' });
@@ -65,10 +66,11 @@ export default function PaymentFailures() {
   const filterParams = useCallback(() => ({
     ...(query ? { search: query } : {}),
     ...(instFilter ? { institution: instFilter } : {}),
+    ...(resolvedFilter ? { resolved: resolvedFilter } : {}),
     ...(dateFrom ? { date_from: dateFrom } : {}),
     ...(dateTo ? { date_to: dateTo } : {}),
     sort_by: sort.col, sort_dir: sort.dir,
-  }), [query, instFilter, dateFrom, dateTo, sort]);
+  }), [query, instFilter, resolvedFilter, dateFrom, dateTo, sort]);
 
   const load = useCallback(async (p = 1) => {
     setLoading(true);
@@ -157,6 +159,12 @@ export default function PaymentFailures() {
             {instOptions.map((name) => <option key={name} value={name}>{name}</option>)}
           </select>
         )}
+
+        <select className={styles.select} value={resolvedFilter} onChange={(e) => setResolvedFilter(e.target.value)}>
+          <option value="">הכל</option>
+          <option value="false">טרם טופל</option>
+          <option value="true">טופל</option>
+        </select>
 
         <div className={styles.dateRange}>
           <input className={styles.dateInput} type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
