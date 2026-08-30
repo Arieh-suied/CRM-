@@ -1,5 +1,5 @@
 import { getSupabase, ilikeOr, fetchAll } from './_supabase.js';
-import { requireUser, INSTITUTION_READ_ROLES } from './_auth.js';
+import { requireUser, WRITE_ROLES, INSTITUTION_READ_ROLES } from './_auth.js';
 import { resolveInstitutionNames } from './_scope.js';
 import { isSomechName, isYeshivotName, isToldotNisimName } from './_transaction-notify.js';
 
@@ -59,11 +59,16 @@ async function handleInstitutions(res, supabase, allowedNames) {
   res.json(payload);
 }
 
+// Roles allowed to mark a refusal resolved: staff writers, plus the
+// institution role itself (its own scope only — checked below), since
+// following up on a refusal is exactly what an institution owner does here.
+const RESOLVE_ROLES = [...WRITE_ROLES, 'institution'];
+
 export default async function handler(req, res) {
-  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  if (req.method !== 'GET' && req.method !== 'PUT') return res.status(405).json({ error: 'Method not allowed' });
   try {
     const supabase = getSupabase();
-    const user = await requireUser(req, res, supabase, { roles: INSTITUTION_READ_ROLES });
+    const user = await requireUser(req, res, supabase, { roles: req.method === 'GET' ? INSTITUTION_READ_ROLES : RESOLVE_ROLES });
     if (!user) return;
 
     // payment_failures rows carry a free-text institution_name/category
@@ -75,6 +80,38 @@ export default async function handler(req, res) {
     const allowedNames = user.allowedMosadim?.length
       ? await expandInstitutionNames(supabase, await resolveInstitutionNames(supabase, user.allowedMosadim))
       : null;
+
+    // Both filters apply together when both are set: institution_name
+    // narrows to the caller's own institution (widened for known label
+    // variants), and category further narrows to their specific sub-fund
+    // when they're scoped to one (e.g. יחי ראובן under סומך נופלים).
+    const applyOwnerScope = (query) => {
+      if (allowedNames) query = query.in('institution_name', allowedNames);
+      if (user.allowedGroupNames?.length) query = query.in('category', user.allowedGroupNames);
+      return query;
+    };
+
+    if (req.method === 'PUT') {
+      const { id } = req.query;
+      const { resolved } = req.body ?? {};
+      if (!id || typeof resolved !== 'boolean') return res.status(400).json({ error: 'id and resolved (boolean) are required' });
+
+      // An institution caller may only resolve rows within their own scope —
+      // staff (admin/editor) can resolve any row, matching their GET access.
+      if (user.role === 'institution') {
+        const { data: owned } = await applyOwnerScope(supabase.from('payment_failures').select('id').eq('id', id)).maybeSingle();
+        if (!owned) return res.status(403).json({ error: 'אין לך הרשאה לעדכן שורה זו' });
+      }
+
+      const { data, error } = await supabase
+        .from('payment_failures')
+        .update({ resolved, resolved_at: resolved ? new Date().toISOString() : null })
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) return res.status(500).json({ error: error.message });
+      return res.json(data);
+    }
 
     const {
       action, page = 1, search, institution, date_from, date_to,
@@ -98,13 +135,7 @@ export default async function handler(req, res) {
         const orClause = ilikeOr(['customer_name', 'institution_name', 'order_number', 'donor_email'], search);
         if (orClause) query = query.or(orClause);
       }
-      // Both filters apply together when both are set: institution_name
-      // narrows to the caller's own institution (widened for known label
-      // variants), and category further narrows to their specific sub-fund
-      // when they're scoped to one (e.g. יחי ראובן under סומך נופלים).
-      if (allowedNames) query = query.in('institution_name', allowedNames);
-      if (user.allowedGroupNames?.length) query = query.in('category', user.allowedGroupNames);
-      return query;
+      return applyOwnerScope(query);
     };
 
     // all=1 → every matching row, for the Excel export

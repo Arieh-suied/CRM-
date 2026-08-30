@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import styles from './PaymentFailures.module.css';
-import { fetchPaymentFailures, syncGmailFailures } from '../../services/api.js';
+import { fetchPaymentFailures, syncGmailFailures, setPaymentFailureResolved } from '../../services/api.js';
 import SortTh from '../shared/SortTh.jsx';
 import { exportXlsx, dateStamp } from '../../lib/exportXlsx.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
@@ -26,6 +26,7 @@ const toExportRow = (row, showCategory) => ({
   '4 ספרות':     row.last4 ?? '',
   'טלפון':       row.donor_phone ?? '',
   'מייל':        row.donor_email ?? '',
+  'טופל':        row.resolved ? 'כן' : 'לא',
 });
 
 export default function PaymentFailures() {
@@ -37,7 +38,9 @@ export default function PaymentFailures() {
   // portal shows that instead in the "מוסד" column. Staff keep seeing
   // institution_name as-is (category there is often just a campaign name).
   const showCategory = role === 'institution';
+  const canResolve = role !== 'viewer'; // admin/editor/institution can mark handled — viewer stays read-only
   const [data, setData]           = useState([]);
+  const [resolvingId, setResolvingId] = useState(null);
   const [total, setTotal]         = useState(0);
   const [page, setPage]           = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -100,6 +103,18 @@ export default function PaymentFailures() {
       setSyncResult({ ok: false, message: err.message });
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleToggleResolved = async (row) => {
+    setResolvingId(row.id);
+    try {
+      const updated = await setPaymentFailureResolved(row.id, !row.resolved);
+      setData((prev) => prev.map((r) => (r.id === row.id ? updated : r)));
+    } catch (err) {
+      setSyncResult({ ok: false, message: err.message });
+    } finally {
+      setResolvingId(null);
     }
   };
 
@@ -185,15 +200,16 @@ export default function PaymentFailures() {
               <th>4 ספרות</th>
               <th>טלפון</th>
               <th>מייל</th>
+              <th>טופל</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={10} className={styles.center}>טוען...</td></tr>
+              <tr><td colSpan={11} className={styles.center}>טוען...</td></tr>
             ) : !data.length ? (
-              <tr><td colSpan={10} className={styles.center}>אין סירובים</td></tr>
+              <tr><td colSpan={11} className={styles.center}>אין סירובים</td></tr>
             ) : data.map((row) => (
-              <tr key={row.id ?? row.gmail_message_id}>
+              <tr key={row.id ?? row.gmail_message_id} className={row.resolved ? styles.rowResolved : ''}>
                 <td className={styles.date}>{fmtDate(row.created_at)}</td>
                 <td>{(showCategory ? row.category : row.institution_name) ?? '—'}</td>
                 <td className={styles.name}>{row.customer_name ?? '—'}</td>
@@ -204,6 +220,21 @@ export default function PaymentFailures() {
                 <td className={styles.muted}>{row.last4 ?? '—'}</td>
                 <td className={styles.muted}>{row.donor_phone ?? '—'}</td>
                 <td className={styles.muted}>{row.donor_email ?? '—'}</td>
+                <td>
+                  {canResolve ? (
+                    <label className={styles.resolveToggle}>
+                      <input
+                        type="checkbox"
+                        checked={!!row.resolved}
+                        disabled={resolvingId === row.id}
+                        onChange={() => handleToggleResolved(row)}
+                      />
+                      {row.resolved ? '✓ טופל' : 'טרם טופל'}
+                    </label>
+                  ) : (
+                    row.resolved ? '✓ טופל' : 'טרם טופל'
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>

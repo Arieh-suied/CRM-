@@ -104,6 +104,14 @@ export function fetchPaymentFailures(params = {}) {
   return request(`/payment-failures${qs ? '?' + qs : ''}`);
 }
 
+export function setPaymentFailureResolved(id, resolved) {
+  return request(`/payment-failures?id=${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ resolved }),
+  });
+}
+
 const postJson = (path, body) =>
   request(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 

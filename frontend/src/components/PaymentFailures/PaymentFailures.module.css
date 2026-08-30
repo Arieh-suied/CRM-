@@ -172,6 +172,18 @@
 .amount { font-weight: 700; }
 .error  { color: var(--color-danger); font-size: 12px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
 
+.rowResolved { opacity: 0.55; }
+
+.resolveToggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
 .center {
   text-align: center;
   padding: 48px;
