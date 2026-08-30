@@ -99,6 +99,14 @@ export default function BankRefusals({ institutions }) {
     [institutions]
   );
 
+  // Institution role always has exactly one eligible institution (their own,
+  // scoped server-side) — pick it automatically instead of making them choose.
+  useEffect(() => {
+    if (role === 'institution' && !mosadFilter && eligibleInstitutions.length === 1) {
+      setMosadFilter(eligibleInstitutions[0].mosad_number);
+    }
+  }, [role, mosadFilter, eligibleInstitutions]);
+
   const load = useCallback(() => {
     if (!mosadFilter || !period) { setRows([]); return; }
     setLoading(true); setErrorMsg('');
@@ -153,12 +161,14 @@ export default function BankRefusals({ institutions }) {
   return (
     <div className={styles.wrapper}>
       <div className={styles.toolbar}>
-        <select className={styles.select} value={mosadFilter} onChange={(e) => setMosadFilter(e.target.value)}>
-          <option value="">בחר מוסד</option>
-          {eligibleInstitutions.map((i) => (
-            <option key={i.mosad_number} value={i.mosad_number}>{i.mosad_name}</option>
-          ))}
-        </select>
+        {role !== 'institution' && (
+          <select className={styles.select} value={mosadFilter} onChange={(e) => setMosadFilter(e.target.value)}>
+            <option value="">בחר מוסד</option>
+            {eligibleInstitutions.map((i) => (
+              <option key={i.mosad_number} value={i.mosad_number}>{i.mosad_name}</option>
+            ))}
+          </select>
+        )}
         <input className={styles.monthInput} type="month" value={period} onChange={(e) => setPeriod(e.target.value)} />
         {mosadFilter && (
           <>

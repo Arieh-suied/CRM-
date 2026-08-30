@@ -83,6 +83,7 @@ export default function PaymentFailures() {
   useEffect(() => { load(1); }, [load]);
 
   useEffect(() => {
+    if (showCategory) return; // institution role has no institution picker to fill
     fetchPaymentFailures({ action: 'institutions' })
       .then((res) => setInstOptions(res.data ?? []))
       .catch(() => {});
@@ -135,10 +136,12 @@ export default function PaymentFailures() {
           )}
         </div>
 
-        <select className={styles.select} value={instFilter} onChange={(e) => setInstFilter(e.target.value)}>
-          <option value="">כל המוסדות</option>
-          {instOptions.map((name) => <option key={name} value={name}>{name}</option>)}
-        </select>
+        {!showCategory && (
+          <select className={styles.select} value={instFilter} onChange={(e) => setInstFilter(e.target.value)}>
+            <option value="">כל המוסדות</option>
+            {instOptions.map((name) => <option key={name} value={name}>{name}</option>)}
+          </select>
+        )}
 
         <div className={styles.dateRange}>
           <input className={styles.dateInput} type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
