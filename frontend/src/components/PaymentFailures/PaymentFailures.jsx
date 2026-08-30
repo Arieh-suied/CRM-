@@ -16,6 +16,7 @@ const fmtDate = (iso) => {
 };
 
 const toExportRow = (row, showCategory) => ({
+  'טופל':        row.resolved ? 'כן' : 'לא',
   'תאריך':       fmtDate(row.created_at),
   'מוסד':        (showCategory ? row.category : row.institution_name) ?? '',
   'שם לקוח':     row.customer_name ?? '',
@@ -26,7 +27,6 @@ const toExportRow = (row, showCategory) => ({
   '4 ספרות':     row.last4 ?? '',
   'טלפון':       row.donor_phone ?? '',
   'מייל':        row.donor_email ?? '',
-  'טופל':        row.resolved ? 'כן' : 'לא',
 });
 
 export default function PaymentFailures() {
@@ -190,6 +190,7 @@ export default function PaymentFailures() {
         <table className={styles.table}>
           <thead>
             <tr>
+              <th>טופל</th>
               <SortTh label="תאריך"       col="created_at"         sort={sort} onSort={handleSort} />
               <SortTh label="מוסד"        col="institution_name"   sort={sort} onSort={handleSort} />
               <SortTh label="שם לקוח"     col="customer_name"      sort={sort} onSort={handleSort} />
@@ -200,7 +201,6 @@ export default function PaymentFailures() {
               <th>4 ספרות</th>
               <th>טלפון</th>
               <th>מייל</th>
-              <th>טופל</th>
             </tr>
           </thead>
           <tbody>
@@ -210,16 +210,6 @@ export default function PaymentFailures() {
               <tr><td colSpan={11} className={styles.center}>אין סירובים</td></tr>
             ) : data.map((row) => (
               <tr key={row.id ?? row.gmail_message_id} className={row.resolved ? styles.rowResolved : ''}>
-                <td className={styles.date}>{fmtDate(row.created_at)}</td>
-                <td>{(showCategory ? row.category : row.institution_name) ?? '—'}</td>
-                <td className={styles.name}>{row.customer_name ?? '—'}</td>
-                <td className={styles.muted}>{row.customer_id_number ?? '—'}</td>
-                <td className={styles.amount}>{fmt(row.amount)}</td>
-                <td className={styles.error}>{row.error_reason ?? '—'}</td>
-                <td className={styles.muted}>{row.order_number ?? '—'}</td>
-                <td className={styles.muted}>{row.last4 ?? '—'}</td>
-                <td className={styles.muted}>{row.donor_phone ?? '—'}</td>
-                <td className={styles.muted}>{row.donor_email ?? '—'}</td>
                 <td>
                   {canResolve ? (
                     <label className={styles.resolveToggle}>
@@ -235,6 +225,16 @@ export default function PaymentFailures() {
                     row.resolved ? '✓ טופל' : 'טרם טופל'
                   )}
                 </td>
+                <td className={styles.date}>{fmtDate(row.created_at)}</td>
+                <td>{(showCategory ? row.category : row.institution_name) ?? '—'}</td>
+                <td className={styles.name}>{row.customer_name ?? '—'}</td>
+                <td className={styles.muted}>{row.customer_id_number ?? '—'}</td>
+                <td className={styles.amount}>{fmt(row.amount)}</td>
+                <td className={styles.error}>{row.error_reason ?? '—'}</td>
+                <td className={styles.muted}>{row.order_number ?? '—'}</td>
+                <td className={styles.muted}>{row.last4 ?? '—'}</td>
+                <td className={styles.muted}>{row.donor_phone ?? '—'}</td>
+                <td className={styles.muted}>{row.donor_email ?? '—'}</td>
               </tr>
             ))}
           </tbody>
