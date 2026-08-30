@@ -34,7 +34,7 @@ function parseHistoryCsv(buf) {
   if (lines.length < 2) return [];
   const header = lines[0].split('\t').map((h) => h.trim());
   const idx = (name) => header.indexOf(name);
-  const col = { id: idx('מספר הוראה'), idNum: idx('מספר זהות'), name: idx('שם'), bank: idx('בנק'), branch: idx('סניף'), account: idx('חשבון'), date: idx('תאריך'), amount: idx('סכום'), status: idx('תנועה'), receiptNo: idx('מספר קבלה') };
+  const col = { id: idx('מספר הוראה'), idNum: idx('מספר זהות'), name: idx('שם'), bank: idx('בנק'), branch: idx('סניף'), account: idx('חשבון'), date: idx('תאריך'), amount: idx('סכום'), status: idx('תנועה'), category: idx('קטגוריה'), receiptNo: idx('מספר קבלה') };
 
   return lines.slice(1).map((line) => {
     const c = line.split('\t');
@@ -48,6 +48,7 @@ function parseHistoryCsv(buf) {
       date: c[col.date]?.trim(),
       amount: parseFloat(c[col.amount]),
       status: c[col.status]?.trim(),
+      category: c[col.category]?.trim() || null,
       existingReceiptNumber: c[col.receiptNo]?.trim() || null,
     };
   }).filter((r) => r.masavId && r.date);
@@ -92,6 +93,7 @@ export async function sync(inst, period) {
       bank_name:         charge.bank,
       bank_branch:       charge.branch,
       bank_account:      charge.account,
+      category:          charge.category,
       auto_status:       bounced ? 'bounced' : 'cleared',
       existing_receipt_number: charge.existingReceiptNumber,
       updated_at:        new Date().toISOString(),
@@ -138,12 +140,16 @@ export default async function handler(req, res) {
       }
     }
 
-    const { data, error } = await getSupabase()
+    let query = getSupabase()
       .from('bank_standing_order_failures')
       .select('*')
       .eq('mosad_number', mosad_number)
       .eq('period', period)
       .order('charge_date', { ascending: true });
+    // Sub-fund-scoped caller (e.g. יחי ראובן under סומך נופלים) — narrow to
+    // their own category, same as payment-failures.js.
+    if (caller.allowedGroupNames?.length) query = query.in('category', caller.allowedGroupNames);
+    const { data, error } = await query;
     if (error) return res.status(500).json({ error: error.message });
     return res.json({ data });
   }
