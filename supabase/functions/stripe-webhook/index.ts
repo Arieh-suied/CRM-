@@ -186,9 +186,22 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent, event: Str
     raw_payment:              pi,
     paid_at:                  new Date(pi.created * 1000).toISOString(),
   }, { onConflict: 'stripe_payment_intent_id' });
+
+  const last4 = charge?.payment_method_details?.card?.last4;
+  await sendTelegram(
+    Deno.env.get('TELEGRAM_CHAT_YESHIVOT'),
+    [
+      `התקבלה עסקת סטרייפ${meta.institution_name ? ' ב' + meta.institution_name : ''}`,
+      '',
+      `שם: ${donorLabel(donorName, donorEmail)}`,
+      `סכום: ${amount.toFixed(2)}${upper(pi.currency) === 'ILS' ? '₪' : ' ' + upper(pi.currency)}`,
+      `כרטיס: ${last4 ? '**** ' + last4 : '—'}`,
+    ].join('\n')
+  );
 }
 
 async function handlePaymentIntentFailed(pi: Stripe.PaymentIntent, event: Stripe.Event) {
+  const meta = pi.metadata ?? {};
   await supabase.from('stripe_donations').upsert({
     stripe_payment_intent_id: pi.id,
     stripe_customer_id:       strId(pi.customer),
@@ -200,6 +213,18 @@ async function handlePaymentIntentFailed(pi: Stripe.PaymentIntent, event: Stripe
     raw_payment:              pi,
     paid_at:                  new Date(pi.created * 1000).toISOString(),
   }, { onConflict: 'stripe_payment_intent_id' });
+
+  const lastError = pi.last_payment_error;
+  await sendTelegram(
+    Deno.env.get('TELEGRAM_CHAT_REFUSALS_YESHIVOT'),
+    [
+      `⚠️ סירוב עסקת סטרייפ${meta.institution_name ? ' ב' + meta.institution_name : ''}`,
+      '',
+      `שם: ${donorLabel(meta.donor_name ?? null, pi.receipt_email ?? null)}`,
+      `סכום: ${(pi.amount / 100).toFixed(2)}${upper(pi.currency) === 'ILS' ? '₪' : ' ' + upper(pi.currency)}`,
+      `סיבה: ${lastError?.message || '—'}`,
+    ].join('\n')
+  );
 }
 
 async function handleInvoicePaid(invoice: Stripe.Invoice, event: Stripe.Event) {
@@ -287,4 +312,26 @@ function json(data: unknown, status = 200): Response {
     status,
     headers: { 'Content-Type': 'application/json' },
   });
+}
+
+// Mirrors frontend/api/_telegram.js — separate copy because this Deno
+// function can't import that Node module across the Vercel/Supabase runtime split.
+async function sendTelegram(chatId: string | undefined, text: string) {
+  const token = Deno.env.get('TELEGRAM_BOT_TOKEN');
+  if (!token || !chatId) return;
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text }),
+    });
+    const data = await res.json();
+    if (!data.ok) console.error('stripe-webhook telegram error:', data.description);
+  } catch (err) {
+    console.error('stripe-webhook telegram send failed:', err);
+  }
+}
+
+function donorLabel(name: string | null, email: string | null): string {
+  return name || email || '—';
 }
