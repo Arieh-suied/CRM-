@@ -15,9 +15,9 @@ const fmtDate = (iso) => {
   return new Date(iso).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: '2-digit' });
 };
 
-const toExportRow = (row) => ({
+const toExportRow = (row, showCategory) => ({
   'תאריך':       fmtDate(row.created_at),
-  'מוסד':        row.institution_name ?? '',
+  'מוסד':        (showCategory ? row.category : row.institution_name) ?? '',
   'שם לקוח':     row.customer_name ?? '',
   'ת"ז':         row.customer_id_number ?? '',
   'סכום':        row.amount ?? '',
@@ -31,6 +31,12 @@ const toExportRow = (row) => ({
 export default function PaymentFailures() {
   const { role } = useAuth();
   const canSync = role !== 'institution'; // syncing pulls Gmail globally — staff-only, the server also 403s this for institution
+  // institution_name is free text parsed from the refusal email and can name
+  // an unrelated institution for a sub-fund's rows (see payment-failures.js
+  // / _scope.js) — category is the reliable label there, so the institution
+  // portal shows that instead in the "מוסד" column. Staff keep seeing
+  // institution_name as-is (category there is often just a campaign name).
+  const showCategory = role === 'institution';
   const [data, setData]           = useState([]);
   const [total, setTotal]         = useState(0);
   const [page, setPage]           = useState(1);
@@ -100,7 +106,7 @@ export default function PaymentFailures() {
     setExporting(true);
     try {
       const res = await fetchPaymentFailures({ all: 1, ...filterParams() });
-      const rows = (res.data ?? []).map(toExportRow);
+      const rows = (res.data ?? []).map((row) => toExportRow(row, showCategory));
       if (rows.length) await exportXlsx(rows, `payment-failures-${dateStamp()}.xlsx`, 'סירובים');
     } catch (err) {
       setSyncResult({ ok: false, message: err.message });
@@ -186,7 +192,7 @@ export default function PaymentFailures() {
             ) : data.map((row) => (
               <tr key={row.id ?? row.gmail_message_id}>
                 <td className={styles.date}>{fmtDate(row.created_at)}</td>
-                <td>{row.institution_name ?? '—'}</td>
+                <td>{(showCategory ? row.category : row.institution_name) ?? '—'}</td>
                 <td className={styles.name}>{row.customer_name ?? '—'}</td>
                 <td className={styles.muted}>{row.customer_id_number ?? '—'}</td>
                 <td className={styles.amount}>{fmt(row.amount)}</td>
