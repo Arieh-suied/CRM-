@@ -1,8 +1,22 @@
+import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import styles from './LoginScreen.module.css';
 
 export default function LoginScreen() {
-  const { signIn } = useAuth();
+  const { signIn, signInWithPassword } = useAuth();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const handlePasswordLogin = async (e) => {
+    e.preventDefault();
+    setError(null);
+    setSubmitting(true);
+    const { error: err } = await signInWithPassword(email.trim(), password);
+    setSubmitting(false);
+    if (err) setError('שם משתמש או סיסמה שגויים');
+  };
 
   return (
     <div className={styles.page}>
@@ -18,6 +32,32 @@ export default function LoginScreen() {
           </svg>
           כניסה עם Google
         </button>
+
+        <div className={styles.divider}>מוסדות</div>
+        <form className={styles.passwordForm} onSubmit={handlePasswordLogin}>
+          <input
+            className={styles.input}
+            type="email"
+            placeholder="שם משתמש (אימייל)"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="username"
+            required
+          />
+          <input
+            className={styles.input}
+            type="password"
+            placeholder="סיסמה"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="current-password"
+            required
+          />
+          {error && <span className={styles.formError}>{error}</span>}
+          <button className={styles.submitBtn} type="submit" disabled={submitting}>
+            {submitting ? 'מתחבר...' : 'כניסה'}
+          </button>
+        </form>
       </div>
     </div>
   );

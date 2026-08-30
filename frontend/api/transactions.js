@@ -1,5 +1,6 @@
 import { getSupabase, ilikeOr, fetchAll } from './_supabase.js';
-import { requireUser } from './_auth.js';
+import { requireUser, INSTITUTION_READ_ROLES } from './_auth.js';
+import { applyScope } from './_scope.js';
 
 const PAGE_SIZE = 50;
 const SORTABLE = new Set(['transaction_time_iso', 'client_name', 'amount', 'transaction_type', 'group_name', 'mosad_number']);
@@ -26,16 +27,17 @@ const FILTER_OPTIONS_TTL_MS = 5 * 60 * 1000;
 
 // Supabase caps each request at 1000 rows, so a single select over the whole
 // table silently misses values — page through and collect distinct non-empty ones.
-async function fetchDistinct(supabase, column) {
+async function fetchDistinct(supabase, column, user) {
   const CHUNK = 1000;
   const values = new Set();
   for (let from = 0; ; from += CHUNK) {
-    const { data, error } = await supabase
+    let query = supabase
       .from('transactions')
       .select(column)
       .not(column, 'is', null)
-      .neq(column, '')
-      .range(from, from + CHUNK - 1);
+      .neq(column, '');
+    query = applyScope(query, user);
+    const { data, error } = await query.range(from, from + CHUNK - 1);
     if (error) throw new Error(error.message);
     for (const row of data) {
       const v = row[column];
@@ -49,7 +51,7 @@ async function fetchDistinct(supabase, column) {
 // Donor picker for the manual-email modal: search donors that have an email,
 // deduped by address (latest transaction wins, so placeholder values like
 // {סכום} and the mosad template match the donor's most recent donation).
-async function handleDonorSearch(req, res, supabase) {
+async function handleDonorSearch(req, res, supabase, user) {
   const search = String(req.query?.search || '').trim();
   if (search.length < 2) return res.json([]);
 
@@ -62,6 +64,7 @@ async function handleDonorSearch(req, res, supabase) {
     .limit(60);
   const orClause = ilikeOr(['client_name', 'email', 'phone'], search);
   if (orClause) query = query.or(orClause);
+  query = applyScope(query, user);
 
   const { data, error } = await query;
   if (error) return res.status(500).json({ error: error.message });
@@ -78,18 +81,21 @@ async function handleDonorSearch(req, res, supabase) {
   return res.json(donors);
 }
 
-async function handleFilters(_req, res, supabase) {
-  if (filterOptionsCache.data && filterOptionsCache.expires > Date.now()) {
+async function handleFilters(_req, res, supabase, user) {
+  // Scoped callers (role='institution') have a tiny dataset and their own
+  // options — never serve them the unscoped, shared cache (or populate it).
+  const scoped = Boolean(user.allowedMosadim?.length || user.allowedGroupNames?.length);
+  if (!scoped && filterOptionsCache.data && filterOptionsCache.expires > Date.now()) {
     return res.json(filterOptionsCache.data);
   }
 
   const [transaction_types, group_names] = await Promise.all([
-    fetchDistinct(supabase, 'transaction_type'),
-    fetchDistinct(supabase, 'group_name'),
+    fetchDistinct(supabase, 'transaction_type', user),
+    fetchDistinct(supabase, 'group_name', user),
   ]);
 
   const payload = { transaction_types, group_names };
-  filterOptionsCache = { data: payload, expires: Date.now() + FILTER_OPTIONS_TTL_MS };
+  if (!scoped) filterOptionsCache = { data: payload, expires: Date.now() + FILTER_OPTIONS_TTL_MS };
   return res.json(payload);
 }
 
@@ -97,13 +103,13 @@ export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
   try {
     const supabase = getSupabase();
-    const user = await requireUser(req, res, supabase);
+    const user = await requireUser(req, res, supabase, { roles: INSTITUTION_READ_ROLES });
     if (!user) return;
 
     const { action, page = 1, sort_by = 'transaction_time_iso', sort_dir = 'desc', all, ...filters } = req.query;
 
-    if (action === 'filters') return await handleFilters(req, res, supabase);
-    if (action === 'donor-search') return await handleDonorSearch(req, res, supabase);
+    if (action === 'filters') return await handleFilters(req, res, supabase, user);
+    if (action === 'donor-search') return await handleDonorSearch(req, res, supabase, user);
 
     const offset = (parseInt(page) - 1) * PAGE_SIZE;
     const sortField = SORTABLE.has(sort_by) ? sort_by : 'transaction_time_iso';
@@ -111,13 +117,13 @@ export default async function handler(req, res) {
 
     // all=1 → every matching row, for the Excel export
     if (all) {
-      const rows = await fetchAll(() => applyFilters(
+      const rows = await fetchAll(() => applyScope(applyFilters(
         supabase
           .from('transactions_with_parsed_time')
           .select('*')
           .order(column, { ascending: sort_dir === 'asc' }),
         filters
-      ));
+      ), user));
       return res.json({ data: rows, total: rows.length });
     }
 
@@ -127,7 +133,7 @@ export default async function handler(req, res) {
       .order(column, { ascending: sort_dir === 'asc' })
       .range(offset, offset + PAGE_SIZE - 1);
 
-    query = applyFilters(query, filters);
+    query = applyScope(applyFilters(query, filters), user);
     const { data, error, count } = await query;
     if (error) return res.status(500).json({ error: error.message });
 

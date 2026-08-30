@@ -58,6 +58,13 @@ export function deleteAdminUser(id) {
     .catch(() => {}); // 204 No Content has no body — ignore parse error
 }
 
+export function resetInstitutionPassword(id, password) {
+  return adminRequest(`/admin/users?id=${encodeURIComponent(id)}&action=reset_password`, {
+    method: 'PUT',
+    body: JSON.stringify({ password }),
+  });
+}
+
 export function fetchTransactions(params = {}) {
   const qs = new URLSearchParams(
     Object.fromEntries(Object.entries(params).filter(([, v]) => v !== '' && v != null))
@@ -72,6 +79,10 @@ export function fetchFilterOptions() {
 
 export function fetchInstitutions() {
   return request('/institutions');
+}
+
+export function fetchInstitutionSummary() {
+  return request('/institution-summary');
 }
 
 export function createInstitution(body) {

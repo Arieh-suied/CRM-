@@ -2,16 +2,21 @@ import { useState, useEffect } from 'react';
 import styles from './NavTabs.module.css';
 
 // Tabs without `roles` are visible to everyone; otherwise only to the listed roles.
+// 'institution' is a narrow, row-scoped portal role (see frontend/api/_scope.js) —
+// every tab it should NOT see needs an explicit roles list that excludes it.
+const STAFF_ROLES = ['admin', 'editor', 'viewer'];
+
 const ALL_TABS = [
   { id: 'transactions', label: 'עסקאות' },
-  { id: 'stripe',       label: 'Stripe' },
-  { id: 'bank',         label: 'העברות בנקאיות' },
-  { id: 'keva',         label: 'הוראות קבע' },
-  { id: 'grow',         label: 'Grow' },
-  { id: 'receipts',     label: 'קבלות' },
-  { id: 'funds',        label: 'ניהול קרנות' },
+  { id: 'stripe',       label: 'Stripe', roles: STAFF_ROLES },
+  { id: 'bank',         label: 'העברות בנקאיות', roles: STAFF_ROLES },
+  { id: 'keva',         label: 'הוראות קבע', roles: STAFF_ROLES },
+  { id: 'grow',         label: 'Grow', roles: STAFF_ROLES },
+  { id: 'receipts',     label: 'קבלות', roles: STAFF_ROLES },
+  { id: 'funds',        label: 'ניהול קרנות', roles: STAFF_ROLES },
   { id: 'failures',     label: 'סירובים' },
-  { id: 'bank-refusals', label: 'סירובים בנקאי' },
+  { id: 'bank-refusals', label: 'סירובים בנקאי', roles: STAFF_ROLES },
+  { id: 'summary',      label: 'סיכום', roles: ['institution'] },
   { id: 'email-template', label: 'תבנית מייל', roles: ['admin', 'editor'] },
   { id: 'users',        label: 'ניהול משתמשים', roles: ['admin'] },
 ];

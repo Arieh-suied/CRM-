@@ -323,6 +323,12 @@
   border: 1px solid rgba(130, 146, 176, 0.25);
 }
 
+.badge_institution {
+  background: rgba(16, 185, 129, 0.1);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.28);
+}
+
 /* ── Status dot ── */
 .statusDot {
   display: inline-flex;

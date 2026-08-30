@@ -31,7 +31,7 @@ export default async function handler(req, res) {
   if (req.method === 'GET') {
     const { data, error } = await supabase
       .from('allowed_users')
-      .select('id, email, full_name, role, is_active, allowed_mosadim, created_at')
+      .select('id, email, full_name, role, is_active, allowed_mosadim, allowed_group_names, auth_user_id, created_at')
       .order('created_at', { ascending: false });
 
     if (error) return res.status(500).json({ error: error.message });
@@ -40,20 +40,38 @@ export default async function handler(req, res) {
 
   // POST — add user
   if (req.method === 'POST') {
-    const { email, full_name, role, allowed_mosadim } = req.body;
+    const { email, full_name, role, allowed_mosadim, allowed_group_names, password } = req.body;
     if (!email) return res.status(400).json({ error: 'Email required' });
 
-    const validRoles = ['admin', 'editor', 'viewer'];
+    const validRoles = ['admin', 'editor', 'viewer', 'institution'];
     const userRole = validRoles.includes(role) ? role : 'viewer';
+    const normalizedEmail = email.trim().toLowerCase();
+
+    // Institution logins authenticate with a real email+password Supabase Auth
+    // account (separate from staff Google OAuth) — create it here so the
+    // allowlist row and the actual login credential are set up together.
+    let authUserId = null;
+    if (userRole === 'institution') {
+      if (!password) return res.status(400).json({ error: 'Password required for institution users' });
+      const { data: created, error: authErr } = await supabase.auth.admin.createUser({
+        email: normalizedEmail,
+        password,
+        email_confirm: true,
+      });
+      if (authErr) return res.status(400).json({ error: authErr.message });
+      authUserId = created.user.id;
+    }
 
     const { data, error } = await supabase
       .from('allowed_users')
       .insert({
-        email:           email.trim().toLowerCase(),
-        full_name:       full_name || null,
-        role:            userRole,
-        is_active:       true,
-        allowed_mosadim: allowed_mosadim?.length ? allowed_mosadim : null,
+        email:               normalizedEmail,
+        full_name:           full_name || null,
+        role:                userRole,
+        is_active:           true,
+        allowed_mosadim:     allowed_mosadim?.length ? allowed_mosadim : null,
+        allowed_group_names: allowed_group_names?.length ? allowed_group_names : null,
+        auth_user_id:        authUserId,
       })
       .select()
       .single();
@@ -62,17 +80,37 @@ export default async function handler(req, res) {
     return res.status(201).json(data);
   }
 
-  // PUT — update user (requires ?id=)
+  // PUT — update user (requires ?id=); ?action=reset_password updates the
+  // institution user's Supabase Auth password instead of the allowlist row.
   if (req.method === 'PUT') {
     if (!id) return res.status(400).json({ error: 'Missing id' });
 
-    const { full_name, role, is_active, allowed_mosadim } = req.body;
+    if (req.query.action === 'reset_password') {
+      const { password } = req.body;
+      if (!password) return res.status(400).json({ error: 'Password required' });
+
+      const { data: row, error: fetchErr } = await supabase
+        .from('allowed_users')
+        .select('auth_user_id')
+        .eq('id', id)
+        .single();
+      if (fetchErr || !row?.auth_user_id) return res.status(404).json({ error: 'No auth account for this user' });
+
+      const { error: authErr } = await supabase.auth.admin.updateUserById(row.auth_user_id, { password });
+      if (authErr) return res.status(400).json({ error: authErr.message });
+      return res.json({ success: true });
+    }
+
+    const { full_name, role, is_active, allowed_mosadim, allowed_group_names } = req.body;
     const updates = {};
     if (full_name      !== undefined) updates.full_name       = full_name || null;
     if (role           !== undefined) updates.role            = role;
     if (is_active      !== undefined) updates.is_active       = Boolean(is_active);
     if (allowed_mosadim !== undefined) {
       updates.allowed_mosadim = allowed_mosadim?.length ? allowed_mosadim : null;
+    }
+    if (allowed_group_names !== undefined) {
+      updates.allowed_group_names = allowed_group_names?.length ? allowed_group_names : null;
     }
 
     const { data, error } = await supabase

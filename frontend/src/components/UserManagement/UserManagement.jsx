@@ -1,15 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import styles from './UserManagement.module.css';
-import { fetchAdminUsers, createAdminUser, updateAdminUser, deleteAdminUser } from '../../services/api.js';
+import { fetchAdminUsers, createAdminUser, updateAdminUser, deleteAdminUser, resetInstitutionPassword } from '../../services/api.js';
 
 const ROLES = [
-  { value: 'viewer', label: 'צופה',   desc: 'יכול לצפות בנתונים בלבד' },
-  { value: 'editor', label: 'עורך',   desc: 'יכול לערוך נתונים' },
-  { value: 'admin',  label: 'מנהל',   desc: 'גישה מלאה וניהול משתמשים' },
+  { value: 'viewer',      label: 'צופה',   desc: 'יכול לצפות בנתונים בלבד' },
+  { value: 'editor',      label: 'עורך',   desc: 'יכול לערוך נתונים' },
+  { value: 'admin',       label: 'מנהל',   desc: 'גישה מלאה וניהול משתמשים' },
+  { value: 'institution', label: 'מוסד',   desc: 'כניסה עם סיסמה, צפייה בנתוני המוסד בלבד' },
 ];
 
-const ROLE_LABELS = { admin: 'מנהל', editor: 'עורך', viewer: 'צופה' };
-const ROLE_COLORS = { admin: 'admin', editor: 'editor', viewer: 'viewer' };
+const ROLE_LABELS = { admin: 'מנהל', editor: 'עורך', viewer: 'צופה', institution: 'מוסד' };
+const ROLE_COLORS = { admin: 'admin', editor: 'editor', viewer: 'viewer', institution: 'institution' };
 
 function RoleBadge({ role }) {
   return (
@@ -77,11 +78,64 @@ function MosadimSelect({ institutions, value, onChange }) {
   );
 }
 
-const EMPTY_FORM = { email: '', full_name: '', role: 'viewer', allowed_mosadim: null };
+// Same shape as MosadimSelect but over group_name strings — used to further
+// restrict an institution user to a specific sub-fund (e.g. "יחי ראובן"
+// inside מוסד סומך נופלים, which shares its mosad_number with other funds).
+function GroupNamesSelect({ groupNames, value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const allSelected = !value || value.length === 0;
 
-function UserForm({ institutions, initial, onSave, onCancel, saving }) {
+  function toggle(name) {
+    if (allSelected) {
+      onChange([name]);
+    } else if (value.includes(name)) {
+      const next = value.filter((n) => n !== name);
+      onChange(next.length ? next : null);
+    } else {
+      onChange([...value, name]);
+    }
+  }
+
+  const label = allSelected
+    ? 'כל הקטגוריות במוסד'
+    : `${value.length} קטגורי${value.length !== 1 ? 'ות' : 'ה'}`;
+
+  return (
+    <div className={styles.mosadDropdown}>
+      <button type="button" className={styles.mosadTrigger} onClick={() => setOpen((v) => !v)}>
+        <span>{label}</span>
+        <svg viewBox="0 0 12 12" fill="none" className={styles.chevron} style={{ transform: open ? 'rotate(180deg)' : '' }}>
+          <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </button>
+      {open && (
+        <div className={styles.mosadMenu}>
+          <label className={styles.mosadItem}>
+            <input type="checkbox" checked={allSelected} onChange={() => onChange(null)} />
+            <span>כל הקטגוריות</span>
+          </label>
+          {(groupNames ?? []).map((name) => (
+            <label key={name} className={styles.mosadItem}>
+              <input
+                type="checkbox"
+                checked={!allSelected && value.includes(name)}
+                onChange={() => toggle(name)}
+              />
+              <span>{name}</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const EMPTY_FORM = { email: '', full_name: '', role: 'viewer', allowed_mosadim: null, allowed_group_names: null, password: '' };
+
+function UserForm({ institutions, groupNames, initial, onSave, onCancel, saving }) {
   const [form, setForm] = useState(initial ?? EMPTY_FORM);
   const isEdit = !!initial;
+  const isInstitution = form.role === 'institution';
 
   const set = (key, val) => setForm((p) => ({ ...p, [key]: val }));
 
@@ -155,6 +209,36 @@ function UserForm({ institutions, initial, onSave, onCancel, saving }) {
         </div>
       </div>
 
+      {isInstitution && (
+        <div className={styles.formRow}>
+          <div className={styles.formField}>
+            <label className={styles.formLabel}>קטגוריה בתוך המוסד (אופציונלי)</label>
+            <GroupNamesSelect
+              groupNames={groupNames}
+              value={form.allowed_group_names}
+              onChange={(val) => set('allowed_group_names', val)}
+            />
+            <p className={styles.formHint}>
+              למוסד עם קרן ייעודית תחת מוסד משותף (למשל יחי ראובן תחת סומך נופלים) - הגבל לקטגוריה הספציפית
+            </p>
+          </div>
+
+          {!isEdit && (
+            <div className={styles.formField}>
+              <label className={styles.formLabel}>סיסמה ראשונית *</label>
+              <input
+                className={styles.formInput}
+                type="text"
+                required
+                placeholder="סיסמה למסירה למוסד"
+                value={form.password}
+                onChange={(e) => set('password', e.target.value)}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
       <div className={styles.formActions}>
         <button type="submit" className={styles.btnPrimary} disabled={saving}>
           {saving ? 'שומר...' : isEdit ? 'שמור שינויים' : 'הוסף משתמש'}
@@ -167,7 +251,7 @@ function UserForm({ institutions, initial, onSave, onCancel, saving }) {
   );
 }
 
-export default function UserManagement({ institutions }) {
+export default function UserManagement({ institutions, groupNames }) {
   const [users, setUsers]       = useState([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState(null);
@@ -215,9 +299,10 @@ export default function UserManagement({ institutions }) {
     try {
       if (editing) {
         await updateAdminUser(editing.id, {
-          full_name:       form.full_name,
-          role:            form.role,
-          allowed_mosadim: form.allowed_mosadim,
+          full_name:           form.full_name,
+          role:                form.role,
+          allowed_mosadim:     form.allowed_mosadim,
+          allowed_group_names: form.allowed_group_names,
         });
       } else {
         await createAdminUser(form);
@@ -253,6 +338,18 @@ export default function UserManagement({ institutions }) {
     }
   }
 
+  async function handleResetPassword(user) {
+    const password = window.prompt(`סיסמה חדשה עבור ${user.email}:`);
+    if (!password) return;
+    setActionError(null);
+    try {
+      await resetInstitutionPassword(user.id, password);
+      window.alert('הסיסמה עודכנה');
+    } catch (e) {
+      setActionError(e.message);
+    }
+  }
+
   function mosadimLabel(user) {
     if (!user.allowed_mosadim) return 'הכל';
     const names = user.allowed_mosadim.map((num) => {
@@ -277,6 +374,7 @@ export default function UserManagement({ institutions }) {
       {showForm && (
         <UserForm
           institutions={institutions}
+          groupNames={groupNames}
           initial={editing}
           onSave={handleSave}
           onCancel={cancelForm}
@@ -320,6 +418,9 @@ export default function UserManagement({ institutions }) {
                   <td>
                     <div className={styles.actions}>
                       <button className={styles.btnAction} onClick={() => startEdit(u)}>ערוך</button>
+                      {u.role === 'institution' && (
+                        <button className={styles.btnAction} onClick={() => handleResetPassword(u)}>איפוס סיסמה</button>
+                      )}
                       <button className={styles.btnAction} onClick={() => toggleActive(u)}>
                         {u.is_active ? 'השבת' : 'הפעל'}
                       </button>

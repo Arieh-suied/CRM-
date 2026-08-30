@@ -66,10 +66,18 @@ export function AuthProvider({ children }) {
       options: { redirectTo: window.location.origin },
     });
 
+  // Institution logins (email+password) — separate from the Google OAuth path
+  // above, which is for internal staff only. Returns { error } so the caller
+  // can show a message instead of throwing.
+  const signInWithPassword = async (email, password) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    return { error };
+  };
+
   const signOut = () => supabase.auth.signOut();
 
   return (
-    <AuthContext.Provider value={{ user, isAllowed, role, allowedMosadim, loading, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, isAllowed, role, allowedMosadim, loading, signIn, signInWithPassword, signOut }}>
       {children}
     </AuthContext.Provider>
   );
