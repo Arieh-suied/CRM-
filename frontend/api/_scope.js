@@ -24,3 +24,15 @@ export async function resolveInstitutionNames(supabase, mosadNumbers) {
     .in('mosad_number', mosadNumbers);
   return (data ?? []).map((r) => r.mosad_name).filter(Boolean);
 }
+
+// standing-orders.js / bank-orders.js proxy Nedarim's live GetKevaNew /
+// GetMasavKevaNew responses as-is — a DataTables-shaped { data: [...] }
+// where each row is a numeric-string-keyed object (row['5'] etc, no named
+// fields). Nedarim has no per-category filter on these actions, so a
+// sub-fund-scoped caller (allowed_group_names set) must be filtered
+// in-memory by the category column, or they'd see every other fund's donor
+// details (name, bank account, phone) under the same mosad.
+export function filterRowsByColumn(rows, colIndex, allowedValues) {
+  if (!allowedValues?.length) return rows;
+  return (rows ?? []).filter((row) => allowedValues.includes(row[String(colIndex)]));
+}

@@ -1,17 +1,30 @@
 import { BANK_URL, getInstitution as getInst, callNedarim as callNedarimRaw } from './_nedarim.js';
 import { getSupabase } from './_supabase.js';
-import { requireUser, WRITE_ROLES } from './_auth.js';
+import { requireUser, WRITE_ROLES, INSTITUTION_READ_ROLES } from './_auth.js';
+import { filterRowsByColumn } from './_scope.js';
 
 const callNedarim = (params) => callNedarimRaw(BANK_URL, params);
 
+// Category lives in column '7' of GetMasavKevaNew's DataTables-shaped rows
+// (see BankTable in StandingOrders.jsx).
+const CATEGORY_COL = '7';
+
 export default async function handler(req, res) {
-  // Reading orders needs a logged-in user; charging / editing a bank standing
-  // order (POST) is restricted to editors and admins.
-  const user = await requireUser(req, res, getSupabase(), req.method === 'GET' ? {} : { roles: WRITE_ROLES });
+  const { mosad_number, masav_id, export: exportType, from, to } = req.query;
+
+  // Only the plain listing (no masav_id detail, no CSV export) is scoped
+  // per-row and safe for the institution role — a detail lookup or the raw
+  // CSV export bypass the in-memory category filter below.
+  const isPlainList = req.method === 'GET' && !masav_id && !exportType;
+  const user = await requireUser(req, res, getSupabase(), { roles: isPlainList ? INSTITUTION_READ_ROLES : WRITE_ROLES });
   if (!user) return;
 
-  const { mosad_number, masav_id, export: exportType, from, to } = req.query;
   if (!mosad_number) return res.status(400).json({ error: 'mosad_number is required' });
+
+  if (user.role === 'institution') {
+    if (!user.extraTabs?.includes('keva')) return res.status(403).json({ error: 'אין לך הרשאה לבצע פעולה זו' });
+    if (!user.allowedMosadim?.includes(mosad_number)) return res.status(403).json({ error: 'אין לך הרשאה לצפות במוסד זה' });
+  }
 
   let inst;
   try { inst = await getInst(mosad_number); } catch (e) { return res.status(400).json({ error: e.message }); }
@@ -37,7 +50,11 @@ export default async function handler(req, res) {
       try { return res.json(JSON.parse(text)); } catch { return res.json({ error: text }); }
     }
     const r = await callNedarim({ Action: 'GetMasavKevaNew', MosadNumber: inst.mosad_number, ApiPassword: inst.api_password });
-    return res.json(await r.json());
+    const payload = await r.json();
+    if (user.allowedGroupNames?.length && Array.isArray(payload?.data)) {
+      payload.data = filterRowsByColumn(payload.data, CATEGORY_COL, user.allowedGroupNames);
+    }
+    return res.json(payload);
   }
 
   if (req.method === 'POST') {

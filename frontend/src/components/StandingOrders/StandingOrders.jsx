@@ -5,6 +5,7 @@ import { filterRowsByDateRange, exportAoaXlsx } from '../../lib/exportXlsx.js';
 import CreditModal from './CreditModal.jsx';
 import BankModal from './BankModal.jsx';
 import SortThBase, { sortRows } from '../shared/SortTh.jsx';
+import { useAuth } from '../../contexts/AuthContext.jsx';
 
 const SortTh = (props) => <SortThBase className={styles.sortable} {...props} />;
 
@@ -33,7 +34,7 @@ function SummaryBar({ totalMonth, totalYear }) {
   );
 }
 
-function CreditTable({ rows, mosadNumber, onRefresh }) {
+function CreditTable({ rows, mosadNumber, onRefresh, canOpen }) {
   const [sort, setSort]           = useState({ col: null, dir: 'asc' });
   const [selectedId, setSelectedId] = useState(null);
 
@@ -64,7 +65,11 @@ function CreditTable({ rows, mosadNumber, onRefresh }) {
           </thead>
           <tbody>
             {sorted.map(row => (
-              <tr key={row.DT_RowId} className={styles.clickableRow} onClick={() => setSelectedId(row.DT_RowId)}>
+              <tr
+                key={row.DT_RowId}
+                className={canOpen ? styles.clickableRow : ''}
+                onClick={canOpen ? () => setSelectedId(row.DT_RowId) : undefined}
+              >
                 <td className={styles.muted}>{row.DT_RowId}</td>
                 <td className={styles.name}>{row['2'] ?? '—'}</td>
                 <td className={styles.amount}>{row['4'] ? fmt(parseFloat(row['4'])) : '—'}</td>
@@ -81,7 +86,7 @@ function CreditTable({ rows, mosadNumber, onRefresh }) {
         </table>
       </div>
 
-      {selectedId && (
+      {canOpen && selectedId && (
         <CreditModal
           kevaId={selectedId}
           mosadNumber={mosadNumber}
@@ -93,7 +98,7 @@ function CreditTable({ rows, mosadNumber, onRefresh }) {
   );
 }
 
-function BankTable({ rows, mosadNumber, onRefresh }) {
+function BankTable({ rows, mosadNumber, onRefresh, canOpen }) {
   const [sort, setSort]           = useState({ col: null, dir: 'asc' });
   const [selectedId, setSelectedId] = useState(null);
 
@@ -122,7 +127,11 @@ function BankTable({ rows, mosadNumber, onRefresh }) {
           </thead>
           <tbody>
             {sorted.map(row => (
-              <tr key={row.DT_RowId} className={styles.clickableRow} onClick={() => setSelectedId(row.DT_RowId)}>
+              <tr
+                key={row.DT_RowId}
+                className={canOpen ? styles.clickableRow : ''}
+                onClick={canOpen ? () => setSelectedId(row.DT_RowId) : undefined}
+              >
                 <td className={styles.muted}>{row.DT_RowId}</td>
                 <td className={styles.name}>{row['2'] ?? '—'}</td>
                 <td className={styles.muted}>{row['3'] ?? '—'}</td>
@@ -137,7 +146,7 @@ function BankTable({ rows, mosadNumber, onRefresh }) {
         </table>
       </div>
 
-      {selectedId && (
+      {canOpen && selectedId && (
         <BankModal
           masavId={selectedId}
           mosadNumber={mosadNumber}
@@ -256,6 +265,8 @@ function filterRows(rows, q) {
 }
 
 export default function StandingOrders({ institutions }) {
+  const { role } = useAuth();
+  const canOpen = role !== 'institution'; // detail/edit modals write via server actions that are staff-only anyway
   const [mosadFilter, setMosadFilter] = useState('');
   const [activeType, setActiveType]   = useState('credit');
   const [creditData, setCreditData]   = useState(null);
@@ -265,6 +276,14 @@ export default function StandingOrders({ institutions }) {
   const [search, setSearch]           = useState('');
 
   const eligibleInstitutions = (institutions ?? []).filter(i => i.has_api_password);
+
+  // Institution role always has exactly one eligible institution (their own,
+  // scoped server-side) — pick it automatically instead of making them choose.
+  useEffect(() => {
+    if (role === 'institution' && !mosadFilter && eligibleInstitutions.length === 1) {
+      setMosadFilter(eligibleInstitutions[0].mosad_number);
+    }
+  }, [role, mosadFilter, eligibleInstitutions]);
 
   const load = useCallback(() => {
     if (!mosadFilter) { setCreditData(null); setBankData(null); return; }
@@ -283,12 +302,14 @@ export default function StandingOrders({ institutions }) {
   return (
     <div className={styles.wrapper}>
       <div className={styles.toolbar}>
-        <select className={styles.select} value={mosadFilter} onChange={e => setMosadFilter(e.target.value)}>
-          <option value="">בחר מוסד</option>
-          {eligibleInstitutions.map(i => (
-            <option key={i.mosad_number} value={i.mosad_number}>{i.mosad_name}</option>
-          ))}
-        </select>
+        {role !== 'institution' && (
+          <select className={styles.select} value={mosadFilter} onChange={e => setMosadFilter(e.target.value)}>
+            <option value="">בחר מוסד</option>
+            {eligibleInstitutions.map(i => (
+              <option key={i.mosad_number} value={i.mosad_number}>{i.mosad_name}</option>
+            ))}
+          </select>
+        )}
 
         {mosadFilter && !loading && (
           <>
@@ -313,7 +334,7 @@ export default function StandingOrders({ institutions }) {
                 בנקאי ({bankRows.length})
               </button>
             </div>
-            <ExportMenu mosadNumber={mosadFilter} type={activeType} />
+            {role !== 'institution' && <ExportMenu mosadNumber={mosadFilter} type={activeType} />}
           </>
         )}
       </div>
@@ -329,7 +350,7 @@ export default function StandingOrders({ institutions }) {
           )}
           {creditData?.error
             ? <p className={styles.errorMsg}>{creditData.error}</p>
-            : <CreditTable rows={creditRows} mosadNumber={mosadFilter} onRefresh={load} />
+            : <CreditTable rows={creditRows} mosadNumber={mosadFilter} onRefresh={load} canOpen={canOpen} />
           }
         </>
       )}
@@ -338,7 +359,7 @@ export default function StandingOrders({ institutions }) {
         <>
           {bankData?.error
             ? <p className={styles.errorMsg}>{bankData.error}</p>
-            : <BankTable rows={bankRows} mosadNumber={mosadFilter} onRefresh={load} />
+            : <BankTable rows={bankRows} mosadNumber={mosadFilter} onRefresh={load} canOpen={canOpen} />
           }
         </>
       )}

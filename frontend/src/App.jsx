@@ -170,7 +170,9 @@ function Dashboard({ user, signOut, role, allowedMosadim, extraTabs }) {
         <Suspense fallback={<div className={styles.loadingText} style={{ padding: 40, textAlign: 'center' }}>טוען…</div>}>
           {activeTab === 'stripe'    && <StripeDonations />}
           {activeTab === 'bank'      && <BankTransfers institutions={visibleInstitutions} />}
-          {activeTab === 'keva'      && <StandingOrders institutions={visibleInstitutions} />}
+          {activeTab === 'keva' && (role !== 'institution' || extraTabs?.includes('keva')) && (
+            <StandingOrders institutions={visibleInstitutions} />
+          )}
           {activeTab === 'receipts'  && <Receipts />}
           {activeTab === 'grow'      && <GrowTransactions />}
           {activeTab === 'funds'     && <FundsManagement />}
