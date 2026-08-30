@@ -130,7 +130,7 @@ function GroupNamesSelect({ groupNames, value, onChange }) {
   );
 }
 
-const EMPTY_FORM = { email: '', full_name: '', role: 'viewer', allowed_mosadim: null, allowed_group_names: null, password: '' };
+const EMPTY_FORM = { email: '', full_name: '', role: 'viewer', allowed_mosadim: null, allowed_group_names: null, extra_tabs: null, password: '' };
 
 function UserForm({ institutions, groupNames, initial, onSave, onCancel, saving }) {
   const [form, setForm] = useState(initial ?? EMPTY_FORM);
@@ -239,6 +239,25 @@ function UserForm({ institutions, groupNames, initial, onSave, onCancel, saving 
         </div>
       )}
 
+      {isInstitution && (
+        <div className={styles.formRow}>
+          <div className={styles.formField}>
+            <label className={styles.formLabel}>לשוניות נוספות</label>
+            <label className={styles.roleOption} style={{ minWidth: 0 }}>
+              <input
+                type="checkbox"
+                checked={(form.extra_tabs ?? []).includes('bank-refusals')}
+                onChange={(e) => set('extra_tabs', e.target.checked ? ['bank-refusals'] : null)}
+              />
+              <div>
+                <span className={styles.roleLabel}>סירובים בנקאי</span>
+                <span className={styles.roleDesc}>גישת צפייה בלבד לדוח הוראות הקבע שחזרו</span>
+              </div>
+            </label>
+          </div>
+        </div>
+      )}
+
       <div className={styles.formActions}>
         <button type="submit" className={styles.btnPrimary} disabled={saving}>
           {saving ? 'שומר...' : isEdit ? 'שמור שינויים' : 'הוסף משתמש'}
@@ -303,6 +322,7 @@ export default function UserManagement({ institutions, groupNames }) {
           role:                form.role,
           allowed_mosadim:     form.allowed_mosadim,
           allowed_group_names: form.allowed_group_names,
+          extra_tabs:          form.extra_tabs,
         });
       } else {
         await createAdminUser(form);

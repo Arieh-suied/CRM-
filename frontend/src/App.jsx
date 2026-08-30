@@ -51,7 +51,7 @@ function UserAvatar({ email }) {
   return <div className={styles.avatar}>{initial}</div>;
 }
 
-function Dashboard({ user, signOut, role, allowedMosadim }) {
+function Dashboard({ user, signOut, role, allowedMosadim, extraTabs }) {
   const [activeTab, setActiveTab]   = useState(tabFromHash);
   const [filters, setFilters]       = useState(EMPTY_FILTERS);
   const [sort, setSort]             = useState(DEFAULT_SORT);
@@ -139,7 +139,7 @@ function Dashboard({ user, signOut, role, allowedMosadim }) {
       </header>
 
       <main className={styles.main}>
-        <NavTabs active={activeTab} onChange={handleTabChange} role={role} />
+        <NavTabs active={activeTab} onChange={handleTabChange} role={role} extraTabs={extraTabs} />
 
         {loadError && <div className={styles.error}>{loadError}</div>}
 
@@ -175,7 +175,9 @@ function Dashboard({ user, signOut, role, allowedMosadim }) {
           {activeTab === 'grow'      && <GrowTransactions />}
           {activeTab === 'funds'     && <FundsManagement />}
           {activeTab === 'failures'  && <PaymentFailures />}
-          {activeTab === 'bank-refusals' && <BankRefusals institutions={visibleInstitutions} />}
+          {activeTab === 'bank-refusals' && (role !== 'institution' || extraTabs?.includes('bank-refusals')) && (
+            <BankRefusals institutions={visibleInstitutions} />
+          )}
           {activeTab === 'summary' && role === 'institution' && <InstitutionSummary />}
           {activeTab === 'email-template' && ['admin', 'editor'].includes(role) && (
             <EmailTemplate institutions={visibleInstitutions} />
@@ -194,7 +196,7 @@ function Dashboard({ user, signOut, role, allowedMosadim }) {
 }
 
 export default function App() {
-  const { user, isAllowed, role, allowedMosadim, loading, signOut } = useAuth();
+  const { user, isAllowed, role, allowedMosadim, extraTabs, loading, signOut } = useAuth();
 
   if (loading) {
     return (
@@ -207,5 +209,5 @@ export default function App() {
   if (!user)      return <LoginScreen />;
   if (!isAllowed) return <AccessDenied />;
 
-  return <Dashboard user={user} signOut={signOut} role={role} allowedMosadim={allowedMosadim} />;
+  return <Dashboard user={user} signOut={signOut} role={role} allowedMosadim={allowedMosadim} extraTabs={extraTabs} />;
 }

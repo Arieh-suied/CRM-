@@ -21,9 +21,9 @@ const ALL_TABS = [
   { id: 'users',        label: 'ניהול משתמשים', roles: ['admin'] },
 ];
 
-export default function NavTabs({ active, onChange, role }) {
+export default function NavTabs({ active, onChange, role, extraTabs = [] }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const tabs = ALL_TABS.filter((t) => !t.roles || t.roles.includes(role));
+  const tabs = ALL_TABS.filter((t) => !t.roles || t.roles.includes(role) || extraTabs.includes(t.id));
   const activeTab = tabs.find((t) => t.id === active);
 
   function handleChange(id) {

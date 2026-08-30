@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import styles from './BankRefusals.module.css';
 import { fetchBankRefusals, syncBankRefusals, resolveBankRefusal } from '../../services/api.js';
 import SortTh, { sortRows } from '../shared/SortTh.jsx';
+import { useAuth } from '../../contexts/AuthContext.jsx';
 
 // אור אפרים + חכמי ירושלים — תרומות והשכ"ל, ללא הודעת סירוב אוטומטית (בשונה מאשראי)
 // סומך נופלים (כולל יפה ותמה, קרן משנה תחתיו — אותו מוסד/מספר) — כל המיילים
@@ -75,6 +76,8 @@ function exportCsv(rows, mosadNumber, period) {
 }
 
 export default function BankRefusals({ institutions }) {
+  const { role } = useAuth();
+  const canAct = role !== 'institution'; // view-only for the institution portal — server also 403s writes/sync for it
   const [mosadFilter, setMosadFilter] = useState('');
   const [period, setPeriod]           = useState(defaultPeriod());
   const [rows, setRows]               = useState([]);
@@ -172,9 +175,11 @@ export default function BankRefusals({ institutions }) {
               />
               {search && <button className={styles.clearBtn} onClick={() => setSearch('')}>✕</button>}
             </div>
-            <button className={styles.syncBtn} onClick={handleSync} disabled={syncing}>
-              {syncing ? 'מסנכרן...' : 'סנכרן מנדרים+'}
-            </button>
+            {canAct && (
+              <button className={styles.syncBtn} onClick={handleSync} disabled={syncing}>
+                {syncing ? 'מסנכרן...' : 'סנכרן מנדרים+'}
+              </button>
+            )}
             <button className={styles.exportBtn} onClick={() => exportCsv(visibleRows, mosadFilter, period)} disabled={!visibleRows.length}>
               ייצוא CSV
             </button>
@@ -217,7 +222,9 @@ export default function BankRefusals({ institutions }) {
                   <td className={styles.muted}>{row.masav_id}</td>
                   <td><StatusBadge row={row} /></td>
                   <td>
-                    {row.status === 'pending' ? (
+                    {row.status === 'pending' && !canAct ? (
+                      <span className={styles.muted}>טרם הוכרע</span>
+                    ) : row.status === 'pending' ? (
                       <div className={styles.actions}>
                         {row.existing_receipt_number ? (
                           <span className={styles.muted}>קבלה כבר קיימת בנדרים+ (#{row.existing_receipt_number})</span>

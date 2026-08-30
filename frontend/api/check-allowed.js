@@ -18,7 +18,7 @@ export default async function handler(req, res) {
 
   const { data } = await supabase
     .from('allowed_users')
-    .select('is_active, role, allowed_mosadim')
+    .select('is_active, role, allowed_mosadim, extra_tabs')
     .eq('email', user.email.trim())
     .maybeSingle();
 
@@ -30,5 +30,6 @@ export default async function handler(req, res) {
     allowed:          true,
     role:             data.role ?? 'viewer',
     allowed_mosadim:  data.allowed_mosadim ?? null,
+    extra_tabs:       data.extra_tabs ?? [],
   });
 }

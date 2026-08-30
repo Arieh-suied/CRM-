@@ -31,7 +31,7 @@ export default async function handler(req, res) {
   if (req.method === 'GET') {
     const { data, error } = await supabase
       .from('allowed_users')
-      .select('id, email, full_name, role, is_active, allowed_mosadim, allowed_group_names, auth_user_id, created_at')
+      .select('id, email, full_name, role, is_active, allowed_mosadim, allowed_group_names, extra_tabs, auth_user_id, created_at')
       .order('created_at', { ascending: false });
 
     if (error) return res.status(500).json({ error: error.message });
@@ -40,7 +40,7 @@ export default async function handler(req, res) {
 
   // POST — add user
   if (req.method === 'POST') {
-    const { email, full_name, role, allowed_mosadim, allowed_group_names, password } = req.body;
+    const { email, full_name, role, allowed_mosadim, allowed_group_names, extra_tabs, password } = req.body;
     if (!email) return res.status(400).json({ error: 'Email required' });
 
     const validRoles = ['admin', 'editor', 'viewer', 'institution'];
@@ -71,6 +71,7 @@ export default async function handler(req, res) {
         is_active:           true,
         allowed_mosadim:     allowed_mosadim?.length ? allowed_mosadim : null,
         allowed_group_names: allowed_group_names?.length ? allowed_group_names : null,
+        extra_tabs:          extra_tabs?.length ? extra_tabs : null,
         auth_user_id:        authUserId,
       })
       .select()
@@ -101,7 +102,7 @@ export default async function handler(req, res) {
       return res.json({ success: true });
     }
 
-    const { full_name, role, is_active, allowed_mosadim, allowed_group_names } = req.body;
+    const { full_name, role, is_active, allowed_mosadim, allowed_group_names, extra_tabs } = req.body;
     const updates = {};
     if (full_name      !== undefined) updates.full_name       = full_name || null;
     if (role           !== undefined) updates.role            = role;
@@ -111,6 +112,9 @@ export default async function handler(req, res) {
     }
     if (allowed_group_names !== undefined) {
       updates.allowed_group_names = allowed_group_names?.length ? allowed_group_names : null;
+    }
+    if (extra_tabs !== undefined) {
+      updates.extra_tabs = extra_tabs?.length ? extra_tabs : null;
     }
 
     const { data, error } = await supabase

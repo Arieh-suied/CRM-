@@ -1,5 +1,5 @@
 import { getSupabase } from './_supabase.js';
-import { requireUser, WRITE_ROLES } from './_auth.js';
+import { requireUser, WRITE_ROLES, INSTITUTION_READ_ROLES } from './_auth.js';
 import { BANK_URL, getInstitution, callNedarim as callNedarimRaw } from './_nedarim.js';
 import { issueReceipt, branchByMosadNumber } from './_receipts-core.js';
 
@@ -102,10 +102,26 @@ export async function sync(inst, period) {
 }
 
 export default async function handler(req, res) {
-  const caller = await requireUser(req, res, getSupabase(), req.method === 'GET' ? {} : { roles: WRITE_ROLES });
+  const { mosad_number, period, action } = req.query;
+
+  // Plain GET (view the month's report) is open to the institution role,
+  // scoped below to their own mosad — sync (still a GET, via ?action=sync)
+  // pulls fresh data from Nedarim+ and stays staff-only like every POST here.
+  const isPlainView = req.method === 'GET' && action !== 'sync';
+  const caller = await requireUser(req, res, getSupabase(), { roles: isPlainView ? INSTITUTION_READ_ROLES : WRITE_ROLES });
   if (!caller) return;
 
-  const { mosad_number, period, action } = req.query;
+  // Beyond the role check, an institution caller also needs this specific
+  // tab granted (see allowed_users.extra_tabs — most institution accounts
+  // don't get bank-refusals) and must be viewing their own mosad only.
+  if (caller.role === 'institution') {
+    if (!caller.extraTabs?.includes('bank-refusals')) {
+      return res.status(403).json({ error: 'אין לך הרשאה לבצע פעולה זו' });
+    }
+    if (!caller.allowedMosadim?.includes(mosad_number)) {
+      return res.status(403).json({ error: 'אין לך הרשאה לצפות במוסד זה' });
+    }
+  }
 
   if (req.method === 'GET') {
     if (!mosad_number || !period) return res.status(400).json({ error: 'mosad_number and period are required' });

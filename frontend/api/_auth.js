@@ -11,7 +11,7 @@ export async function getRequestUser(req, supabase) {
 
   const { data } = await supabase
     .from('allowed_users')
-    .select('role, is_active, allowed_mosadim, allowed_group_names')
+    .select('role, is_active, allowed_mosadim, allowed_group_names, extra_tabs')
     .eq('email', user.email.trim())
     .maybeSingle();
 
@@ -21,6 +21,7 @@ export async function getRequestUser(req, supabase) {
     role: data.role ?? 'viewer',
     allowedMosadim: data.allowed_mosadim ?? null,
     allowedGroupNames: data.allowed_group_names ?? null,
+    extraTabs: data.extra_tabs ?? [],
   };
 }
 

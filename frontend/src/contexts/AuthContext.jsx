@@ -13,14 +13,15 @@ async function checkAllowed(accessToken) {
       },
     });
     const data = await res.json();
-    if (data?.allowed !== true) return { allowed: false, role: null, allowedMosadim: null };
+    if (data?.allowed !== true) return { allowed: false, role: null, allowedMosadim: null, extraTabs: [] };
     return {
       allowed:         true,
       role:            data.role ?? 'viewer',
       allowedMosadim:  data.allowed_mosadim ?? null,
+      extraTabs:       data.extra_tabs ?? [],
     };
   } catch {
-    return { allowed: false, role: null, allowedMosadim: null };
+    return { allowed: false, role: null, allowedMosadim: null, extraTabs: [] };
   }
 }
 
@@ -29,6 +30,7 @@ export function AuthProvider({ children }) {
   const [isAllowed, setIsAllowed]         = useState(false);
   const [role, setRole]                   = useState(null);
   const [allowedMosadim, setAllowedMosadim] = useState(null);
+  const [extraTabs, setExtraTabs]         = useState([]);
   const [loading, setLoading]             = useState(true);
 
   async function applySession(session) {
@@ -38,11 +40,13 @@ export function AuthProvider({ children }) {
       setIsAllowed(result.allowed);
       setRole(result.role);
       setAllowedMosadim(result.allowedMosadim);
+      setExtraTabs(result.extraTabs);
     } else {
       setUser(null);
       setIsAllowed(false);
       setRole(null);
       setAllowedMosadim(null);
+      setExtraTabs([]);
     }
   }
 
@@ -77,7 +81,7 @@ export function AuthProvider({ children }) {
   const signOut = () => supabase.auth.signOut();
 
   return (
-    <AuthContext.Provider value={{ user, isAllowed, role, allowedMosadim, loading, signIn, signInWithPassword, signOut }}>
+    <AuthContext.Provider value={{ user, isAllowed, role, allowedMosadim, extraTabs, loading, signIn, signInWithPassword, signOut }}>
       {children}
     </AuthContext.Provider>
   );
