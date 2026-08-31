@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import styles from './Receipts.module.css';
 import { supabase } from '../../lib/supabase.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import { analyzeTransferScreenshot, ALLOWED_IMAGE_TYPES } from './imageUtils.js';
 import { authFetch } from '../../services/api.js';
+import { debounceByKey } from '../../lib/debounce.js';
 
 const BRANCHES = [
   'סומך נופלים',
@@ -336,7 +337,7 @@ export default function BatchReceipts() {
     setEntries(prev => prev.map(e => e.id === id ? { ...e, [field]: dbVal } : e));
   };
 
-  const searchNameSuggestions = useCallback(async (entryId, q) => {
+  const runNameSearch = useCallback(async (entryId, q) => {
     if (q.length < 2) { setNameSuggestions(prev => ({ ...prev, [entryId]: [] })); return; }
     const { data } = await supabase.from('customers')
       .select('*')
@@ -344,6 +345,12 @@ export default function BatchReceipts() {
       .limit(6);
     setNameSuggestions(prev => ({ ...prev, [entryId]: data || [] }));
   }, []);
+  // Debounced per-entry (a separate timer per row) so typing in one row's
+  // name field doesn't cancel a pending search for another row.
+  const searchNameSuggestions = useMemo(
+    () => debounceByKey(runNameSearch, 300, (entryId) => entryId),
+    [runNameSearch]
+  );
 
   const applyNameSuggestion = async (entry, customer) => {
     const patch = { customer_name: customer.name };

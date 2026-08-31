@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import styles from './Receipts.module.css';
 import { authFetch } from '../../services/api.js';
 import { supabase } from '../../lib/supabase.js';
+import { debounce } from '../../lib/debounce.js';
 import { TRANSFER_INSTITUTIONS } from '../../constants/transferInstitutions.js';
 
 const FIELDS = [
@@ -39,7 +40,7 @@ function CustomerNameField({ value, onChange, onSelect, disabled }) {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  async function search(q) {
+  async function runSearch(q) {
     if (q.trim().length < 2) { setSuggestions([]); setShowSugg(false); return; }
     const { data } = await supabase.from('customers')
       .select('*')
@@ -48,6 +49,9 @@ function CustomerNameField({ value, onChange, onSelect, disabled }) {
     if (data?.length) { setSuggestions(data); setShowSugg(true); }
     else { setSuggestions([]); setShowSugg(false); }
   }
+  // Debounced so fast typing doesn't fire a query per keystroke.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const search = useMemo(() => debounce(runSearch, 300), []);
 
   return (
     <div ref={wrapRef} style={{ position: 'relative' }}>
