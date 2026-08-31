@@ -53,6 +53,7 @@ export default function PaymentFailures() {
   const [dateTo, setDateTo]       = useState('');
   const [sort, setSort]           = useState({ col: 'created_at', dir: 'desc' });
   const [loading, setLoading]     = useState(false);
+  const [errorMsg, setErrorMsg]   = useState('');
   const [syncing, setSyncing]     = useState(false);
   const [exporting, setExporting] = useState(false);
   const [syncResult, setSyncResult] = useState(null);
@@ -74,12 +75,16 @@ export default function PaymentFailures() {
 
   const load = useCallback(async (p = 1) => {
     setLoading(true);
+    setErrorMsg('');
     try {
       const res = await fetchPaymentFailures({ page: p, ...filterParams() });
       setData(res.data ?? []);
       setTotal(res.total ?? 0);
       setTotalPages(res.totalPages ?? 1);
       setPage(p);
+    } catch (e) {
+      setErrorMsg(e.message);
+      setData([]);
     } finally {
       setLoading(false);
     }
@@ -214,6 +219,8 @@ export default function PaymentFailures() {
           <tbody>
             {loading ? (
               <tr><td colSpan={11} className={styles.center}>טוען...</td></tr>
+            ) : errorMsg ? (
+              <tr><td colSpan={11} className={styles.errorMsg}>{errorMsg}</td></tr>
             ) : !data.length ? (
               <tr><td colSpan={11} className={styles.center}>אין סירובים</td></tr>
             ) : data.map((row) => (

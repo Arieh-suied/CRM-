@@ -28,6 +28,7 @@ function DonationsView() {
   const [search, setSearch]     = useState('');
   const [query, setQuery]       = useState('');
   const [loading, setLoading]   = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
   const [syncing, setSyncing]   = useState(false);
   const [syncMsg, setSyncMsg]   = useState('');
   const [exporting, setExporting] = useState(false);
@@ -39,15 +40,23 @@ function DonationsView() {
 
   const load = useCallback(async (p = 1) => {
     setLoading(true);
-    const params = { page: p, sort_by: sort.col, sort_dir: sort.dir };
-    if (query) params.search = query;
-    const res = await authFetch(`/api/stripe-donations?${new URLSearchParams(params)}`);
-    const json = await res.json();
-    setData(json.data ?? []);
-    setTotal(json.total ?? 0);
-    setTotalPages(json.totalPages ?? 1);
-    setPage(p);
-    setLoading(false);
+    setErrorMsg('');
+    try {
+      const params = { page: p, sort_by: sort.col, sort_dir: sort.dir };
+      if (query) params.search = query;
+      const res = await authFetch(`/api/stripe-donations?${new URLSearchParams(params)}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'שגיאה בטעינת הנתונים');
+      setData(json.data ?? []);
+      setTotal(json.total ?? 0);
+      setTotalPages(json.totalPages ?? 1);
+      setPage(p);
+    } catch (e) {
+      setErrorMsg(e.message);
+      setData([]);
+    } finally {
+      setLoading(false);
+    }
   }, [query, sort]);
 
   useEffect(() => { load(1); }, [load]);
@@ -125,6 +134,8 @@ function DonationsView() {
           <tbody>
             {loading ? (
               <tr><td colSpan={5} className={styles.center}>טוען...</td></tr>
+            ) : errorMsg ? (
+              <tr><td colSpan={5} className={styles.errorMsg}>{errorMsg}</td></tr>
             ) : !data.length ? (
               <tr><td colSpan={5} className={styles.center}>אין נתונים</td></tr>
             ) : data.map(row => (
@@ -156,6 +167,7 @@ function SubscriptionsView() {
   const [data, setData]       = useState([]);
   const [total, setTotal]     = useState(0);
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
   const [exporting, setExporting] = useState(false);
@@ -168,13 +180,21 @@ function SubscriptionsView() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const params = { view: 'subscriptions' };
-    if (search) params.search = search;
-    const res  = await authFetch(`/api/stripe-donations?${new URLSearchParams(params)}`);
-    const json = await res.json();
-    setData(json.data ?? []);
-    setTotal(json.total ?? 0);
-    setLoading(false);
+    setErrorMsg('');
+    try {
+      const params = { view: 'subscriptions' };
+      if (search) params.search = search;
+      const res  = await authFetch(`/api/stripe-donations?${new URLSearchParams(params)}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'שגיאה בטעינת הנתונים');
+      setData(json.data ?? []);
+      setTotal(json.total ?? 0);
+    } catch (e) {
+      setErrorMsg(e.message);
+      setData([]);
+    } finally {
+      setLoading(false);
+    }
   }, [search]);
 
   useEffect(() => { load(); }, [load]);
@@ -264,6 +284,8 @@ function SubscriptionsView() {
           <tbody>
             {loading ? (
               <tr><td colSpan={7} className={styles.center}>טוען...</td></tr>
+            ) : errorMsg ? (
+              <tr><td colSpan={7} className={styles.errorMsg}>{errorMsg}</td></tr>
             ) : !sorted.length ? (
               <tr><td colSpan={7} className={styles.center}>אין מנויים פעילים</td></tr>
             ) : sorted.map(row => {

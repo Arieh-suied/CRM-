@@ -40,6 +40,7 @@ export default function BankTransfers({ institutions }) {
   const [query, setQuery]         = useState('');
   const [mosadFilter, setMosadFilter] = useState('');
   const [loading, setLoading]     = useState(false);
+  const [errorMsg, setErrorMsg]   = useState('');
   const [receipt, setReceipt]     = useState(null);
   const [exporting, setExporting] = useState(false);
   const [sort, setSort]           = useState({ col: 'created_at', dir: 'desc' });
@@ -58,17 +59,25 @@ export default function BankTransfers({ institutions }) {
 
   const load = useCallback(async (p = 1) => {
     setLoading(true);
-    const params = { page: p, sort_by: sort.col, sort_dir: sort.dir };
-    if (query)       params.search       = query;
-    if (mosadFilter) params.mosad_number = mosadFilter;
-    const qs = new URLSearchParams(params).toString();
-    const res = await authFetch(`/api/bank-transfers?${qs}`);
-    const json = await res.json();
-    setData(json.data ?? []);
-    setTotal(json.total ?? 0);
-    setTotalPages(json.totalPages ?? 1);
-    setPage(p);
-    setLoading(false);
+    setErrorMsg('');
+    try {
+      const params = { page: p, sort_by: sort.col, sort_dir: sort.dir };
+      if (query)       params.search       = query;
+      if (mosadFilter) params.mosad_number = mosadFilter;
+      const qs = new URLSearchParams(params).toString();
+      const res = await authFetch(`/api/bank-transfers?${qs}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'שגיאה בטעינת הנתונים');
+      setData(json.data ?? []);
+      setTotal(json.total ?? 0);
+      setTotalPages(json.totalPages ?? 1);
+      setPage(p);
+    } catch (e) {
+      setErrorMsg(e.message);
+      setData([]);
+    } finally {
+      setLoading(false);
+    }
   }, [query, mosadFilter, sort]);
 
   useEffect(() => { load(1); }, [load]);
@@ -165,6 +174,8 @@ export default function BankTransfers({ institutions }) {
           <tbody>
             {loading ? (
               <tr><td colSpan={12} className={styles.center}>טוען...</td></tr>
+            ) : errorMsg ? (
+              <tr><td colSpan={12} className={styles.errorMsg}>{errorMsg}</td></tr>
             ) : !data.length ? (
               <tr><td colSpan={12} className={styles.center}>אין נתונים</td></tr>
             ) : data.map((row) => (

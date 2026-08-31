@@ -31,6 +31,7 @@ export default function GrowTransactions() {
   const [query, setQuery]     = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
   const [exporting, setExporting] = useState(false);
   const [sort, setSort]       = useState({ col: 'created_at', dir: 'desc' });
   const [receipt, setReceipt] = useState(null);
@@ -43,6 +44,7 @@ export default function GrowTransactions() {
 
   const load = useCallback(async (p = 1) => {
     setLoading(true);
+    setErrorMsg('');
     const from = (p - 1) * PAGE_SIZE;
     let q = supabase
       .from('grow_transactions')
@@ -54,7 +56,10 @@ export default function GrowTransactions() {
     if (query) q = q.or(`full_name.ilike.%${query}%,payer_email.ilike.%${query}%,transaction_code.ilike.%${query}%,asmachta.ilike.%${query}%`);
 
     const { data: rows, count, error } = await q;
-    if (!error) {
+    if (error) {
+      setErrorMsg(error.message);
+      setData([]);
+    } else {
       setData(rows ?? []);
       setTotal(count ?? 0);
       setTotalPages(Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE)));
@@ -149,6 +154,8 @@ export default function GrowTransactions() {
           <tbody>
             {loading ? (
               <tr><td colSpan={8} className={styles.center}>טוען...</td></tr>
+            ) : errorMsg ? (
+              <tr><td colSpan={8} className={styles.errorMsg}>{errorMsg}</td></tr>
             ) : !data.length ? (
               <tr><td colSpan={8} className={styles.center}>אין נתונים</td></tr>
             ) : data.map((row) => (

@@ -169,6 +169,13 @@
   color: var(--color-text-muted);
 }
 
+.errorMsg {
+  text-align: center;
+  padding: 24px;
+  color: #e53e3e;
+  font-size: 13px;
+}
+
 .pagination {
   display: flex;
   align-items: center;
