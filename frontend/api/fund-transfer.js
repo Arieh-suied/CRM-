@@ -1,8 +1,14 @@
 // Manual fund-sheet entry — appends a row to a fund's sheet, replacing the
 // manual step of opening the sheet and typing it in by hand. Same sheet/tab
-// as the automated donation routing (see _transaction-route.js); every fund
-// sheet shares the A=date/B=name/C=amount layout written by provisionSheet()
-// in funds.js.
+// as the automated donation routing (see _transaction-route.js).
+//
+// Not every fund's sheet has the plain A=date/B=name/C=amount layout
+// provisionSheet() writes for new funds — some older funds have an extra
+// fixed column (e.g. a payment-type label) in between. Rather than assume
+// one layout, this reuses the same `columns` spec each fund already carries
+// for automated routing (funds.columns — see funds.js buildColumns /
+// _fund-routing.js) to place values in the right cells for that fund's
+// actual sheet.
 //
 // Two directions:
 //   'transfer' — money going out to a beneficiary (negative amount, name
@@ -18,12 +24,29 @@ import { appendRow } from './_google-sheets.js';
 
 const DEFAULT_DESCRIPTION = 'בוצע העברה';
 const DIRECTIONS = new Set(['transfer', 'donation']);
+const DEFAULT_COLUMNS = [{ type: 'date' }, { type: 'name' }, { type: 'amount' }];
 
 // Sheet rows use DD/MM/YYYY everywhere; the date input gives YYYY-MM-DD.
 function toDmy(raw) {
   const m = String(raw || '').trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!m) return null;
   return `${m[3]}/${m[2]}/${m[1]}`;
+}
+
+// Places {date, name, amount} into the cells the fund's own column spec
+// expects. A fixed 'literal' column (e.g. a payment-type label) is written
+// as-is, the same for every row, regardless of transfer/donation direction —
+// it's a property of the fund's sheet layout, not of this entry.
+function buildRow(columns, { dmyDate, name, amount }) {
+  return columns.map((col) => {
+    switch (col.type) {
+      case 'date':   return dmyDate;
+      case 'name':   return name;
+      case 'literal': return col.text ?? '';
+      case 'amount': return amount;
+      default:       return '';
+    }
+  });
 }
 
 export const config = { maxDuration: 30 };
@@ -54,13 +77,14 @@ export default async function handler(req, res) {
 
   const { data: fund, error: fundError } = await supabase
     .from('funds')
-    .select('spreadsheet_id, sheet_name, name')
+    .select('spreadsheet_id, sheet_name, name, columns')
     .eq('id', fundId)
     .single();
   if (fundError || !fund) return res.status(404).json({ error: 'הקרן לא נמצאה' });
 
   const signedAmount = dir === 'donation' ? Math.abs(numAmount) : -Math.abs(numAmount);
-  const row = [dmyDate, name || DEFAULT_DESCRIPTION, signedAmount];
+  const columns = Array.isArray(fund.columns) && fund.columns.length ? fund.columns : DEFAULT_COLUMNS;
+  const row = buildRow(columns, { dmyDate, name: name || DEFAULT_DESCRIPTION, amount: signedAmount });
 
   try {
     await appendRow(fund.spreadsheet_id, fund.sheet_name, row);
