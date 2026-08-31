@@ -93,6 +93,21 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ ok: false, error: "Method not allowed" }), { status: 405, headers: json });
   }
 
+  // Nedarim can't send a Supabase JWT (hence --no-verify-jwt), so this is guarded
+  // by a shared secret instead: set NEDARIM_WEBHOOK_SECRET as a Supabase function
+  // secret and add ?secret=<value> to the callback URL configured in Nedarim's
+  // admin panel for each institution. While the secret is unset the endpoint
+  // stays open (unchanged behaviour) so production keeps working until it's
+  // wired up for every institution's callback URL.
+  const webhookSecret = Deno.env.get("NEDARIM_WEBHOOK_SECRET");
+  if (webhookSecret) {
+    const url = new URL(req.url);
+    const provided = req.headers.get("x-webhook-secret") || url.searchParams.get("secret");
+    if (provided !== webhookSecret) {
+      return new Response(JSON.stringify({ ok: false, error: "Unauthorized" }), { status: 401, headers: json });
+    }
+  }
+
   let body: unknown;
   try {
     body = await req.json();

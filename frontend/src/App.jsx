@@ -192,9 +192,11 @@ function Dashboard({ user, signOut, role, allowedMosadim, extraTabs }) {
         </Suspense>
       </main>
 
-      <Suspense fallback={null}>
-        <AIAssistant />
-      </Suspense>
+      {role !== 'institution' && (
+        <Suspense fallback={null}>
+          <AIAssistant />
+        </Suspense>
+      )}
     </div>
   );
 }

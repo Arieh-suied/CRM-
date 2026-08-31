@@ -29,6 +29,14 @@ import { getGmailAccessToken, gmailFetch, extractPlainText } from './_gmail.js';
 
 const WEBHOOK_URL = 'https://qpzrwnukasfftcybznjv.supabase.co/functions/v1/nedarim-webhook';
 
+// Once NEDARIM_WEBHOOK_SECRET is set as a Supabase function secret (see
+// nedarim-webhook/index.ts), the webhook requires it on every call this
+// recovery job makes too — the warm ping and the re-injection POST.
+const webhookHeaders = () => {
+  const secret = process.env.NEDARIM_WEBHOOK_SECRET;
+  return secret ? { 'x-webhook-secret': secret } : {};
+};
+
 // The failure email body: "CallBack URL: ...\nJson Data:\n{...}\nError: ..."
 function extractPayload(text) {
   const afterLabel = text.slice(text.indexOf('Json Data'));
@@ -68,7 +76,7 @@ export default async function handler(req, res) {
   try {
     // 1. Keep the edge function warm.
     try {
-      const ping = await fetch(WEBHOOK_URL);
+      const ping = await fetch(WEBHOOK_URL, { headers: webhookHeaders() });
       result.warmPing = ping.ok;
     } catch (err) {
       console.error('nedarim-recovery warm ping failed:', err);
@@ -107,7 +115,7 @@ export default async function handler(req, res) {
 
         const resp = await fetch(WEBHOOK_URL, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...webhookHeaders() },
           body: JSON.stringify(payload),
         });
         if (!resp.ok) throw new Error(`webhook responded ${resp.status}`);

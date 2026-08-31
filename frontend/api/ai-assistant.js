@@ -337,6 +337,13 @@ export default async function handler(req, res) {
     if (!requestUser) {
       return res.status(401).json({ error: 'יש להתחבר למערכת כדי להשתמש בעוזר' });
     }
+    // The assistant's tools query across every whitelisted table with no
+    // per-mosad/group row scoping (some of those tables, like customers,
+    // have no institution column to scope by at all) — an institution
+    // portal account must never reach it, only internal staff.
+    if (requestUser.role === 'institution') {
+      return res.status(403).json({ error: 'אין גישה לעוזר ה-AI' });
+    }
     const notes = await loadNotes(supabase);
 
     const cleanHistory = history
