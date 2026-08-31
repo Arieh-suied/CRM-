@@ -63,6 +63,18 @@ async function fetchWithRetry(url, options, label) {
   throw lastErr;
 }
 
+// appendRow writes with valueInputOption=USER_ENTERED, so a string starting
+// with =/+/-/@ is parsed as a formula by Sheets. Untrusted free-text values
+// (a donor/attacker-supplied name or comment) must go through this before
+// landing in a cell — a leading apostrophe forces Sheets to treat the value
+// as literal text (the apostrophe itself isn't shown). Don't apply this to
+// values a caller deliberately built as a formula (e.g. the receipt-link
+// HYPERLINK column), or to non-string values.
+export function sanitizeSheetCell(value) {
+  if (typeof value !== 'string') return value;
+  return /^[=+\-@]/.test(value) ? `'${value}` : value;
+}
+
 export async function appendRow(spreadsheetId, sheetName, values) {
   const token = await getAccessToken();
   const range = encodeURIComponent(`${sheetName}!A:A`);

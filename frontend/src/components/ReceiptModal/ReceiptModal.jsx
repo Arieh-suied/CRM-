@@ -1,13 +1,17 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import styles from './ReceiptModal.module.css';
-
-function proxyUrl(url, title) {
-  const filename = title?.replace(/[^\w֐-׿\s-]/g, '').trim() || 'קבלה';
-  return `/api/receipt-proxy?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`;
-}
+import { buildReceiptProxyUrl } from '../../lib/receiptProxy.js';
 
 export default function ReceiptModal({ url, title, onClose }) {
-  const proxied = proxyUrl(url, title);
+  const [proxied, setProxied] = useState(null);
+
+  useEffect(() => {
+    const filename = title?.replace(/[^\w֐-׿\s-]/g, '').trim() || 'קבלה';
+    let cancelled = false;
+    buildReceiptProxyUrl(url, filename).then((u) => { if (!cancelled) setProxied(u); });
+    return () => { cancelled = true; };
+  }, [url, title]);
+
   useEffect(() => {
     function handleKey(e) {
       if (e.key === 'Escape') onClose();

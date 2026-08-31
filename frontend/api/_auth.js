@@ -1,11 +1,17 @@
 // Resolves the logged-in user from a request's Authorization: Bearer <supabase-jwt>
 // header against allowed_users, for endpoints that need to know who's calling
 // (and whether they're admin) beyond just "has a valid Supabase session".
+//
+// Falls back to a ?token= query param when there's no Authorization header —
+// for the handful of endpoints hit by direct browser navigation (an <iframe>/
+// <a> to a PDF, say) rather than fetch(), which can't attach a custom header.
 
 export async function getRequestUser(req, supabase) {
   const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer ')) return null;
-  const token = authHeader.slice('Bearer '.length);
+  const token = authHeader?.startsWith('Bearer ')
+    ? authHeader.slice('Bearer '.length)
+    : req.query?.token;
+  if (!token) return null;
   const { data: { user } } = await supabase.auth.getUser(token);
   if (!user?.email) return null;
 

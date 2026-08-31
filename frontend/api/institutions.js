@@ -11,10 +11,16 @@ export default async function handler(req, res) {
     if (!user) return;
 
     if (req.method === 'GET') {
-      const { data, error } = await supabase
+      let query = supabase
         .from('institutions')
         .select('id, mosad_number, mosad_name, created_at, api_password')
         .order('mosad_name', { ascending: true });
+      // An institution account only needs its own row(s) to render its name —
+      // not the full roster of every other client on the platform.
+      if (user.role === 'institution' && user.allowedMosadim?.length) {
+        query = query.in('mosad_number', user.allowedMosadim);
+      }
+      const { data, error } = await query;
       if (error) return res.status(500).json({ error: error.message });
       const safe = (data ?? []).map(({ api_password, ...rest }) => ({
         ...rest,

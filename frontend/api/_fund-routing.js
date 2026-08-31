@@ -2,6 +2,8 @@
 // supabase/migrations/20260626000000_funds_table.sql) instead of a static
 // list, so creating a fund from the CRM UI takes effect immediately.
 
+import { sanitizeSheetCell } from './_google-sheets.js';
+
 function getField(row, field) {
   return row?.[field] ?? '';
 }
@@ -29,10 +31,12 @@ function fee(amount, pct, mult) {
 function buildRowValues(row, columns) {
   return columns.map((col) => {
     switch (col.type) {
-      case 'date': return row.transaction_time_raw;
-      case 'name': return row.client_name;
-      case 'comments': return row.comments;
-      case 'group_name': return row.group_name;
+      // These four come straight from donor/webhook-supplied fields —
+      // sanitize against Sheets formula injection (see sanitizeSheetCell).
+      case 'date': return sanitizeSheetCell(row.transaction_time_raw);
+      case 'name': return sanitizeSheetCell(row.client_name);
+      case 'comments': return sanitizeSheetCell(row.comments);
+      case 'group_name': return sanitizeSheetCell(row.group_name);
       case 'literal': return col.text;
       // keva_id is only set on charges belonging to a recurring standing order
       // (Nedarim's "Keva"); its absence means a one-off/web charge.

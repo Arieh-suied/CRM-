@@ -1,7 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import styles from './Receipts.module.css';
 import { supabase } from '../../lib/supabase.js';
 import { authFetch } from '../../services/api.js';
+import { debounce } from '../../lib/debounce.js';
+import { buildReceiptProxyUrl } from '../../lib/receiptProxy.js';
 import TransferScreenshotUpload from './TransferScreenshotUpload.jsx';
 
 const BRANCHES = [
@@ -42,6 +44,7 @@ export default function QuickReceipt() {
   const [loading, setLoading]   = useState(false);
   const [msg, setMsg]           = useState({ text: '', ok: false });
   const [lastReceipt, setLastReceipt] = useState(null);
+  const [lastReceiptLink, setLastReceiptLink] = useState(null);
 
   // Autocomplete
   const [suggestions, setSuggestions]       = useState([]);
@@ -57,7 +60,15 @@ export default function QuickReceipt() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const searchCustomers = useCallback(async (q) => {
+  useEffect(() => {
+    if (!lastReceipt?.url) { setLastReceiptLink(null); return; }
+    let cancelled = false;
+    buildReceiptProxyUrl(lastReceipt.url, `קבלה-${lastReceipt.docNumber}`)
+      .then((u) => { if (!cancelled) setLastReceiptLink(u); });
+    return () => { cancelled = true; };
+  }, [lastReceipt]);
+
+  const runCustomerSearch = useCallback(async (q) => {
     if (q.length < 2) { setSuggestions([]); setShowSugg(false); return; }
     const { data } = await supabase.from('customers')
       .select('*')
@@ -66,6 +77,8 @@ export default function QuickReceipt() {
     if (data?.length) { setSuggestions(data); setShowSugg(true); }
     else { setSuggestions([]); setShowSugg(false); }
   }, []);
+  // Debounced so fast typing doesn't fire a query per keystroke.
+  const searchCustomers = useMemo(() => debounce(runCustomerSearch, 300), [runCustomerSearch]);
 
   const lookupByAccount = useCallback(async (account) => {
     if (!account || account.length < 4 || name.trim()) return;
@@ -211,9 +224,9 @@ export default function QuickReceipt() {
           <div>
             <div style={{ fontWeight: 700, marginBottom: 4 }}>קבלה הופקה בהצלחה</div>
             <div style={{ fontSize: 13 }}>מספר קבלה: <strong>{lastReceipt.docNumber}</strong></div>
-            {lastReceipt.url && (
+            {lastReceiptLink && (
               <a
-                href={`/api/receipt-proxy?url=${encodeURIComponent(lastReceipt.url)}&filename=קבלה-${lastReceipt.docNumber}`}
+                href={lastReceiptLink}
                 target="_blank"
                 rel="noopener noreferrer"
                 className={styles.receiptSuccessLink}

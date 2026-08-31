@@ -20,7 +20,7 @@
 
 import { getSupabase } from './_supabase.js';
 import { requireUser, WRITE_ROLES } from './_auth.js';
-import { appendRow } from './_google-sheets.js';
+import { appendRow, sanitizeSheetCell } from './_google-sheets.js';
 
 const DEFAULT_DESCRIPTION = 'בוצע העברה';
 const DIRECTIONS = new Set(['transfer', 'donation']);
@@ -40,8 +40,8 @@ function toDmy(raw) {
 function buildRow(columns, { dmyDate, name, amount }) {
   return columns.map((col) => {
     switch (col.type) {
-      case 'date':   return dmyDate;
-      case 'name':   return name;
+      case 'date':   return sanitizeSheetCell(dmyDate);
+      case 'name':   return sanitizeSheetCell(name);
       case 'literal': return col.text ?? '';
       case 'amount': return amount;
       default:       return '';

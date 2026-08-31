@@ -1,7 +1,18 @@
+import { getSupabase } from './_supabase.js';
+import { getRequestUser } from './_auth.js';
+
 const ALLOWED_HOST = 'files.ezcount.co.il';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
+  // Hit via <iframe>/<a> navigation, not fetch() — see getRequestUser's
+  // ?token= fallback. Any logged-in staff account can view any receipt (no
+  // role check beyond "logged in"), matching how receipt links are surfaced
+  // throughout the app with no per-user ownership tracking on receipts.
+  const user = await getRequestUser(req, getSupabase());
+  if (!user) return res.status(401).json({ error: 'יש להתחבר כדי לצפות בקבלה' });
+
   const { url, filename } = req.query;
   if (!url) return res.status(400).json({ error: 'Missing url' });
 
