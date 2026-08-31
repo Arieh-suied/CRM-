@@ -14,6 +14,7 @@ const ALL_TABS = [
   { id: 'grow',         label: 'Grow', roles: STAFF_ROLES },
   { id: 'receipts',     label: 'קבלות', roles: STAFF_ROLES },
   { id: 'funds',        label: 'ניהול קרנות', roles: STAFF_ROLES },
+  { id: 'fund-transfer', label: 'העברה לנתמך', roles: ['admin', 'editor'] },
   { id: 'failures',     label: 'סירובים' },
   { id: 'bank-refusals', label: 'סירובים בנקאי', roles: STAFF_ROLES },
   { id: 'summary',      label: 'סיכום', roles: ['institution'] },

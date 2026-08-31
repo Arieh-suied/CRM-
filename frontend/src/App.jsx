@@ -21,6 +21,7 @@ const Receipts         = lazy(() => import('./components/Receipts/Receipts.jsx')
 const GrowTransactions = lazy(() => import('./components/GrowTransactions/GrowTransactions.jsx'));
 const UserManagement   = lazy(() => import('./components/UserManagement/UserManagement.jsx'));
 const FundsManagement  = lazy(() => import('./components/Funds/FundsManagement.jsx'));
+const FundTransferForm = lazy(() => import('./components/Funds/FundTransferForm.jsx'));
 const PaymentFailures  = lazy(() => import('./components/PaymentFailures/PaymentFailures.jsx'));
 const BankRefusals     = lazy(() => import('./components/BankRefusals/BankRefusals.jsx'));
 const AIAssistant      = lazy(() => import('./components/AIAssistant/AIAssistant.jsx'));
@@ -38,7 +39,7 @@ const DEFAULT_SORT = { sort_by: 'transaction_time_iso', sort_dir: 'desc' };
 // or back/forward keeps you on the same screen instead of resetting to עסקאות.
 const VALID_TABS = new Set([
   'transactions', 'stripe', 'bank', 'keva', 'grow',
-  'receipts', 'funds', 'failures', 'bank-refusals', 'email-template', 'users', 'summary',
+  'receipts', 'funds', 'fund-transfer', 'failures', 'bank-refusals', 'email-template', 'users', 'summary',
 ]);
 
 function tabFromHash() {
@@ -176,6 +177,7 @@ function Dashboard({ user, signOut, role, allowedMosadim, extraTabs }) {
           {activeTab === 'receipts'  && <Receipts />}
           {activeTab === 'grow'      && <GrowTransactions />}
           {activeTab === 'funds'     && <FundsManagement />}
+          {activeTab === 'fund-transfer' && <FundTransferForm />}
           {activeTab === 'failures'  && <PaymentFailures />}
           {activeTab === 'bank-refusals' && (role !== 'institution' || extraTabs?.includes('bank-refusals')) && (
             <BankRefusals institutions={visibleInstitutions} />

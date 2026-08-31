@@ -26,3 +26,5 @@ supabase/.temp/
 
 # Vercel CLI link
 .vercel
+
+.env*
