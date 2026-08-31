@@ -5,6 +5,11 @@ import { authFetch } from '../../services/api.js';
 
 const DEFAULT_DESCRIPTION = 'בוצע העברה';
 
+const DIRECTIONS = [
+  { value: 'transfer', label: 'העברה לנתמך' },
+  { value: 'donation', label: 'תרומה שהתקבלה (מזומן/העברה ידנית)' },
+];
+
 const today = () => new Date().toISOString().slice(0, 10);
 
 const formatILS = (n) => `₪${Math.abs(n).toLocaleString('he-IL', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
@@ -31,6 +36,7 @@ async function authHeaders() {
 export default function FundTransferForm() {
   const [funds, setFunds]     = useState([]);
   const [loading, setLoading] = useState(true);
+  const [direction, setDirection]   = useState('transfer');
   const [fundId, setFundId]         = useState('');
   const [date, setDate]             = useState(today);
   const [description, setDescription] = useState(DEFAULT_DESCRIPTION);
@@ -38,6 +44,8 @@ export default function FundTransferForm() {
   const [saving, setSaving]         = useState(false);
   const [msg, setMsg]               = useState({ text: '', ok: false });
   const amountRef = useRef(null);
+
+  const isDonation = direction === 'donation';
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -56,16 +64,25 @@ export default function FundTransferForm() {
 
   useEffect(() => { load(); }, [load]);
 
+  const changeDirection = (dir) => {
+    setDirection(dir);
+    // "transfer" always writes the same fixed label; "donation" needs the
+    // donor's actual name, so don't carry the fixed label over as a default.
+    setDescription(dir === 'transfer' ? DEFAULT_DESCRIPTION : '');
+  };
+
   const selectedFundName = useMemo(
     () => funds.find((f) => f.id === fundId)?.name ?? '',
     [funds, fundId]
   );
 
   const validAmount = Number(amount) > 0;
+  const validDescription = isDonation ? description.trim().length > 0 : true;
+  const canSubmit = fundId && validAmount && validDescription;
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!fundId || !validAmount) return;
+    if (!canSubmit) return;
 
     setSaving(true);
     setMsg({ text: '', ok: false });
@@ -73,13 +90,15 @@ export default function FundTransferForm() {
       const res = await fetch('/api/fund-transfer', {
         method: 'POST',
         headers: await authHeaders(),
-        body: JSON.stringify({ fundId, date, description, amount: Number(amount) }),
+        body: JSON.stringify({ fundId, date, description, amount: Number(amount), direction }),
       });
       const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error || 'שגיאה ברישום ההעברה');
-      setMsg({ text: `נרשמה העברה של ${formatILS(Number(amount))} מקרן "${data.fundName}"`, ok: true });
+      if (!res.ok || data.error) throw new Error(data.error || 'שגיאה ברישום');
+      const verb = isDonation ? 'נרשמה תרומה' : 'נרשמה העברה';
+      setMsg({ text: `${verb} של ${formatILS(Number(amount))} מקרן "${data.fundName}"`, ok: true });
       setAmount('');
       setDate(today());
+      if (isDonation) setDescription('');
       amountRef.current?.focus();
     } catch (err) {
       setMsg({ text: err.message, ok: false });
@@ -90,7 +109,20 @@ export default function FundTransferForm() {
 
   return (
     <div>
-      <h3 className={styles.sectionTitle}>העברה לנתמך</h3>
+      <h3 className={styles.sectionTitle}>תנועה בקרן</h3>
+
+      <div className={styles.subNav} style={{ padding: 0, border: 'none', background: 'none', marginBottom: 14 }}>
+        {DIRECTIONS.map((d) => (
+          <button
+            key={d.value}
+            type="button"
+            className={`${styles.subNavBtn} ${direction === d.value ? styles.subNavActive : ''}`}
+            onClick={() => changeDirection(d.value)}
+          >
+            {d.label}
+          </button>
+        ))}
+      </div>
 
       {msg.text && (
         <div className={msg.ok ? styles.successMsg : styles.errorMsg}>{msg.text}</div>
@@ -128,20 +160,27 @@ export default function FundTransferForm() {
           </div>
 
           <div className={`${styles.fieldGroup} ${styles.formGridFull}`}>
-            <label className={styles.fieldLabel}>תיאור (יופיע בגיליון)</label>
-            <input className={styles.fieldInput} style={fieldBorder} value={description} onChange={(e) => setDescription(e.target.value)} required />
+            <label className={styles.fieldLabel}>{isDonation ? 'שם התורם' : 'תיאור (יופיע בגיליון)'}</label>
+            <input
+              className={styles.fieldInput}
+              style={fieldBorder}
+              placeholder={isDonation ? 'שם התורם' : ''}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              required={isDonation}
+            />
           </div>
         </div>
 
         {fundId && validAmount && (
           <p style={{ fontSize: 12, color: 'var(--color-text-muted)', margin: '14px 0 0' }}>
-            ייכתב בגיליון של "{selectedFundName}": {formatDmy(date)} · {description || DEFAULT_DESCRIPTION} · ‎-{formatILS(Number(amount))}
+            {isDonation ? 'יתווסף' : 'ייכתב'} בגיליון של "{selectedFundName}": {formatDmy(date)} · {description || DEFAULT_DESCRIPTION} · ‎{isDonation ? '+' : '-'}{formatILS(Number(amount))}
           </p>
         )}
 
         <div style={{ marginTop: 16 }}>
-          <button type="submit" className={`${styles.btn} ${styles.btnPrimary}`} disabled={saving || loading || !fundId || !validAmount}>
-            {saving ? 'רושם...' : 'רשום העברה'}
+          <button type="submit" className={`${styles.btn} ${styles.btnPrimary}`} disabled={saving || loading || !canSubmit}>
+            {saving ? 'רושם...' : isDonation ? 'רשום תרומה' : 'רשום העברה'}
           </button>
         </div>
       </form>
