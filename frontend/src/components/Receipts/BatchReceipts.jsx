@@ -280,6 +280,10 @@ export default function BatchReceipts() {
     });
   };
 
+  const updatePreviewField = (idx, field, value) => {
+    setImportPreview(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r));
+  };
+
   // Screenshot upload — analyze multiple bank-transfer screenshots and queue them as pending receipts
   const handleImages = async (fileList) => {
     const files = Array.from(fileList || []).filter(f => ALLOWED_IMAGE_TYPES.includes(f.type));
@@ -525,16 +529,39 @@ export default function BatchReceipts() {
               <tbody>
                 {importPreview.map((r, i) => (
                   <tr key={i}>
-                    <td>
-                      {r.customer_name || '—'}
-                      {r._uncertain && <span title="שם לא מאומת מהצילום (שם בעל החשבון) - יש לבדוק" style={{ marginRight: 4 }}>⚠</span>}
+                    <td style={{ minWidth: 130 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <input className={styles.tableInput} defaultValue={r.customer_name || ''} placeholder="שם"
+                          onBlur={e => updatePreviewField(i, 'customer_name', e.target.value.trim())} />
+                        {r._uncertain && <span title="שם לא מאומת מהצילום (שם בעל החשבון) - יש לבדוק">⚠</span>}
+                      </div>
                     </td>
-                    <td>₪{r.amount}</td>
-                    <td>{r.transfer_date || '—'}</td>
-                    <td>{r.bank_name || '—'}</td>
-                    <td>{r.bank_account || '—'}</td>
-                    <td>{r.reference_number || '—'}</td>
-                    <td>{r.branch || '—'}</td>
+                    <td style={{ width: 90 }}>
+                      <input className={styles.tableInput} type="number" defaultValue={r.amount ?? ''} placeholder="סכום"
+                        onBlur={e => updatePreviewField(i, 'amount', e.target.value ? parseFloat(e.target.value) : null)} />
+                    </td>
+                    <td style={{ width: 100 }}>
+                      <input className={styles.tableInput} defaultValue={r.transfer_date || ''} placeholder="dd/mm/yyyy"
+                        onBlur={e => updatePreviewField(i, 'transfer_date', e.target.value.trim())} />
+                    </td>
+                    <td style={{ width: 90 }}>
+                      <input className={styles.tableInput} defaultValue={r.bank_name || ''} placeholder="בנק"
+                        onBlur={e => updatePreviewField(i, 'bank_name', e.target.value.trim())} />
+                    </td>
+                    <td style={{ width: 100 }}>
+                      <input className={styles.tableInput} defaultValue={r.bank_account || ''} placeholder="חשבון"
+                        onBlur={e => updatePreviewField(i, 'bank_account', e.target.value.trim())} />
+                    </td>
+                    <td style={{ width: 100 }}>
+                      <input className={styles.tableInput} defaultValue={r.reference_number || ''} placeholder="אסמכתא"
+                        onBlur={e => updatePreviewField(i, 'reference_number', e.target.value.trim())} />
+                    </td>
+                    <td style={{ width: 130 }}>
+                      <select className={styles.tableInput} value={r.branch || ''} onChange={e => updatePreviewField(i, 'branch', e.target.value)}>
+                        <option value="">בחר מוסד</option>
+                        {BRANCHES.map(b => <option key={b} value={b}>{b}</option>)}
+                      </select>
+                    </td>
                     <td>
                       <button className={styles.btnIconDanger} title="הסר שורה מהייבוא" onClick={() => removePreviewRow(i)}>✕</button>
                     </td>

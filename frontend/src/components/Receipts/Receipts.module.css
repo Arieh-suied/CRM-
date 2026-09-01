@@ -370,6 +370,26 @@
   background: rgba(229,62,62,0.05);
 }
 
+.tableInput {
+  height: 28px;
+  padding: 0 6px;
+  border: var(--glass-border);
+  border-radius: 5px;
+  background: rgba(238,240,247,0.4);
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--color-text);
+  width: 100%;
+  min-width: 70px;
+  box-sizing: border-box;
+}
+
+.tableInput:focus {
+  outline: none;
+  border-color: rgba(79,126,248,0.5);
+  background: #fff;
+}
+
 /* ── Buttons ─────────────────────────────────────────────────────── */
 .btn {
   display: inline-flex;
