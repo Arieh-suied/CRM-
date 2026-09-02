@@ -264,6 +264,70 @@ function filterRows(rows, q) {
   );
 }
 
+// Bank rows (GetMasavKevaNew) have no dedicated status column — Nedarim
+// overloads the "חיוב הבא" (next-charge, column 4) field with the status text
+// whenever the order isn't actively charging, e.g. "מוקפא" or "נדחה ע"י הבנק
+// (א) נדחה | פנה ללקוח 28/08/26". A real next-charge value is just a date.
+const isDateLike = (v) => /^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(String(v ?? '').trim());
+
+const BANK_STATUS_RULES = [
+  { key: 'active',             label: 'פעילה',                                            test: (v) => isDateLike(v) },
+  { key: 'rejected_cancelled', label: 'נדחה ע"י הבנק (א) בוטל ע"י הלקוח | פנה ללקוח',       test: (v) => v.includes('בוטל ע"י הלקוח') },
+  { key: 'rejected',           label: 'נדחה ע"י הבנק (א) נדחה | פנה ללקוח',                 test: (v) => v.startsWith('נדחה ע"י הבנק') },
+  { key: 'sent',               label: 'הטופס נשלח לבנק',                                    test: (v) => v.startsWith('הטופס נשלח לבנק') },
+  { key: 'inactive',           label: 'לא פעיל - אין יתרת חיובים',                          test: (v) => v.startsWith('לא פעיל') },
+  { key: 'frozen',             label: 'מוקפא',                                             test: (v) => v.startsWith('מוקפא') },
+];
+
+function classifyBankStatus(rawNextCharge) {
+  const v = String(rawNextCharge ?? '').trim();
+  if (!v) return { key: 'unknown', label: 'לא ידוע' };
+  const rule = BANK_STATUS_RULES.find((r) => r.test(v));
+  return rule ? { key: rule.key, label: rule.label } : { key: 'other', label: v };
+}
+
+// Multi-select checkbox dropdown used for the status / category filters on
+// the bank table — checking an option narrows the list, none checked = show all.
+function FilterDropdown({ label, options, selected, onToggle, onShowAll }) {
+  const [open, setOpen] = useState(false);
+  const activeCount = selected.size;
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <button className={`${styles.typeTab} ${activeCount ? styles.typeTabActive : ''}`} onClick={() => setOpen((p) => !p)}>
+        {label}{activeCount ? ` (${activeCount})` : ''} ▾
+      </button>
+      {open && (
+        <div className={styles.exportMenu} style={{ maxHeight: 320, overflowY: 'auto' }}>
+          <label className={`${styles.filterDropdownRow} ${styles.filterDropdownHeader}`}>
+            <span>הצג הכל</span>
+            <input type="checkbox" checked={activeCount === 0} onChange={onShowAll} />
+          </label>
+          {options.map((opt) => (
+            <label key={opt.key} className={styles.filterDropdownRow}>
+              <span>{opt.label} ({opt.count})</span>
+              <input type="checkbox" checked={selected.has(opt.key)} onChange={() => onToggle(opt.key)} />
+            </label>
+          ))}
+          {!options.length && <span style={{ padding: '7px 12px', fontSize: 12, color: 'var(--color-text-muted)' }}>אין נתונים</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Builds {key,label,count} filter options from the current rows, sorted by label.
+function buildFilterOptions(rows, getEntry) {
+  const counts = new Map();
+  for (const row of rows) {
+    const { key, label } = getEntry(row);
+    const cur = counts.get(key) || { key, label, count: 0 };
+    cur.count++;
+    counts.set(key, cur);
+  }
+  return [...counts.values()].sort((a, b) => a.label.localeCompare(b.label, 'he'));
+}
+
 export default function StandingOrders({ institutions }) {
   const { role } = useAuth();
   const canOpen = role !== 'institution'; // detail/edit modals write via server actions that are staff-only anyway
@@ -274,6 +338,8 @@ export default function StandingOrders({ institutions }) {
   const [loading, setLoading]         = useState(false);
   const [errorMsg, setErrorMsg]       = useState('');
   const [search, setSearch]           = useState('');
+  const [statusFilter, setStatusFilter]     = useState(() => new Set());
+  const [categoryFilter, setCategoryFilter] = useState(() => new Set());
 
   const eligibleInstitutions = (institutions ?? []).filter(i => i.has_api_password);
 
@@ -296,8 +362,29 @@ export default function StandingOrders({ institutions }) {
 
   useEffect(load, [load]);
 
-  const creditRows = filterRows(creditData?.data ?? [], search.trim());
-  const bankRows   = filterRows(bankData?.data ?? [], search.trim());
+  // New institution / dataset — stale filter selections would just hide everything.
+  useEffect(() => { setStatusFilter(new Set()); setCategoryFilter(new Set()); }, [mosadFilter]);
+
+  const creditRows   = filterRows(creditData?.data ?? [], search.trim());
+  const bankSearched = filterRows(bankData?.data ?? [], search.trim());
+
+  const bankStatusOptions   = buildFilterOptions(bankSearched, (row) => classifyBankStatus(row['4']));
+  const bankCategoryOptions = buildFilterOptions(bankSearched, (row) => {
+    const cat = (row['7'] ?? '').toString().trim() || '—';
+    return { key: cat, label: cat };
+  });
+
+  const bankRows = bankSearched.filter((row) => {
+    if (statusFilter.size && !statusFilter.has(classifyBankStatus(row['4']).key)) return false;
+    if (categoryFilter.size) {
+      const cat = (row['7'] ?? '').toString().trim() || '—';
+      if (!categoryFilter.has(cat)) return false;
+    }
+    return true;
+  });
+
+  const toggleStatusFilter   = (key) => setStatusFilter((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
+  const toggleCategoryFilter = (key) => setCategoryFilter((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
 
   return (
     <div className={styles.wrapper}>
@@ -334,6 +421,24 @@ export default function StandingOrders({ institutions }) {
                 בנקאי ({bankRows.length})
               </button>
             </div>
+            {activeType === 'bank' && (
+              <>
+                <FilterDropdown
+                  label="סטטוס"
+                  options={bankStatusOptions}
+                  selected={statusFilter}
+                  onToggle={toggleStatusFilter}
+                  onShowAll={() => setStatusFilter(new Set())}
+                />
+                <FilterDropdown
+                  label="קטגוריה"
+                  options={bankCategoryOptions}
+                  selected={categoryFilter}
+                  onToggle={toggleCategoryFilter}
+                  onShowAll={() => setCategoryFilter(new Set())}
+                />
+              </>
+            )}
             {role !== 'institution' && <ExportMenu mosadNumber={mosadFilter} type={activeType} />}
           </>
         )}
