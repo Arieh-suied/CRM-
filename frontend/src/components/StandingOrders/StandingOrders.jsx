@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import styles from './StandingOrders.module.css';
 import { fetchStandingOrders, exportCreditOrders, exportBankOrders, authFetch } from '../../services/api.js';
 import { filterRowsByDateRange, exportAoaXlsx } from '../../lib/exportXlsx.js';
@@ -158,6 +159,46 @@ function BankTable({ rows, mosadNumber, onRefresh, canOpen }) {
   );
 }
 
+// Dropdown panels (export menu, filter menus) render into a portal on <body>
+// instead of as a normal descendant — .wrapper has overflow:hidden and clips
+// to its own content height, which shrinks the moment a filter narrows the
+// table underneath, silently cutting the panel off mid-list. Positioning via
+// the toggle button's own screen rect (recomputed on scroll/resize) sidesteps
+// that entirely.
+function useDropdownPanel() {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState(null);
+  const btnRef = useRef(null);
+  const panelRef = useRef(null);
+
+  useLayoutEffect(() => {
+    if (!open || !btnRef.current) return;
+    const update = () => {
+      const r = btnRef.current.getBoundingClientRect();
+      setPos({ top: r.bottom + 4, right: window.innerWidth - r.right });
+    };
+    update();
+    window.addEventListener('scroll', update, true);
+    window.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('scroll', update, true);
+      window.removeEventListener('resize', update);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onMouseDown = (e) => {
+      if (btnRef.current?.contains(e.target) || panelRef.current?.contains(e.target)) return;
+      setOpen(false);
+    };
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, [open]);
+
+  return { open, setOpen, pos, btnRef, panelRef };
+}
+
 function monthRange(offset = 0) {
   const now = new Date();
   const first = new Date(now.getFullYear(), now.getMonth() + offset, 1);
@@ -167,7 +208,7 @@ function monthRange(offset = 0) {
 }
 
 function ExportMenu({ mosadNumber, type }) {
-  const [open, setOpen]       = useState(false);
+  const { open, setOpen, pos, btnRef, panelRef } = useDropdownPanel();
   const [exporting, setExp]   = useState(false);
   const [dateFrom, setFrom]   = useState('');
   const [dateTo, setTo]       = useState('');
@@ -214,11 +255,11 @@ function ExportMenu({ mosadNumber, type }) {
 
   return (
     <div style={{ position: 'relative' }}>
-      <button className={styles.typeTab} onClick={() => setOpen(p => !p)} disabled={exporting}>
+      <button ref={btnRef} className={styles.typeTab} onClick={() => setOpen(p => !p)} disabled={exporting}>
         {exporting ? 'מייצא...' : 'ייצוא ▾'}
       </button>
-      {open && (
-        <div className={styles.exportMenu}>
+      {open && pos && createPortal(
+        <div ref={panelRef} className={styles.exportMenu} style={{ position: 'fixed', top: pos.top, right: pos.right }}>
           {type === 'credit' ? (
             <>
               <div className={styles.exportDateRow}>
@@ -248,7 +289,8 @@ function ExportMenu({ mosadNumber, type }) {
               </div>
             </>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -289,16 +331,16 @@ function classifyBankStatus(rawNextCharge) {
 // Multi-select checkbox dropdown used for the status / category filters on
 // the bank table — checking an option narrows the list, none checked = show all.
 function FilterDropdown({ label, options, selected, onToggle, onShowAll }) {
-  const [open, setOpen] = useState(false);
+  const { open, setOpen, pos, btnRef, panelRef } = useDropdownPanel();
   const activeCount = selected.size;
 
   return (
     <div style={{ position: 'relative' }}>
-      <button className={`${styles.typeTab} ${activeCount ? styles.typeTabActive : ''}`} onClick={() => setOpen((p) => !p)}>
+      <button ref={btnRef} className={`${styles.typeTab} ${activeCount ? styles.typeTabActive : ''}`} onClick={() => setOpen((p) => !p)}>
         {label}{activeCount ? ` (${activeCount})` : ''} ▾
       </button>
-      {open && (
-        <div className={styles.exportMenu} style={{ maxHeight: 320, overflowY: 'auto' }}>
+      {open && pos && createPortal(
+        <div ref={panelRef} className={styles.exportMenu} style={{ position: 'fixed', top: pos.top, right: pos.right, maxHeight: 320, overflowY: 'auto' }}>
           <label className={`${styles.filterDropdownRow} ${styles.filterDropdownHeader}`}>
             <span>הצג הכל</span>
             <input type="checkbox" checked={activeCount === 0} onChange={onShowAll} />
@@ -310,7 +352,8 @@ function FilterDropdown({ label, options, selected, onToggle, onShowAll }) {
             </label>
           ))}
           {!options.length && <span style={{ padding: '7px 12px', fontSize: 12, color: 'var(--color-text-muted)' }}>אין נתונים</span>}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
