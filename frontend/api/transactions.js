@@ -2,6 +2,7 @@ import { getSupabase, ilikeOr, fetchAll } from './_supabase.js';
 import { requireUser, INSTITUTION_READ_ROLES } from './_auth.js';
 import { applyScope } from './_scope.js';
 
+import { withErrorAlert } from './_error-alert.js';
 const PAGE_SIZE = 50;
 const SORTABLE = new Set(['transaction_time_iso', 'client_name', 'amount', 'transaction_type', 'group_name', 'mosad_number']);
 const SORT_COLUMN_MAP = { transaction_time_iso: 'transaction_time_parsed' };
@@ -99,7 +100,7 @@ async function handleFilters(_req, res, supabase, user) {
   return res.json(payload);
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
   try {
     const supabase = getSupabase();
@@ -142,3 +143,5 @@ export default async function handler(req, res) {
     res.status(500).json({ error: err.message });
   }
 }
+
+export default withErrorAlert(handler, 'transactions');

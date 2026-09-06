@@ -12,6 +12,7 @@
 
 import { getSupabase } from './_supabase.js';
 import { requireUser, WRITE_ROLES } from './_auth.js';
+import { withErrorAlert } from './_error-alert.js';
 import {
   sendGmail,
   bodyToHtml,
@@ -20,7 +21,7 @@ import {
   MAX_ATTACHMENT_BYTES,
 } from './_email.js';
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const supabase = getSupabase();
@@ -111,3 +112,5 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: `שליחת המייל נכשלה: ${err.message}` });
   }
 }
+
+export default withErrorAlert(handler, 'send-email');

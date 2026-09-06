@@ -22,6 +22,7 @@ import { getSupabase } from './_supabase.js';
 import { requireUser, WRITE_ROLES } from './_auth.js';
 import { appendRow, sanitizeSheetCell } from './_google-sheets.js';
 
+import { withErrorAlert } from './_error-alert.js';
 const DEFAULT_DESCRIPTION = 'בוצע העברה';
 const DIRECTIONS = new Set(['transfer', 'donation']);
 const DEFAULT_COLUMNS = [{ type: 'date' }, { type: 'name' }, { type: 'amount' }];
@@ -51,7 +52,7 @@ function buildRow(columns, { dmyDate, name, amount }) {
 
 export const config = { maxDuration: 30 };
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const supabase = getSupabase();
@@ -94,3 +95,5 @@ export default async function handler(req, res) {
 
   return res.status(200).json({ success: true, fundName: fund.name });
 }
+
+export default withErrorAlert(handler, 'fund-transfer');

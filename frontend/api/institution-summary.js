@@ -8,7 +8,8 @@
 import { getSupabase } from './_supabase.js';
 import { requireUser, INSTITUTION_READ_ROLES } from './_auth.js';
 
-export default async function handler(req, res) {
+import { withErrorAlert } from './_error-alert.js';
+async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
   try {
     const supabase = getSupabase();
@@ -45,3 +46,5 @@ export default async function handler(req, res) {
     res.status(500).json({ error: err.message });
   }
 }
+
+export default withErrorAlert(handler, 'institution-summary');

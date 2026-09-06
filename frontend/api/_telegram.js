@@ -1,6 +1,25 @@
 // Minimal Telegram Bot API client — sends plain-text messages to a chat/channel.
 // Env var required: TELEGRAM_BOT_TOKEN
 
+// Serverless functions occasionally hit a cold TLS connection to
+// api.telegram.org that resets or times out before any HTTP response comes
+// back (ECONNRESET / ETIMEDOUT — a network-layer failure, not a Telegram API
+// rejection). A couple of quick retries absorbs that instead of silently
+// losing the alert; a real API-level rejection (bad chat id, etc.) still
+// throws immediately since retrying it would never succeed.
+async function fetchWithRetry(url, options, attempts = 3) {
+  let lastErr;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fetch(url, options);
+    } catch (err) {
+      lastErr = err;
+      if (i < attempts - 1) await new Promise((r) => setTimeout(r, 300 * (i + 1)));
+    }
+  }
+  throw lastErr;
+}
+
 export async function sendTelegramMessage(chatId, text, { receiptUrl } = {}) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) throw new Error('Missing env var: TELEGRAM_BOT_TOKEN');
@@ -11,7 +30,7 @@ export async function sendTelegramMessage(chatId, text, { receiptUrl } = {}) {
     body.reply_markup = { inline_keyboard: [[{ text: '📄 קבלה', url: receiptUrl }]] };
   }
 
-  const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+  const res = await fetchWithRetry(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -42,7 +61,7 @@ export async function sendTelegramPhoto(chatId, image, caption = '') {
   if (caption) form.append('caption', caption.slice(0, 1024)); // Telegram caption limit
   form.append('photo', new Blob([bytes], { type: mimeType }), image.filename || `screenshot.${ext}`);
 
-  const res = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
+  const res = await fetchWithRetry(`https://api.telegram.org/bot${token}/sendPhoto`, {
     method: 'POST',
     body: form,
   });

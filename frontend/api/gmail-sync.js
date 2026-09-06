@@ -17,6 +17,7 @@ import { getSupabase } from './_supabase.js';
 import { requireUser } from './_auth.js';
 import { sendTelegramMessage } from './_telegram.js';
 import { refusalChatId } from './_transaction-notify.js';
+import { withErrorAlert } from './_error-alert.js';
 import {
   getGmailAccessToken,
   gmailFetch,
@@ -81,7 +82,7 @@ async function notifyRefusal(record) {
   }
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   // Manual "סנכרן" button in PaymentFailures.jsx calls this with POST.
   // Vercel Cron always calls scheduled paths with GET, authenticated via
   // an Authorization: Bearer <CRON_SECRET> header it adds automatically —
@@ -140,3 +141,5 @@ export default async function handler(req, res) {
     res.status(500).json({ error: err.message });
   }
 }
+
+export default withErrorAlert(handler, 'gmail-sync');

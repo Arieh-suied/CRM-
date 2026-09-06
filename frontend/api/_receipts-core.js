@@ -9,6 +9,9 @@
 // actually represents so issued_receipts.receipt_type reads correctly for both).
 
 import { getSupabase } from './_supabase.js';
+import { appendRow, sanitizeSheetCell } from './_google-sheets.js';
+import { sendTelegramMessage } from './_telegram.js';
+import { transactionChatIdByName } from './_transaction-notify.js';
 
 export const BRANCH_CONFIG = {
   'סומך נופלים':             { envKey: 'EZCOUNT_API_KEY',           docType: 405, itemDetails: 'תרומה',      mosadNumber: '7001671', receiptTypeLabel: 'קבלה על תרומה' },
@@ -49,6 +52,35 @@ function toIso(raw) {
   return null;
 }
 
+// Manually chosen from the funds dropdown when issuing a receipt — separate
+// from the automatic mosad_number/group_name routing in _fund-routing.js,
+// which only reacts to incoming `transactions` rows, not receipts.
+async function appendFundRow(supabase, fundId, { rawDate, issueDateIso, customerName, amount, docUrl }) {
+  const { data: fund, error } = await supabase.from('funds').select('spreadsheet_id, sheet_name').eq('id', fundId).maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!fund) throw new Error('קרן לא נמצאה');
+
+  const dateCell = rawDate || issueDateIso || new Date().toISOString().slice(0, 10);
+  const receiptCell = docUrl ? `=HYPERLINK("${docUrl}","הצג קבלה")` : '';
+  await appendRow(fund.spreadsheet_id, fund.sheet_name, [
+    sanitizeSheetCell(dateCell),
+    sanitizeSheetCell(customerName),
+    amount,
+    receiptCell,
+  ]);
+}
+
+function buildReceiptTelegramText({ branch, customerName, amount, notes }) {
+  const lines = [
+    `הופקה קבלה ב${branch}`,
+    '',
+    `שם: ${customerName}`,
+    `סכום: ${amount}₪`,
+  ];
+  if (notes) lines.push(`הערות: ${notes}`);
+  return lines.join('\n');
+}
+
 function buildPayment(pm, sum, bankName, bankBranch, bankAccount, checkNumber, transferDate) {
   const p = { payment_type: pm, payment_sum: sum };
   const td = normalizeDate(transferDate);
@@ -74,7 +106,7 @@ export async function issueReceipt(payload) {
     amount, branch,
     payments: paymentEntries,
     paymentMethod, bankName, bankBranch, bankAccount, checkNumber, transferDate,
-    notes,
+    notes, fundId,
   } = payload;
 
   if (!customerName || typeof customerName !== 'string' || customerName.trim().length < 2) {
@@ -204,5 +236,34 @@ export async function issueReceipt(payload) {
     console.error('DB persist error:', dbErr);
   }
 
-  return { success: true, docNumber, docUrl, receiptId, status: 200 };
+  // Fund-sheet append (manual, opt-in via the receipt form's dropdown) and the
+  // institution's Telegram alert (automatic whenever a channel is configured
+  // for that branch) are best-effort — neither should fail an already-issued
+  // receipt, so failures are reported back but never thrown.
+  let fundWarning;
+  let telegramSent = false;
+  try {
+    const supabase = getSupabase();
+    const chatId = transactionChatIdByName(branch);
+    const [fundResult, telegramResult] = await Promise.allSettled([
+      fundId
+        ? appendFundRow(supabase, fundId, { rawDate: normalizeDate(firstTransferDate), issueDateIso: toIso(firstTransferDate), customerName: customerName.trim(), amount, docUrl })
+        : Promise.resolve(null),
+      chatId
+        ? sendTelegramMessage(chatId, buildReceiptTelegramText({ branch, customerName: customerName.trim(), amount, notes }), { receiptUrl: docUrl || undefined })
+        : Promise.resolve(null),
+    ]);
+    if (fundId && fundResult.status === 'rejected') {
+      console.error('Fund sheet append error:', fundResult.reason?.message);
+      fundWarning = `הקבלה הופקה אך ההוספה לאקסל נכשלה: ${fundResult.reason?.message || 'שגיאה לא ידועה'}`;
+    }
+    if (chatId) {
+      telegramSent = telegramResult.status === 'fulfilled';
+      if (telegramResult.status === 'rejected') console.error('Receipt Telegram send error:', telegramResult.reason?.message);
+    }
+  } catch (notifyErr) {
+    console.error('Fund/Telegram notify error:', notifyErr);
+  }
+
+  return { success: true, docNumber, docUrl, receiptId, status: 200, telegramSent, ...(fundWarning ? { fundWarning } : {}) };
 }

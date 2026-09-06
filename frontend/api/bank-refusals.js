@@ -3,6 +3,7 @@ import { requireUser, WRITE_ROLES, INSTITUTION_READ_ROLES } from './_auth.js';
 import { BANK_URL, getInstitution, callNedarim as callNedarimRaw } from './_nedarim.js';
 import { issueReceipt, branchByMosadNumber } from './_receipts-core.js';
 
+import { withErrorAlert } from './_error-alert.js';
 const callNedarim = (params) => callNedarimRaw(BANK_URL, params);
 
 const BOUNCE_STATUS = 'החזרת הוראת קבע';
@@ -103,7 +104,7 @@ export async function sync(inst, period) {
   return charges.length;
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   const { mosad_number, period, action } = req.query;
 
   // Plain GET (view the month's report) is open to the institution role,
@@ -222,3 +223,5 @@ export default async function handler(req, res) {
 
   res.status(405).json({ error: 'Method not allowed' });
 }
+
+export default withErrorAlert(handler, 'bank-refusals');

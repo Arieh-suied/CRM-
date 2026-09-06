@@ -7,6 +7,7 @@ import { getRequestUser } from './_auth.js';
 import { sendTelegramMessage } from './_telegram.js';
 import { resolveInstitution, buildTelegramText, receiptUrlFor } from './_transaction-notify.js';
 
+import { withErrorAlert } from './_error-alert.js';
 const MAX_ROUNDS = 5;
 const MAX_HISTORY = 20;
 const DEFAULT_LIMIT = 20;
@@ -317,7 +318,7 @@ async function callOpenAI(messages, apiKey) {
   return data;
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
@@ -386,3 +387,5 @@ export default async function handler(req, res) {
     res.status(500).json({ error: err.message });
   }
 }
+
+export default withErrorAlert(handler, 'ai-assistant');

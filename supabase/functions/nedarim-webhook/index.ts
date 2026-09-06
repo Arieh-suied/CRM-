@@ -82,6 +82,37 @@ async function upsertWithRetry(rows: Record<string, string>[]) {
   console.error(`nedarim-webhook GAVE UP after 3 attempts (tx ${ids}) — recover via nedarim-recovery`);
 }
 
+// Mirrors frontend/api/_telegram.js — separate copy because this Deno
+// function can't import that Node module across the Vercel/Supabase runtime split.
+async function sendTelegram(chatId: string | undefined, text: string) {
+  const token = Deno.env.get("TELEGRAM_BOT_TOKEN");
+  if (!token || !chatId) return;
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text }),
+    });
+    const data = await res.json();
+    if (!data.ok) console.error("nedarim-webhook telegram error:", data.description);
+  } catch (err) {
+    console.error("nedarim-webhook telegram send failed:", err);
+  }
+}
+
+// Nedarim's own documented sender IPs — Nedarim support confirmed directly
+// (2026-09-02) that these cover both callback types, refusals and
+// transactions, so this is enforced as a hard block. Deployed log-only for a
+// short window first (never blocking) while that was still an assumption,
+// since this pipeline processes real donations with no retry on failure.
+const NEDARIM_ALLOWED_IPS = ["18.196.146.117", "18.194.219.73"];
+
+function clientIp(req: Request): string | null {
+  const fwd = req.headers.get("x-forwarded-for");
+  if (!fwd) return null;
+  return fwd.split(",")[0].trim();
+}
+
 Deno.serve(async (req) => {
   const json = { "Content-Type": "application/json" };
 
@@ -91,6 +122,16 @@ Deno.serve(async (req) => {
   }
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ ok: false, error: "Method not allowed" }), { status: 405, headers: json });
+  }
+
+  const ip = clientIp(req);
+  if (ip && !NEDARIM_ALLOWED_IPS.includes(ip)) {
+    console.error(`nedarim-webhook: rejected update from unrecognized IP ${ip}`);
+    await sendTelegram(
+      Deno.env.get("TELEGRAM_CHAT_SECURITY_ALERTS"),
+      `⚠️ עדכון מ-webhook נדרים (עסקאות) נדחה — הגיע מכתובת IP לא מוכרת: ${ip}\nייתכן שזו כתובת חדשה של נדרים, כדאי לברר מולם. אם זה קורה שוב ושוב, ייתכן שזה ניסיון הונאה.`
+    );
+    return new Response(JSON.stringify({ ok: false, error: "Unauthorized source" }), { status: 403, headers: json });
   }
 
   // Nedarim can't send a Supabase JWT (hence --no-verify-jwt), so this is guarded

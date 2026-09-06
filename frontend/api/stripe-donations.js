@@ -1,6 +1,7 @@
 import { getSupabase, ilikeOr, fetchAll } from './_supabase.js';
 import { requireUser, WRITE_ROLES } from './_auth.js';
 
+import { withErrorAlert } from './_error-alert.js';
 const PAGE_SIZE = 50;
 const ALLOWED_SORT = new Set(['resolved_name', 'donor_email', 'amount', 'paid_at', 'stripe_customer_id']);
 
@@ -8,7 +9,7 @@ const ALLOWED_SORT = new Set(['resolved_name', 'donor_email', 'amount', 'paid_at
 // GET ?view=subscriptions       → active subscriptions list
 // POST                          → sync customer names from Stripe
 // POST ?action=subscriptions    → sync active subscriptions from Stripe
-export default async function handler(req, res) {
+async function handler(req, res) {
   const user = await requireUser(req, res, getSupabase(), req.method === 'GET' ? {} : { roles: WRITE_ROLES });
   if (!user) return;
 
@@ -267,3 +268,5 @@ async function handleSyncSubscriptions(req, res) {
     res.status(500).json({ error: err.message });
   }
 }
+
+export default withErrorAlert(handler, 'stripe-donations');

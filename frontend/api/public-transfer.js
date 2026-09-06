@@ -15,6 +15,7 @@ import { randomUUID } from 'crypto';
 import { getSupabase } from './_supabase.js';
 import { sendTelegramMessage, sendTelegramPhoto } from './_telegram.js';
 import { institutionById } from './_transfer-institutions.js';
+import { withErrorAlert } from './_error-alert.js';
 import {
   parseTransferImage, validateImageInput, ParseTransferError, ALLOWED_MIME,
 } from './_parse-transfer-core.js';
@@ -48,7 +49,7 @@ function buildCaption(fields, institutionLabel) {
   return lines.filter((l) => l !== null).join('\n');
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   // Shared-secret gate (same pattern as grow-webhook.js). While the env var is
@@ -174,3 +175,5 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: err.message });
   }
 }
+
+export default withErrorAlert(handler, 'public-transfer');

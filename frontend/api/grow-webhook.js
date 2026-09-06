@@ -3,6 +3,7 @@
 
 import { getSupabase } from './_supabase.js';
 
+import { withErrorAlert } from './_error-alert.js';
 const INSTITUTION_NAME = 'סומך נופלים';
 const EZ_DOC_TYPE = 405; // קבלה לתרומה
 const EZ_ITEM_DETAILS = 'תרומה';
@@ -77,7 +78,7 @@ async function createEzcountReceipt(payload) {
   return ezRes.json();
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   // Grow calls this endpoint directly, so it can't send a Supabase JWT. Guard it
@@ -185,3 +186,5 @@ export default async function handler(req, res) {
     return res.status(500).json({ success: false, error: err.message });
   }
 }
+
+export default withErrorAlert(handler, 'grow-webhook');

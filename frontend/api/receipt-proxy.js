@@ -1,9 +1,10 @@
 import { getSupabase } from './_supabase.js';
 import { getRequestUser } from './_auth.js';
 
+import { withErrorAlert } from './_error-alert.js';
 const ALLOWED_HOST = 'files.ezcount.co.il';
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
   // Hit via <iframe>/<a> navigation, not fetch() — see getRequestUser's
@@ -34,3 +35,5 @@ export default async function handler(req, res) {
     res.status(500).json({ error: err.message });
   }
 }
+
+export default withErrorAlert(handler, 'receipt-proxy');

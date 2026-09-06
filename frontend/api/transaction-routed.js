@@ -22,11 +22,12 @@ import { getSupabase } from './_supabase.js';
 import { routeTransaction } from './_transaction-route.js';
 import { sendDonorThanksIfEnabled } from './_email.js';
 
+import { withErrorAlert } from './_error-alert.js';
 // Telegram + N sheet appends + Gmail token exchange + send can brush against
 // the 10s default on a cold start.
 export const config = { maxDuration: 30 };
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const secret = process.env.SUPABASE_WEBHOOK_SECRET;
@@ -52,3 +53,5 @@ export default async function handler(req, res) {
 
   return res.status(200).json(results);
 }
+
+export default withErrorAlert(handler, 'transaction-routed');

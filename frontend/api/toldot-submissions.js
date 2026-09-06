@@ -18,6 +18,7 @@ import { issueReceipt } from './_receipts-core.js';
 import { routeTransaction } from './_transaction-route.js';
 import { institutionById } from './_transfer-institutions.js';
 
+import { withErrorAlert } from './_error-alert.js';
 const STORAGE_BUCKET = 'transfer-screenshots';
 const SIGNED_URL_TTL = 60 * 60; // 1h
 
@@ -68,7 +69,7 @@ async function suggestCustomerMatch(supabase, sub) {
   return null;
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   const supabase = getSupabase();
 
   try {
@@ -243,3 +244,5 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: err.message });
   }
 }
+
+export default withErrorAlert(handler, 'toldot-submissions');

@@ -1,7 +1,8 @@
 import { getSupabase } from './_supabase.js';
 import { requireUser, WRITE_ROLES, INSTITUTION_READ_ROLES } from './_auth.js';
 
-export default async function handler(req, res) {
+import { withErrorAlert } from './_error-alert.js';
+async function handler(req, res) {
   const supabase = getSupabase();
   try {
     // GET is read-only (mosad_number/mosad_name pairs only, no financial data)
@@ -40,3 +41,5 @@ export default async function handler(req, res) {
     res.status(500).json({ error: err.message });
   }
 }
+
+export default withErrorAlert(handler, 'institutions');

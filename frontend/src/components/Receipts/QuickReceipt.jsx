@@ -35,6 +35,8 @@ const newPayment = () => ({
 
 export default function QuickReceipt() {
   const [branch, setBranch]     = useState('');
+  const [funds, setFunds]       = useState([]);
+  const [fundId, setFundId]     = useState('');
   const [name, setName]         = useState('');
   const [idNum, setIdNum]       = useState('');
   const [phone, setPhone]       = useState('');
@@ -58,6 +60,13 @@ export default function QuickReceipt() {
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  useEffect(() => {
+    authFetch('/api/funds')
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => setFunds(Array.isArray(data) ? data : []))
+      .catch(() => setFunds([]));
   }, []);
 
   useEffect(() => {
@@ -187,6 +196,7 @@ export default function QuickReceipt() {
           transferDate: p.date       || undefined,
         })),
         notes: notes.trim() || undefined,
+        fundId: fundId || undefined,
       };
 
       const res = await authFetch('/api/receipts', {
@@ -198,11 +208,15 @@ export default function QuickReceipt() {
       if (!res.ok || data.error) throw new Error(data.error || 'שגיאה ביצירת הקבלה');
 
       setLastReceipt({ docNumber: data.docNumber, url: data.docUrl });
-      setMsg({ text: `קבלה מספר ${data.docNumber} הופקה בהצלחה!`, ok: true });
+      let successText = `קבלה מספר ${data.docNumber} הופקה בהצלחה!`;
+      if (fundId && !data.fundWarning) successText += ' נוספה שורה לאקסל.';
+      if (data.telegramSent) successText += ' נשלחה הודעה בטלגרם.';
+      if (data.fundWarning) successText += ` ${data.fundWarning}`;
+      setMsg({ text: successText, ok: true });
 
       // Reset form
       setBranch(''); setName(''); setIdNum(''); setPhone(''); setEmail(''); setNotes('');
-      setPayments([newPayment()]); setSelectedCustomerId(null);
+      setPayments([newPayment()]); setSelectedCustomerId(null); setFundId('');
     } catch (err) {
       setMsg({ text: err.message, ok: false });
     } finally {
@@ -249,6 +263,14 @@ export default function QuickReceipt() {
               <select className={styles.fieldSelect} value={branch} onChange={e => setBranch(e.target.value)} required>
                 <option value="">בחר מוסד</option>
                 {BRANCHES.map(b => <option key={b} value={b}>{b}</option>)}
+              </select>
+            </div>
+
+            <div className={styles.fieldGroup}>
+              <label className={styles.fieldLabel}>הוסף לאקסל של קרן (אופציונלי)</label>
+              <select className={styles.fieldSelect} value={fundId} onChange={e => setFundId(e.target.value)}>
+                <option value="">ללא</option>
+                {funds.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
               </select>
             </div>
 

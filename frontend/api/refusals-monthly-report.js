@@ -7,6 +7,7 @@ import { sync } from './bank-refusals.js';
 import { sendTelegramMessage } from './_telegram.js';
 import { refusalChatId } from './_transaction-notify.js';
 
+import { withErrorAlert } from './_error-alert.js';
 const STREAK_THRESHOLD = 2;
 const LOOKBACK_MONTHS = 12;
 
@@ -61,7 +62,7 @@ function buildReportText(institutionName, period, donors) {
   return lines.join('\n');
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
   const cronSecret = process.env.CRON_SECRET;
@@ -114,3 +115,5 @@ export default async function handler(req, res) {
 
   return res.json({ success: true, period, reportsSent });
 }
+
+export default withErrorAlert(handler, 'refusals-monthly-report');

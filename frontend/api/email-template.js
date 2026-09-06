@@ -17,6 +17,7 @@ import { getSupabase } from './_supabase.js';
 import { requireUser, WRITE_ROLES } from './_auth.js';
 import { ATTACHMENTS_BUCKET, MAX_ATTACHMENT_BYTES } from './_email.js';
 
+import { withErrorAlert } from './_error-alert.js';
 const SELECT = 'mosad_number, subject, body, auto_send, attach_receipt, attachment_name, attachment_mime, updated_by, updated_at';
 
 async function removeStoredFile(supabase, path) {
@@ -25,7 +26,7 @@ async function removeStoredFile(supabase, path) {
   if (error) console.error(`email-template: failed to remove ${path}:`, error.message);
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   const supabase = getSupabase();
 
   if (req.method === 'GET') {
@@ -137,3 +138,5 @@ export default async function handler(req, res) {
 
   return res.status(405).json({ error: 'Method not allowed' });
 }
+
+export default withErrorAlert(handler, 'email-template');

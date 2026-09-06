@@ -3,13 +3,14 @@ import { getSupabase } from './_supabase.js';
 import { requireUser, WRITE_ROLES, INSTITUTION_READ_ROLES } from './_auth.js';
 import { filterRowsByColumn } from './_scope.js';
 
+import { withErrorAlert } from './_error-alert.js';
 const callNedarim = (params) => callNedarimRaw(BANK_URL, params);
 
 // Category lives in column '7' of GetMasavKevaNew's DataTables-shaped rows
 // (see BankTable in StandingOrders.jsx).
 const CATEGORY_COL = '7';
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   const { mosad_number, masav_id, export: exportType, from, to } = req.query;
 
   // Only the plain listing (no masav_id detail, no CSV export) is scoped
@@ -90,3 +91,5 @@ export default async function handler(req, res) {
 
   res.status(405).json({ error: 'Method not allowed' });
 }
+
+export default withErrorAlert(handler, 'bank-orders');

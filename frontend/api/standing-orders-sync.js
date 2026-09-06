@@ -25,6 +25,7 @@ import { getSupabase } from './_supabase.js';
 import { requireUser } from './_auth.js';
 import { sendTelegramMessage } from './_telegram.js';
 import { transactionChatIdByName } from './_transaction-notify.js';
+import { withErrorAlert } from './_error-alert.js';
 import {
   getGmailAccessToken,
   gmailFetch,
@@ -84,7 +85,7 @@ async function notifyStandingOrder(record) {
   }
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   // GET → Vercel Cron (authenticated via Authorization: Bearer <CRON_SECRET>).
   // POST → manual trigger, must be a logged-in user.
   if (req.method === 'GET') {
@@ -170,3 +171,5 @@ export default async function handler(req, res) {
     res.status(500).json({ error: err.message });
   }
 }
+
+export default withErrorAlert(handler, 'standing-orders-sync');

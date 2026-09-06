@@ -27,6 +27,7 @@ import { getSupabase } from './_supabase.js';
 import { requireUser } from './_auth.js';
 import { getGmailAccessToken, gmailFetch, extractPlainText } from './_gmail.js';
 
+import { withErrorAlert } from './_error-alert.js';
 const WEBHOOK_URL = 'https://qpzrwnukasfftcybznjv.supabase.co/functions/v1/nedarim-webhook';
 
 // Once NEDARIM_WEBHOOK_SECRET is set as a Supabase function secret (see
@@ -56,7 +57,7 @@ function extractPayload(text) {
   }
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   // GET → Vercel Cron (authenticated via Authorization: Bearer <CRON_SECRET>).
   // POST → manual trigger, must be a logged-in user.
   if (req.method === 'GET') {
@@ -133,3 +134,5 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: err.message, ...result });
   }
 }
+
+export default withErrorAlert(handler, 'nedarim-recovery');

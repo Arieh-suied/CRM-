@@ -3,6 +3,7 @@ import { requireUser, WRITE_ROLES, INSTITUTION_READ_ROLES } from './_auth.js';
 import { resolveInstitutionNames } from './_scope.js';
 import { isSomechName, isYeshivotName, isToldotNisimName } from './_transaction-notify.js';
 
+import { withErrorAlert } from './_error-alert.js';
 const PAGE_SIZE = 25;
 const SORTABLE = new Set([
   'created_at', 'institution_name', 'customer_name', 'customer_id_number',
@@ -64,7 +65,7 @@ async function handleInstitutions(res, supabase, allowedNames) {
 // following up on a refusal is exactly what an institution owner does here.
 const RESOLVE_ROLES = [...WRITE_ROLES, 'institution'];
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'PUT') return res.status(405).json({ error: 'Method not allowed' });
   try {
     const supabase = getSupabase();
@@ -154,3 +155,5 @@ export default async function handler(req, res) {
     res.status(500).json({ error: err.message });
   }
 }
+
+export default withErrorAlert(handler, 'payment-failures');

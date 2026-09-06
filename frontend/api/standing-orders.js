@@ -3,13 +3,14 @@ import { getSupabase } from './_supabase.js';
 import { requireUser, WRITE_ROLES, INSTITUTION_READ_ROLES } from './_auth.js';
 import { filterRowsByColumn } from './_scope.js';
 
+import { withErrorAlert } from './_error-alert.js';
 const callNedarim = (params) => callNedarimRaw(CREDIT_URL, params);
 
 // Category lives in column '5' of GetKevaNew's DataTables-shaped rows (see
 // CreditTable in StandingOrders.jsx).
 const CATEGORY_COL = '5';
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   const { mosad_number, keva_id, export: exportType } = req.query;
 
   // Only the plain listing (no keva_id detail, no CSV export) is scoped
@@ -95,3 +96,5 @@ export default async function handler(req, res) {
 
   res.status(405).json({ error: 'Method not allowed' });
 }
+
+export default withErrorAlert(handler, 'standing-orders');
