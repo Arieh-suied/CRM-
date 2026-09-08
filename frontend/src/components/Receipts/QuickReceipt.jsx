@@ -37,6 +37,7 @@ export default function QuickReceipt() {
   const [branch, setBranch]     = useState('');
   const [funds, setFunds]       = useState([]);
   const [fundId, setFundId]     = useState('');
+  const [sendTelegram, setSendTelegram] = useState(true);
   const [name, setName]         = useState('');
   const [idNum, setIdNum]       = useState('');
   const [phone, setPhone]       = useState('');
@@ -197,6 +198,7 @@ export default function QuickReceipt() {
         })),
         notes: notes.trim() || undefined,
         fundId: fundId || undefined,
+        sendTelegram,
       };
 
       const res = await authFetch('/api/receipts', {
@@ -272,6 +274,14 @@ export default function QuickReceipt() {
                 <option value="">ללא</option>
                 {funds.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
               </select>
+            </div>
+
+            <div className={styles.fieldGroup}>
+              <label className={styles.fieldLabel} style={{ visibility: 'hidden' }}>טלגרם</label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, height: 38 }}>
+                <input type="checkbox" checked={sendTelegram} onChange={e => setSendTelegram(e.target.checked)} />
+                שלח הודעה לערוץ הטלגרם של המוסד (אם קיים)
+              </label>
             </div>
 
           </div>

@@ -114,6 +114,14 @@ export default function BatchReceipts() {
   const [imgProgress, setImgProgress] = useState({ current: 0, total: 0 });
   const [imgErrors, setImgErrors] = useState([]);
   const [uncertainNameIds, setUncertainNameIds] = useState(new Set());
+  const [funds, setFunds] = useState([]);
+
+  useEffect(() => {
+    authFetch('/api/funds')
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => setFunds(Array.isArray(data) ? data : []))
+      .catch(() => setFunds([]));
+  }, []);
 
   const fetchEntries = useCallback(async () => {
     setLoading(true);
@@ -409,7 +417,8 @@ export default function BatchReceipts() {
             transferDate: entry.transfer_date    || undefined,
           }],
           notes: entry.notes?.trim() || undefined,
-          telegramRecipient: 'none',
+          fundId: entry.fund_id || undefined,
+          sendTelegram: !!entry.send_telegram,
         }),
       });
       const data = await res.json();
@@ -792,6 +801,19 @@ export default function BatchReceipts() {
               {entry.status === 'error' && (
                 <span className={`${styles.badge} ${styles.badgeError}`} style={{ marginBottom: 8, display: 'inline-block' }}>שגיאה - נסה שוב</span>
               )}
+
+              {/* Fund sheet + Telegram */}
+              <div className={styles.entryRow} style={{ marginBottom: 8 }}>
+                <select className={styles.fieldSelect} style={{ height: 34, flex: 1, fontSize: 12 }} value={entry.fund_id || ''}
+                  onChange={e => updateField(entry.id, 'fund_id', e.target.value)}>
+                  <option value="">ללא הוספה לאקסל</option>
+                  {funds.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                </select>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, whiteSpace: 'nowrap' }}>
+                  <input type="checkbox" checked={!!entry.send_telegram} onChange={e => updateField(entry.id, 'send_telegram', e.target.checked)} />
+                  שלח לטלגרם
+                </label>
+              </div>
 
               {/* Actions */}
               <div className={styles.entryActions}>

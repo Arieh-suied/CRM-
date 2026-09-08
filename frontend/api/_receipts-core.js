@@ -106,7 +106,7 @@ export async function issueReceipt(payload) {
     amount, branch,
     payments: paymentEntries,
     paymentMethod, bankName, bankBranch, bankAccount, checkNumber, transferDate,
-    notes, fundId,
+    notes, fundId, sendTelegram = true,
   } = payload;
 
   if (!customerName || typeof customerName !== 'string' || customerName.trim().length < 2) {
@@ -244,7 +244,7 @@ export async function issueReceipt(payload) {
   let telegramSent = false;
   try {
     const supabase = getSupabase();
-    const chatId = transactionChatIdByName(branch);
+    const chatId = sendTelegram ? transactionChatIdByName(branch) : null;
     const [fundResult, telegramResult] = await Promise.allSettled([
       fundId
         ? appendFundRow(supabase, fundId, { rawDate: normalizeDate(firstTransferDate), issueDateIso: toIso(firstTransferDate), customerName: customerName.trim(), amount, docUrl })
