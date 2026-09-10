@@ -51,21 +51,24 @@ function buildRefusalText(record, body) {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
+  // IP allowlist temporarily set to log-only (not blocking) as of 2026-09-11
+  // after the nedarim-webhook JWT deploy incident spooked confidence in this
+  // check — re-enable the `return res.status(403)...` below once confirmed safe.
   const ip = clientIp(req);
   if (ip && !ALLOWED_IPS.includes(ip)) {
-    console.error(`nedarim-refusal-webhook: rejected request from unexpected IP ${ip}`);
+    console.error(`nedarim-refusal-webhook: unexpected IP ${ip} (log-only, not blocking)`);
     const chatId = process.env.TELEGRAM_CHAT_SECURITY_ALERTS;
     if (chatId) {
       // Awaited (not fire-and-forget) — a Vercel serverless function can be
       // torn down right after the response is sent, which would silently
       // drop an un-awaited Telegram call.
       try {
-        await sendTelegramMessage(chatId, `⚠️ עדכון סירובים מנדרים נדחה — הגיע מכתובת IP לא מוכרת: ${ip}\nייתכן שזו כתובת חדשה של נדרים, כדאי לברר מולם. אם זה קורה שוב ושוב, ייתכן שזה ניסיון הונאה.`);
+        await sendTelegramMessage(chatId, `⚠️ עדכון סירובים מנדרים מכתובת IP לא מוכרת: ${ip} (לא נחסם, log-only)\nייתכן שזו כתובת חדשה של נדרים, כדאי לברר מולם. אם זה קורה שוב ושוב, ייתכן שזה ניסיון הונאה.`);
       } catch (err) {
         console.error('nedarim-refusal-webhook telegram error:', err);
       }
     }
-    return res.status(403).json({ error: 'Unauthorized source' });
+    // return res.status(403).json({ error: 'Unauthorized source' });
   }
 
   const body = req.body || {};

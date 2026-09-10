@@ -130,14 +130,17 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ ok: false, error: "Method not allowed" }), { status: 405, headers: json });
   }
 
+  // IP allowlist temporarily set to log-only (not blocking) as of 2026-09-11
+  // after the JWT-verification deploy incident spooked confidence in this
+  // check — re-enable the `return new Response(...403...)` below once confirmed safe.
   const ip = clientIp(req);
   if (ip && !NEDARIM_ALLOWED_IPS.includes(ip)) {
-    console.error(`nedarim-webhook: rejected update from unrecognized IP ${ip}`);
+    console.error(`nedarim-webhook: unrecognized IP ${ip} (log-only, not blocking)`);
     await sendTelegram(
       Deno.env.get("TELEGRAM_CHAT_SECURITY_ALERTS"),
-      `⚠️ עדכון מ-webhook נדרים (עסקאות) נדחה — הגיע מכתובת IP לא מוכרת: ${ip}\nייתכן שזו כתובת חדשה של נדרים, כדאי לברר מולם. אם זה קורה שוב ושוב, ייתכן שזה ניסיון הונאה.`
+      `⚠️ עדכון מ-webhook נדרים (עסקאות) מכתובת IP לא מוכרת: ${ip} (לא נחסם, log-only)\nייתכן שזו כתובת חדשה של נדרים, כדאי לברר מולם. אם זה קורה שוב ושוב, ייתכן שזה ניסיון הונאה.`
     );
-    return new Response(JSON.stringify({ ok: false, error: "Unauthorized source" }), { status: 403, headers: json });
+    // return new Response(JSON.stringify({ ok: false, error: "Unauthorized source" }), { status: 403, headers: json });
   }
 
   // Nedarim can't send a Supabase JWT (hence --no-verify-jwt), so this is guarded
