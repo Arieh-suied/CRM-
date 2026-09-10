@@ -187,7 +187,6 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent, event: Str
     paid_at:                  new Date(pi.created * 1000).toISOString(),
   }, { onConflict: 'stripe_payment_intent_id' });
 
-  const last4 = charge?.payment_method_details?.card?.last4;
   await sendTelegram(
     Deno.env.get('TELEGRAM_CHAT_YESHIVOT'),
     [
@@ -195,7 +194,6 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent, event: Str
       '',
       `שם: ${donorLabel(donorName, donorEmail)}`,
       `סכום: ${amount.toFixed(2)}${upper(pi.currency) === 'ILS' ? '₪' : ' ' + upper(pi.currency)}`,
-      `כרטיס: ${last4 ? '**** ' + last4 : '—'}`,
     ].join('\n')
   );
 }
