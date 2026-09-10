@@ -3,3 +3,6 @@ verify_jwt = false
 
 [functions.sync-active-stripe-customers]
 verify_jwt = false
+
+[functions.nedarim-webhook]
+verify_jwt = false
