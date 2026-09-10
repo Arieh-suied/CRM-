@@ -3,6 +3,8 @@
 // AI assistant's manual "send to Telegram" tool, so both produce identical
 // messages.
 
+import { convertToIls, CURRENCY_SYMBOLS } from './_exchange-rate.js';
+
 export function isYeshivotName(name) {
   return name?.includes('אור אפרים') || name?.includes('חכמי ירושלים');
 }
@@ -51,17 +53,33 @@ export function receiptUrlFor(row) {
   return row.receipt_data ? `https://files.ezcount.co.il/front/documents/get/${row.receipt_data}` : null;
 }
 
-export function buildTelegramText(row, mosadName) {
+async function buildAmountLines(row) {
+  const currency = row.currency && row.currency !== 'ILS' ? row.currency : null;
+  if (!currency) return [`סכום: ${row.amount}₪`];
+
+  const symbol = CURRENCY_SYMBOLS[currency] || currency + ' ';
+  const lines = [`סכום: ${symbol}${row.amount}`];
+  try {
+    const ilsAmount = await convertToIls(row.amount, currency);
+    lines.push(`שווה ערך: ${ilsAmount}₪`);
+  } catch (err) {
+    console.error('buildAmountLines exchange rate error:', err);
+  }
+  return lines;
+}
+
+export async function buildTelegramText(row, mosadName) {
   // transaction_kind lets a caller override the generic "עסקה" header — e.g.
   // the external bank-transfer approval flow (toldot-submissions.js) passes
   // 'העברה בנקאית' so the channel message reads correctly; the automatic
   // transactions webhook leaves it unset and keeps the original wording.
   const kind = row.transaction_kind || 'עסקה';
+  const amountLines = await buildAmountLines(row);
   return [
     `התקבלה ${kind} ב${mosadName}`,
     '',
     `שם: ${row.client_name || '—'}`,
-    `סכום: ${row.amount}₪`,
+    ...amountLines,
     `הערות: ${row.comments || ''}`,
     `קטגוריה: ${row.group_name || ''}`,
     `סוג תשלום: ${paymentTypeFor(mosadName)}`,

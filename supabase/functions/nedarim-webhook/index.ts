@@ -13,6 +13,11 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
+// Nedarim sends currency as a numeric code, not an ISO string (confirmed with
+// the user 2026-09-10): 1=ILS, 2=USD, 3=EUR. Unrecognized codes fall back to
+// the raw value so we don't silently lose data for a code we haven't seen yet.
+const NEDARIM_CURRENCY_CODES: Record<string, string> = { "1": "ILS", "2": "USD", "3": "EUR" };
+
 function mapRow(item: Record<string, string>) {
   return {
     source: "api",
@@ -25,7 +30,7 @@ function mapRow(item: Record<string, string>) {
     phone: item.Phone ?? null,
     email: item.Mail ?? null,
     amount: item.Amount ? Number(item.Amount) : null,
-    currency: item.Currency ?? null,
+    currency: item.Currency ? (NEDARIM_CURRENCY_CODES[item.Currency] ?? item.Currency) : null,
     confirmation_code: item.Confirmation ?? null,
     last4: item.LastNum ?? null,
     card_expiry: item.Tokef ?? null,

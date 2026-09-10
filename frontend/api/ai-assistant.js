@@ -284,7 +284,7 @@ async function executeSendTelegramNotification(supabase, args, requestUser) {
 
   const { data: row, error } = await supabase
     .from('transactions')
-    .select('id, client_name, amount, comments, group_name, mosad_number, receipt_data')
+    .select('id, client_name, amount, currency, comments, group_name, mosad_number, receipt_data')
     .eq('id', args?.transaction_id)
     .maybeSingle();
   if (error) return { error: error.message };
@@ -292,7 +292,7 @@ async function executeSendTelegramNotification(supabase, args, requestUser) {
 
   const institution = await resolveInstitution(row, supabase);
   const mosadName = institution?.mosadName || args.channel;
-  const text = buildTelegramText(row, mosadName);
+  const text = await buildTelegramText(row, mosadName);
 
   try {
     await sendTelegramMessage(chatId, text, { receiptUrl: receiptUrlFor(row) });

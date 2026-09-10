@@ -11,6 +11,7 @@ import { sendTelegramMessage } from './_telegram.js';
 import { appendRow } from './_google-sheets.js';
 import { getMatchingFundRules } from './_fund-routing.js';
 import { resolveInstitution, buildTelegramText, receiptUrlFor } from './_transaction-notify.js';
+import { convertToIls } from './_exchange-rate.js';
 
 export function chatIdForBucket(bucket) {
   if (bucket === 'סומך נופלים') return process.env.TELEGRAM_CHAT_SOMECH;
@@ -26,7 +27,7 @@ export async function routeTransaction(supabase, record) {
     const target = await resolveInstitution(record, supabase);
     const chatId = target && chatIdForBucket(target.bucket);
     if (chatId) {
-      const text = buildTelegramText(record, target.mosadName);
+      const text = await buildTelegramText(record, target.mosadName);
       await sendTelegramMessage(chatId, text, { receiptUrl: receiptUrlFor(record) });
       results.telegram = { sent: true, channel: target.mosadName };
     } else {
@@ -37,10 +38,22 @@ export async function routeTransaction(supabase, record) {
     results.telegram = { sent: false, error: err.message };
   }
 
+  // Fund sheets track totals in ILS — a foreign-currency transaction must be
+  // converted before it's written, or it silently corrupts the SUM columns
+  // (a $15 donation would otherwise be counted as ₪15).
+  let sheetRecord = record;
+  if (record.currency && record.currency !== 'ILS') {
+    try {
+      sheetRecord = { ...record, amount: await convertToIls(record.amount, record.currency) };
+    } catch (err) {
+      console.error('routeTransaction currency conversion error:', err);
+    }
+  }
+
   const matchingRules = await getMatchingFundRules(supabase, record);
   for (const rule of matchingRules) {
     try {
-      await appendRow(rule.spreadsheetId, rule.sheetName, rule.buildRow(record));
+      await appendRow(rule.spreadsheetId, rule.sheetName, rule.buildRow(sheetRecord));
       results.sheets.push({ fund: rule.name, ok: true });
     } catch (err) {
       console.error(`routeTransaction sheets error [${rule.id}]:`, err);
