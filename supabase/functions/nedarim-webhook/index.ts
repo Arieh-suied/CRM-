@@ -110,7 +110,8 @@ async function sendTelegram(chatId: string | undefined, text: string) {
 // transactions, so this is enforced as a hard block. Deployed log-only for a
 // short window first (never blocking) while that was still an assumption,
 // since this pipeline processes real donations with no retry on failure.
-const NEDARIM_ALLOWED_IPS = ["18.196.146.117", "18.194.219.73"];
+// 3.93.16.70 added 2026-09-11, also confirmed directly by Nedarim.
+const NEDARIM_ALLOWED_IPS = ["18.196.146.117", "18.194.219.73", "3.93.16.70"];
 
 function clientIp(req: Request): string | null {
   const fwd = req.headers.get("x-forwarded-for");

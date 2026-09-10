@@ -9,6 +9,7 @@
 // No shared secret is supported by Nedarim for this webhook — the only
 // verification they offer is a fixed sender-IP allowlist (their own
 // recommendation), enforced below.
+// 3.93.16.70 added 2026-09-11, also confirmed directly by Nedarim.
 //
 // Env vars: none new — reuses SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY,
 // TELEGRAM_BOT_TOKEN, and the existing TELEGRAM_CHAT_REFUSALS_* /
@@ -18,7 +19,7 @@ import { getSupabase } from './_supabase.js';
 import { sendTelegramMessage } from './_telegram.js';
 import { refusalChatId } from './_transaction-notify.js';
 
-const ALLOWED_IPS = ['18.196.146.117', '18.194.219.73'];
+const ALLOWED_IPS = ['18.196.146.117', '18.194.219.73', '3.93.16.70'];
 
 function clientIp(req) {
   const fwd = req.headers['x-forwarded-for'];
