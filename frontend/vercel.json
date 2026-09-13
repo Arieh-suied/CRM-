@@ -11,6 +11,10 @@
     {
       "path": "/api/nedarim-recovery",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/nedarim-refusal-recovery",
+      "schedule": "*/5 * * * *"
     }
   ]
 }
