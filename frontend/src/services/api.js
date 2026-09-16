@@ -214,6 +214,30 @@ export function searchDonors(search) {
   return request(`/transactions?action=donor-search&search=${encodeURIComponent(search)}`);
 }
 
+// Donor annual receipt report
+export function fetchDonorReport({ customerName, customerIdNumber, year }) {
+  const params = new URLSearchParams({ year });
+  if (customerIdNumber) params.set('customer_id_number', customerIdNumber);
+  else if (customerName) params.set('customer_name', customerName);
+  return request(`/donor-report?${params.toString()}`);
+}
+
+export async function downloadDonorReportPdf({ customerName, customerIdNumber, year }) {
+  const params = new URLSearchParams({ year, format: 'merged' });
+  if (customerIdNumber) params.set('customer_id_number', customerIdNumber);
+  else if (customerName) params.set('customer_name', customerName);
+  const res = await authFetch(`/api/donor-report?${params.toString()}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || 'Download failed');
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `דוח-${customerName || customerIdNumber}-${year}.pdf`; a.click();
+  URL.revokeObjectURL(url);
+}
+
 // Bank standing-order refusals — monthly reconciliation
 export function fetchBankRefusals(mosadNumber, period) {
   return request(`/bank-refusals?mosad_number=${encodeURIComponent(mosadNumber)}&period=${encodeURIComponent(period)}`);

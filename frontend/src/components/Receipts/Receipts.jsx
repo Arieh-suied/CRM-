@@ -3,11 +3,13 @@ import styles from './Receipts.module.css';
 import QuickReceipt from './QuickReceipt.jsx';
 import BatchReceipts from './BatchReceipts.jsx';
 import ExternalTransfers from './ExternalTransfers.jsx';
+import DonorReport from './DonorReport.jsx';
 
 const VIEWS = [
-  { id: 'quick',    label: 'קבלה מהירה' },
-  { id: 'batch',    label: 'העלאת העברות' },
-  { id: 'external', label: 'העברות מהדף החיצוני' },
+  { id: 'quick',        label: 'קבלה מהירה' },
+  { id: 'batch',        label: 'העלאת העברות' },
+  { id: 'external',     label: 'העברות מהדף החיצוני' },
+  { id: 'donor-report', label: 'דוח שנתי לתורם' },
 ];
 
 export default function Receipts() {
@@ -31,6 +33,7 @@ export default function Receipts() {
         {view === 'quick' && <QuickReceipt />}
         {view === 'batch' && <BatchReceipts />}
         {view === 'external' && <ExternalTransfers />}
+        {view === 'donor-report' && <DonorReport />}
       </div>
     </div>
   );
