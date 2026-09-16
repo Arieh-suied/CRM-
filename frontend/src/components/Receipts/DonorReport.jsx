@@ -218,6 +218,7 @@ export default function DonorReport() {
               <thead>
                 <tr>
                   <th>תאריך</th>
+                  <th>שם תורם</th>
                   <th>מוסד</th>
                   <th>קרן</th>
                   <th>סוג קבלה</th>
@@ -229,6 +230,7 @@ export default function DonorReport() {
                 {result.receipts.map((r, i) => (
                   <tr key={r.receipt_number || i}>
                     <td>{r.issue_date}</td>
+                    <td>{r.customer_name || '—'}</td>
                     <td>{r.institution_name}</td>
                     <td>{r.category || '—'}</td>
                     <td>{r.receipt_type}</td>
