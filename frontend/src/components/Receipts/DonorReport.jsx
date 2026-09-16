@@ -50,6 +50,7 @@ function ReceiptLink({ receipt }) {
 export default function DonorReport() {
   const { role } = useAuth();
   const [name, setName] = useState('');
+  const [idNumber, setIdNumber] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [year, setYear] = useState(String(CURRENT_YEAR));
   const [suggestions, setSuggestions] = useState([]);
@@ -96,6 +97,7 @@ export default function DonorReport() {
 
   const selectCustomer = (c) => {
     setName(c.name);
+    if (c.id_number) setIdNumber(c.id_number);
     setSelectedCustomer(c);
     setShowSugg(false);
     setResult(null);
@@ -108,15 +110,17 @@ export default function DonorReport() {
     searchCustomers(v);
   };
 
+  const canRun = name.trim() || idNumber.trim();
+
   const runReport = async () => {
-    if (!name.trim()) return;
+    if (!canRun) return;
     setLoading(true);
     setError('');
     setResult(null);
     try {
       const data = await fetchDonorReport({
         customerName: name.trim(),
-        customerIdNumber: selectedCustomer?.id_number || '',
+        customerIdNumber: idNumber.trim(),
         year,
       });
       setResult(data);
@@ -133,7 +137,7 @@ export default function DonorReport() {
     try {
       await downloadDonorReportPdf({
         customerName: name.trim(),
-        customerIdNumber: selectedCustomer?.id_number || '',
+        customerIdNumber: idNumber.trim(),
         year,
       });
     } catch (err) {
@@ -175,6 +179,16 @@ export default function DonorReport() {
         </div>
 
         <div className={styles.fieldGroup}>
+          <label className={styles.fieldLabel}>מספר זהות (מדויק — עדיף כשידוע)</label>
+          <input
+            className={styles.fieldInput}
+            value={idNumber}
+            onChange={(e) => { setIdNumber(e.target.value); setResult(null); }}
+            placeholder="לדוגמה: 203043757"
+          />
+        </div>
+
+        <div className={styles.fieldGroup}>
           <label className={styles.fieldLabel}>שנה</label>
           <select className={styles.fieldSelect} value={year} onChange={(e) => setYear(e.target.value)}>
             {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
@@ -183,7 +197,7 @@ export default function DonorReport() {
       </div>
 
       <div className={styles.entryActions} style={{ marginTop: 14 }}>
-        <button className={`${styles.btn} ${styles.btnPrimary}`} disabled={!name.trim() || loading} onClick={runReport}>
+        <button className={`${styles.btn} ${styles.btnPrimary}`} disabled={!canRun || loading} onClick={runReport}>
           {loading ? 'טוען...' : 'הצג דוח'}
         </button>
         {result?.receipts?.length > 0 && (
@@ -197,7 +211,7 @@ export default function DonorReport() {
 
       {result && (
         result.receipts.length === 0 ? (
-          <div className={styles.empty}>לא נמצאו קבלות עבור {name} בשנת {year}</div>
+          <div className={styles.empty}>לא נמצאו קבלות עבור {name || `ת.ז ${idNumber}`} בשנת {year}</div>
         ) : (
           <div className={styles.tableWrap} style={{ marginTop: 16 }}>
             <table className={styles.table}>
