@@ -2,9 +2,10 @@ import { useState, useEffect, useRef, useCallback, useMemo, useLayoutEffect } fr
 import { createPortal } from 'react-dom';
 import styles from './Receipts.module.css';
 import { supabase } from '../../lib/supabase.js';
-import { fetchDonorReport, downloadDonorReportPdf } from '../../services/api.js';
+import { fetchDonorReport, downloadDonorReportPdf, searchDonors } from '../../services/api.js';
 import { buildReceiptProxyUrl } from '../../lib/receiptProxy.js';
 import { debounce } from '../../lib/debounce.js';
+import { useAuth } from '../../contexts/AuthContext.jsx';
 
 const CURRENT_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: 6 }, (_, i) => CURRENT_YEAR - i);
@@ -47,6 +48,7 @@ function ReceiptLink({ receipt }) {
 }
 
 export default function DonorReport() {
+  const { role } = useAuth();
   const [name, setName] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [year, setYear] = useState(String(CURRENT_YEAR));
@@ -70,15 +72,26 @@ export default function DonorReport() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  // Institution-scoped users search through /api/transactions?action=donor-search
+  // (already filtered server-side by their allowed mosad/group) instead of the
+  // `customers` table directly — that table's RLS lets any authenticated user
+  // read every donor in the org, which a fund-scoped account must not see.
   const runCustomerSearch = useCallback(async (q) => {
     if (q.length < 2) { setSuggestions([]); setShowSugg(false); return; }
+    if (role === 'institution') {
+      const donors = await searchDonors(q).catch(() => []);
+      const mapped = donors.map((d) => ({ id: d.id, name: d.client_name, id_number: null }));
+      if (mapped.length) { setSuggestions(mapped); setShowSugg(true); }
+      else { setSuggestions([]); setShowSugg(false); }
+      return;
+    }
     const { data } = await supabase.from('customers')
       .select('*')
       .or(`name.ilike.%${q}%,id_number.ilike.%${q}%`)
       .limit(6);
     if (data?.length) { setSuggestions(data); setShowSugg(true); }
     else { setSuggestions([]); setShowSugg(false); }
-  }, []);
+  }, [role]);
   const searchCustomers = useMemo(() => debounce(runCustomerSearch, 300), [runCustomerSearch]);
 
   const selectCustomer = (c) => {
@@ -192,6 +205,7 @@ export default function DonorReport() {
                 <tr>
                   <th>תאריך</th>
                   <th>מוסד</th>
+                  <th>קרן</th>
                   <th>סוג קבלה</th>
                   <th>סכום</th>
                   <th>קישור</th>
@@ -202,6 +216,7 @@ export default function DonorReport() {
                   <tr key={r.receipt_number || i}>
                     <td>{r.issue_date}</td>
                     <td>{r.institution_name}</td>
+                    <td>{r.category || '—'}</td>
                     <td>{r.receipt_type}</td>
                     <td>{Number(r.amount).toLocaleString('he-IL')} ₪</td>
                     <td><ReceiptLink receipt={r} /></td>

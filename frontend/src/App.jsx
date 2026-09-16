@@ -18,6 +18,7 @@ const StripeDonations  = lazy(() => import('./components/StripeDonations/StripeD
 const BankTransfers    = lazy(() => import('./components/BankTransfers/BankTransfers.jsx'));
 const StandingOrders   = lazy(() => import('./components/StandingOrders/StandingOrders.jsx'));
 const Receipts         = lazy(() => import('./components/Receipts/Receipts.jsx'));
+const DonorReport      = lazy(() => import('./components/Receipts/DonorReport.jsx'));
 const GrowTransactions = lazy(() => import('./components/GrowTransactions/GrowTransactions.jsx'));
 const UserManagement   = lazy(() => import('./components/UserManagement/UserManagement.jsx'));
 const FundsManagement  = lazy(() => import('./components/Funds/FundsManagement.jsx'));
@@ -39,7 +40,7 @@ const DEFAULT_SORT = { sort_by: 'transaction_time_iso', sort_dir: 'desc' };
 // or back/forward keeps you on the same screen instead of resetting to עסקאות.
 const VALID_TABS = new Set([
   'transactions', 'stripe', 'bank', 'keva', 'grow',
-  'receipts', 'funds', 'fund-transfer', 'failures', 'bank-refusals', 'email-template', 'users', 'summary',
+  'receipts', 'donor-report', 'funds', 'fund-transfer', 'failures', 'bank-refusals', 'email-template', 'users', 'summary',
 ]);
 
 function tabFromHash() {
@@ -175,6 +176,9 @@ function Dashboard({ user, signOut, role, allowedMosadim, extraTabs }) {
             <StandingOrders institutions={visibleInstitutions} />
           )}
           {activeTab === 'receipts'  && <Receipts />}
+          {activeTab === 'donor-report' && (role !== 'institution' || extraTabs?.includes('donor-report')) && (
+            <DonorReport />
+          )}
           {activeTab === 'grow'      && <GrowTransactions />}
           {activeTab === 'funds'     && <FundsManagement />}
           {activeTab === 'fund-transfer' && <FundTransferForm />}

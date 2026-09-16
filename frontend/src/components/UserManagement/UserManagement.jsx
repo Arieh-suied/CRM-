@@ -138,6 +138,12 @@ function UserForm({ institutions, groupNames, initial, onSave, onCancel, saving 
   const isInstitution = form.role === 'institution';
 
   const set = (key, val) => setForm((p) => ({ ...p, [key]: val }));
+  const toggleTab = (tab, checked) => {
+    const next = checked
+      ? [...(form.extra_tabs ?? []), tab]
+      : (form.extra_tabs ?? []).filter((t) => t !== tab);
+    set('extra_tabs', next.length ? next : null);
+  };
 
   function handleSubmit(e) {
     e.preventDefault();
@@ -247,11 +253,22 @@ function UserForm({ institutions, groupNames, initial, onSave, onCancel, saving 
               <input
                 type="checkbox"
                 checked={(form.extra_tabs ?? []).includes('bank-refusals')}
-                onChange={(e) => set('extra_tabs', e.target.checked ? ['bank-refusals'] : null)}
+                onChange={(e) => toggleTab('bank-refusals', e.target.checked)}
               />
               <div>
                 <span className={styles.roleLabel}>סירובים בנקאי</span>
                 <span className={styles.roleDesc}>גישת צפייה בלבד לדוח הוראות הקבע שחזרו</span>
+              </div>
+            </label>
+            <label className={styles.roleOption} style={{ minWidth: 0 }}>
+              <input
+                type="checkbox"
+                checked={(form.extra_tabs ?? []).includes('donor-report')}
+                onChange={(e) => toggleTab('donor-report', e.target.checked)}
+              />
+              <div>
+                <span className={styles.roleLabel}>דוח קבלות שנתי</span>
+                <span className={styles.roleDesc}>צפייה/הורדה של דוח קבלות שנתי, מסונן לפי הקרן/קטגוריה שהוקצתה למשתמש</span>
               </div>
             </label>
           </div>

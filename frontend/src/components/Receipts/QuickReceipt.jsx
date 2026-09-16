@@ -269,7 +269,7 @@ export default function QuickReceipt() {
             </div>
 
             <div className={styles.fieldGroup}>
-              <label className={styles.fieldLabel}>הוסף לאקסל של קרן (אופציונלי)</label>
+              <label className={styles.fieldLabel}>קרן (אופציונלי — גם לאקסל וגם לשיוך בדוחות מסוננים)</label>
               <select className={styles.fieldSelect} value={fundId} onChange={e => setFundId(e.target.value)}>
                 <option value="">ללא</option>
                 {funds.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}

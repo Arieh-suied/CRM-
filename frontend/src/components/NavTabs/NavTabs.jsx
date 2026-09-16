@@ -13,6 +13,7 @@ const ALL_TABS = [
   { id: 'keva',         label: 'הוראות קבע', roles: STAFF_ROLES },
   { id: 'grow',         label: 'Grow', roles: STAFF_ROLES },
   { id: 'receipts',     label: 'קבלות', roles: STAFF_ROLES },
+  { id: 'donor-report', label: 'דוח קבלות שנתי', roles: STAFF_ROLES },
   { id: 'funds',        label: 'ניהול קרנות', roles: STAFF_ROLES },
   { id: 'fund-transfer', label: 'תנועה בקרן', roles: ['admin', 'editor'] },
   { id: 'failures',     label: 'סירובים' },

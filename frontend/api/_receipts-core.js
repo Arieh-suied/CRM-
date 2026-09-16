@@ -170,6 +170,17 @@ export async function issueReceipt(payload) {
 
   try {
     const supabase = getSupabase();
+
+    // Resolved early (separately from appendFundRow's own lookup below, which
+    // only runs later in a best-effort block) so the fund's name can be saved
+    // as issued_receipts.category — needed to scope a sub-fund donor (e.g.
+    // "יחי ראובן") report to just their own receipts.
+    let fundCategory = null;
+    if (fundId) {
+      const { data: fund } = await supabase.from('funds').select('name').eq('id', fundId).maybeSingle();
+      fundCategory = fund?.name || null;
+    }
+
     const firstPayment    = Array.isArray(paymentEntries) && paymentEntries.length > 0 ? paymentEntries[0] : null;
     const saveBankName    = firstPayment?.bankName    || bankName    || null;
     const saveBankBranch  = firstPayment?.bankBranch  || bankBranch  || null;
@@ -223,6 +234,7 @@ export async function issueReceipt(payload) {
         account_number:      saveBankAccount,
         notes:               notes || null,
         status:              'issued',
+        category:            fundCategory,
         pdf_url:             docUrl || null,
         raw_payload:         payload,
         updated_at:          new Date().toISOString(),

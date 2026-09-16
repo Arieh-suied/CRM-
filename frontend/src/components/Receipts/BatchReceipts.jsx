@@ -806,7 +806,7 @@ export default function BatchReceipts() {
               <div className={styles.entryRow} style={{ marginBottom: 8 }}>
                 <select className={styles.fieldSelect} style={{ height: 34, flex: 1, fontSize: 12 }} value={entry.fund_id || ''}
                   onChange={e => updateField(entry.id, 'fund_id', e.target.value)}>
-                  <option value="">ללא הוספה לאקסל</option>
+                  <option value="">ללא קרן</option>
                   {funds.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
                 </select>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, whiteSpace: 'nowrap' }}>
