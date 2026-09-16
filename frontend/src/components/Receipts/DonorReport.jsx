@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import styles from './Receipts.module.css';
 import { supabase } from '../../lib/supabase.js';
 import { fetchDonorReport, downloadDonorReportPdf } from '../../services/api.js';
@@ -7,6 +8,29 @@ import { debounce } from '../../lib/debounce.js';
 
 const CURRENT_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: 6 }, (_, i) => CURRENT_YEAR - i);
+
+// The dropdown is portaled to <body> with position:fixed, anchored to the
+// input's rect — Receipts.module.css's .wrapper has overflow:hidden (for the
+// glass-card rounded corners), which would otherwise clip the suggestion
+// list whenever the card above it is short (as this report's is).
+function useAnchoredPos(anchorRef, open) {
+  const [pos, setPos] = useState(null);
+  useLayoutEffect(() => {
+    if (!open || !anchorRef.current) { setPos(null); return; }
+    const update = () => {
+      const r = anchorRef.current.getBoundingClientRect();
+      setPos({ top: r.bottom + 4, left: r.left, width: r.width });
+    };
+    update();
+    window.addEventListener('scroll', update, true);
+    window.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('scroll', update, true);
+      window.removeEventListener('resize', update);
+    };
+  }, [open, anchorRef]);
+  return pos;
+}
 
 function ReceiptLink({ receipt }) {
   const [href, setHref] = useState(null);
@@ -28,7 +52,9 @@ export default function DonorReport() {
   const [year, setYear] = useState(String(CURRENT_YEAR));
   const [suggestions, setSuggestions] = useState([]);
   const [showSugg, setShowSugg] = useState(false);
-  const suggRef = useRef(null);
+  const inputRef = useRef(null);
+  const panelRef = useRef(null);
+  const pos = useAnchoredPos(inputRef, showSugg && suggestions.length > 0);
 
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -37,7 +63,8 @@ export default function DonorReport() {
 
   useEffect(() => {
     const handler = (e) => {
-      if (suggRef.current && !suggRef.current.contains(e.target)) setShowSugg(false);
+      if (inputRef.current?.contains(e.target) || panelRef.current?.contains(e.target)) return;
+      setShowSugg(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -108,23 +135,29 @@ export default function DonorReport() {
       <div className={styles.sectionTitle}>דוח קבלות שנתי לתורם</div>
 
       <div className={styles.formGrid}>
-        <div className={styles.fieldGroup} ref={suggRef}>
+        <div className={styles.fieldGroup}>
           <label className={styles.fieldLabel}>שם תורם</label>
           <input
+            ref={inputRef}
             className={styles.fieldInput}
             value={name}
             onChange={(e) => handleNameChange(e.target.value)}
             placeholder="הקלד שם לחיפוש..."
           />
-          {showSugg && suggestions.length > 0 && (
-            <div className={styles.autocompleteDropdown}>
+          {showSugg && suggestions.length > 0 && pos && createPortal(
+            <div
+              ref={panelRef}
+              className={styles.autocompleteDropdown}
+              style={{ position: 'fixed', top: pos.top, left: pos.left, right: 'auto', width: pos.width, maxHeight: 260, overflowY: 'auto' }}
+            >
               {suggestions.map((c) => (
                 <div key={c.id} className={styles.autocompleteItem} onClick={() => selectCustomer(c)}>
                   <div className={styles.autocompleteItemName}>{c.name}</div>
                   <div className={styles.autocompleteItemSub}>{c.id_number || ''}</div>
                 </div>
               ))}
-            </div>
+            </div>,
+            document.body
           )}
         </div>
 
