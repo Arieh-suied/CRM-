@@ -1,0 +1,259 @@
+/* ── Card ── */
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
+  min-width: 0;
+}
+
+/* Table cards clip their corners. Only for cards whose popovers are portals or
+   native selects — clipping would cut off an in-flow dropdown. */
+.clip { overflow: hidden; }
+.padded { padding: var(--space-5); }
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  padding: 14px var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.cardTitle {
+  font-size: var(--text-md);
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.cardSubtitle {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
+.cardActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* ── Toolbar ── */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+
+/* Free-standing toolbar (its own card, above a separate table card) */
+.toolbarStandalone {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
+}
+
+.toolbarSearch {
+  flex: 1 1 240px;
+  max-width: 420px;
+}
+
+/* Pushes everything after it to the far (left) end */
+.spacer { margin-inline-start: auto; }
+
+.toolbarMeta {
+  font-size: var(--text-base);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.toolbarDivider {
+  width: 1px;
+  height: 20px;
+  background: var(--color-border);
+  flex-shrink: 0;
+}
+
+/* ── Segmented control (in-page sub-views) ── */
+.segmented {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  background: #eceff6;
+  border-radius: var(--radius);
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.segmented::-webkit-scrollbar { display: none; }
+
+.segment {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font-family: inherit;
+  font-size: var(--text-base);
+  font-weight: 500;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  transition: background-color 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+.segment:hover { color: var(--color-text); }
+
+.segmentActive {
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+
+.segmentCount {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+.segmentActive .segmentCount { color: var(--brand-600); }
+
+/* ── Badge ── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.badgeDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.neutral { background: #eef1f6; color: #4a5470; }
+.primary { background: var(--brand-50); color: var(--brand-700); }
+.success { background: var(--color-success-50); color: var(--color-success); }
+.warning { background: var(--color-warning-50); color: var(--color-warning); }
+.danger  { background: var(--color-danger-50); color: var(--color-danger); }
+
+/* ── Alert (inline banner) ── */
+.alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid;
+  border-radius: var(--radius);
+  font-size: var(--text-base);
+  line-height: 1.5;
+}
+
+.alertIcon { margin-top: 2px; }
+.alertBody { flex: 1; min-width: 0; }
+.alertTitle { font-weight: 700; }
+
+.alertClose {
+  border: none;
+  background: transparent;
+  color: inherit;
+  opacity: 0.6;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.alertClose:hover { opacity: 1; background: rgba(0, 0, 0, 0.05); }
+
+.alert.info    { background: var(--brand-50); border-color: var(--brand-100); color: #24439a; }
+.alert.success { background: var(--color-success-50); border-color: var(--color-success-100); color: #075c40; }
+.alert.warning { background: var(--color-warning-50); border-color: var(--color-warning-100); color: #8a3f06; }
+.alert.danger  { background: var(--color-danger-50); border-color: var(--color-danger-100); color: #a3271e; }
+
+/* ── State message (loading / empty / error) ── */
+.state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
+.stateCompact { padding: 32px 16px; }
+
+.stateIcon {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #eef1f6;
+  color: var(--color-text-muted);
+  margin-bottom: 6px;
+}
+
+.stateIconError { background: var(--color-danger-50); color: var(--color-danger); }
+
+.stateSpinner { color: var(--brand-500); margin-bottom: 6px; }
+
+.stateTitle {
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.stateDescription {
+  font-size: var(--text-base);
+  color: var(--color-text-muted);
+  max-width: 420px;
+}
+
+.stateAction { margin-top: 10px; }
+
+/* ── Page section heading (inside a screen) ── */
+.sectionTitle {
+  font-size: var(--text-md);
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+@media (max-width: 640px) {
+  .toolbar { padding: var(--space-3); }
+  .toolbarSearch { flex-basis: 100%; max-width: none; }
+  .padded { padding: var(--space-4); }
+  .cardHeader { padding: 12px var(--space-4); }
+}

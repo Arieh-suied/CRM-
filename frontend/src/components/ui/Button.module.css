@@ -1,0 +1,125 @@
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: var(--control-h);
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: var(--text-base);
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+.btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.btn:disabled,
+.btn[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Sizes ── */
+.sm { height: var(--control-h-sm); padding: 0 10px; font-size: var(--text-sm); gap: 5px; }
+.lg { height: var(--control-h-lg); padding: 0 20px; font-size: var(--text-md); }
+.block { width: 100%; }
+
+/* ── Variants ── */
+.primary {
+  background: var(--brand-600);
+  color: #fff;
+  box-shadow: var(--shadow-xs);
+}
+.primary:hover:not(:disabled) { background: var(--brand-700); }
+
+.secondary {
+  background: var(--color-surface);
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+  box-shadow: var(--shadow-xs);
+}
+.secondary:hover:not(:disabled) { background: var(--color-surface-muted); border-color: #b9c3d8; }
+
+.ghost {
+  background: transparent;
+  color: var(--color-text-muted);
+}
+.ghost:hover:not(:disabled) { background: #eef1f7; color: var(--color-text); }
+
+/* Tinted brand button — row actions such as "קבלה 41200" or "שלח מייל" */
+.soft {
+  background: var(--brand-50);
+  color: var(--brand-600);
+}
+.soft:hover:not(:disabled) { background: var(--brand-100); }
+
+.danger {
+  background: var(--color-danger-solid);
+  color: #fff;
+  box-shadow: var(--shadow-xs);
+}
+.danger:hover:not(:disabled) { background: #bf3030; }
+
+.dangerSoft {
+  background: var(--color-danger-50);
+  border-color: var(--color-danger-100);
+  color: var(--color-danger);
+}
+.dangerSoft:hover:not(:disabled) { background: #fbe1df; border-color: #f1b8b4; }
+
+.successSoft {
+  background: var(--color-success-50);
+  border-color: var(--color-success-100);
+  color: var(--color-success);
+}
+.successSoft:hover:not(:disabled) { background: #d9f0e6; border-color: #a9dcc6; }
+
+/* Text-only button that reads like a link */
+.link {
+  height: auto;
+  padding: 0;
+  background: none;
+  color: var(--brand-600);
+  font-weight: 500;
+}
+.link:hover:not(:disabled) { text-decoration: underline; }
+
+/* ── Icon-only ── */
+.icon {
+  width: var(--control-h);
+  padding: 0;
+}
+.icon.sm { width: var(--control-h-sm); padding: 0; }
+.icon.lg { width: var(--control-h-lg); padding: 0; }
+
+/* ── Spinner ── */
+.spinner {
+  display: inline-block;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-inline-end-color: transparent;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 640px) {
+  .btn { height: 40px; }
+  .sm { height: 34px; }
+  .lg { height: 48px; }
+  .icon { width: 40px; }
+  .icon.sm { width: 34px; }
+}

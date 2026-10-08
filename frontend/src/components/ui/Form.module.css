@@ -1,0 +1,209 @@
+/* ── Field wrapper ── */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  position: relative;
+}
+
+.label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.required::after {
+  content: ' *';
+  color: var(--color-danger);
+}
+
+.hint {
+  font-size: var(--text-sm);
+  color: var(--color-text-subtle);
+}
+
+.error {
+  font-size: var(--text-sm);
+  color: var(--color-danger);
+}
+
+/* ── Controls ── */
+.control {
+  width: 100%;
+  height: var(--control-h);
+  padding: 0 12px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface);
+  font-family: inherit;
+  font-size: var(--text-base);
+  color: var(--color-text);
+  transition: border-color 0.15s, box-shadow 0.15s, background-color 0.15s;
+}
+
+.control::placeholder { color: var(--color-text-subtle); }
+.control:hover:not(:disabled) { border-color: #b6c1d6; }
+
+.control:focus,
+.control:focus-visible {
+  outline: none;
+  border-color: var(--brand-500);
+  box-shadow: var(--focus-ring);
+}
+
+.control:disabled {
+  background-color: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+}
+
+.control[aria-invalid='true'] {
+  border-color: var(--color-danger);
+}
+
+.sm { height: var(--control-h-sm); font-size: var(--text-sm); padding: 0 10px; }
+
+/* Native select with our own chevron (on the inline-end side = left in RTL) */
+.select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-inline-end: 32px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235b6784' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: left 10px center;
+  background-size: 14px;
+  cursor: pointer;
+  text-overflow: ellipsis;
+}
+
+.textarea {
+  height: auto;
+  min-height: 84px;
+  padding: 8px 12px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+/* ── Checkbox with label ── */
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--text-base);
+  color: var(--color-text);
+  cursor: pointer;
+  user-select: none;
+}
+
+.check input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--brand-600);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.check:has(input:disabled) { cursor: not-allowed; color: var(--color-text-muted); }
+
+/* ── Form layout ── */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px 20px;
+}
+
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px 20px;
+}
+
+.full { grid-column: 1 / -1; }
+
+/* ── Search input ── */
+.search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.searchIcon {
+  position: absolute;
+  inset-inline-start: 11px;
+  color: var(--color-text-subtle);
+  pointer-events: none;
+}
+
+.searchInput {
+  padding-inline-start: 34px;
+  padding-inline-end: 32px;
+}
+
+.searchInput::-webkit-search-cancel-button { -webkit-appearance: none; display: none; }
+
+.searchClear,
+.dateClear {
+  position: absolute;
+  inset-inline-end: 6px;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.searchClear:hover,
+.dateClear:hover { background: #eef1f7; color: var(--color-text); }
+
+.dateClear { position: static; flex-shrink: 0; }
+
+/* ── Date range: two date inputs in one control ── */
+.dateRange {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: var(--control-h);
+  padding: 0 8px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.dateRange:focus-within {
+  border-color: var(--brand-500);
+  box-shadow: var(--focus-ring);
+}
+
+.dateInput {
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  width: 118px;
+  min-width: 0;
+}
+
+.dateInput:focus { outline: none; }
+
+.dateSep {
+  color: var(--color-text-subtle);
+  font-size: var(--text-sm);
+}
+
+@media (max-width: 640px) {
+  .control { height: 42px; }
+  .sm { height: 38px; }
+  .grid2 { grid-template-columns: 1fr; }
+  .dateRange { height: 42px; width: 100%; }
+  .dateInput { flex: 1; width: auto; }
+}

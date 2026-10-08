@@ -4,45 +4,114 @@
   padding: 0;
 }
 
+/* ── Design tokens ────────────────────────────────────────────────────────
+   Every color, size and radius in the app comes from here. Text colors are
+   picked to pass WCAG AA (4.5:1) on white — the old brand blue / green / red
+   were 2.5–3.7:1, so their text variants are one shade deeper. */
 :root {
-  --color-bg: #eef0f7;
-  --color-surface: rgba(255, 255, 255, 0.75);
-  --color-surface-solid: #ffffff;
-  --color-border: rgba(200, 210, 230, 0.6);
-  --color-primary: #4f7ef8;
-  --color-primary-dark: #2f5fe0;
-  --color-text: #1a1f36;
-  --color-text-muted: #5b6784;
-  --color-success: #10b981;
-  --color-danger: #f25c5c;
-  --radius: 14px;
-  --radius-sm: 8px;
-  --radius-lg: 20px;
-  --blur: blur(18px);
-  --shadow-sm: 0 2px 12px rgba(80, 100, 160, 0.07);
-  --shadow-md: 0 8px 32px rgba(80, 100, 160, 0.13);
-  /* Was a translucent white edge meant to catch light on a colored backdrop —
-     invisible on the white/near-white cards it's actually applied to nearly
-     everywhere. Same value as --color-border so it reads as a real outline. */
-  --glass-border: 1px solid rgba(200, 210, 230, 0.6);
+  /* Brand */
+  --brand-50:  #eef3fe;
+  --brand-100: #dde7fd;
+  --brand-200: #bccffb;
+  --brand-500: #4f7ef8;   /* accents: focus ring, active marker, avatar */
+  --brand-600: #3366e8;   /* primary buttons, links, active text */
+  --brand-700: #2a55c9;   /* hover / pressed */
+
+  /* Neutrals */
+  --color-bg:             #f3f5fa;
+  --color-surface:        #ffffff;
+  --color-surface-muted:  #f7f8fc;   /* table headers, toolbars, wells */
+  --color-surface-hover:  #f5f8ff;   /* row hover */
+  --color-border:         #e2e7f0;
+  --color-border-subtle:  #edf0f6;   /* row dividers */
+  --color-border-strong:  #cfd7e6;   /* form controls */
+  --color-text:           #1a1f36;
+  --color-text-muted:     #5b6784;
+  --color-text-subtle:    #6e7891;   /* placeholders, meta */
+
+  /* Semantic — `-text` for foreground, `-50`/`-100` for tinted fills/borders */
+  --color-success:        #0b7a55;
+  --color-success-50:     #e8f6f0;
+  --color-success-100:    #c6eadb;
+  --color-warning:        #b45309;
+  --color-warning-50:     #fef5e7;
+  --color-warning-100:    #fbe3bd;
+  --color-danger:         #c9372c;
+  --color-danger-solid:   #d63b3b;
+  --color-danger-50:      #fdeeee;
+  --color-danger-100:     #f8d2d0;
+  --color-info:           var(--brand-600);
+  --color-info-50:        var(--brand-50);
+  --color-info-100:       var(--brand-100);
+
+  /* Typography */
+  --font-sans: 'Heebo', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Consolas, 'Liberation Mono', monospace;
+  --text-xs:   11px;
+  --text-sm:   12px;
+  --text-base: 13px;
+  --text-md:   14px;
+  --text-lg:   16px;
+  --text-xl:   18px;
+  --text-2xl:  22px;
+
+  /* Spacing — 4px grid */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* Shape & elevation */
+  --radius-sm:   8px;
+  --radius:      10px;
+  --radius-lg:   14px;
+  --radius-full: 999px;
+  --shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --shadow-sm: 0 1px 3px rgba(16, 24, 40, 0.07), 0 1px 2px rgba(16, 24, 40, 0.04);
+  --shadow-md: 0 8px 24px rgba(16, 24, 40, 0.10);
+  --shadow-lg: 0 20px 48px rgba(16, 24, 40, 0.18);
+
+  /* Controls */
+  --control-h:    36px;
+  --control-h-sm: 30px;
+  --control-h-lg: 44px;
+  --focus-ring: 0 0 0 3px rgba(79, 126, 248, 0.28);
+
+  /* Layout */
+  --sidebar-w: 244px;
+  --topbar-h: 56px;
+  --z-sticky: 50;
+  --z-drawer: 400;
+  --z-modal: 1000;
+  --z-toast: 1100;
+
+  /* Legacy names still used by not-yet-migrated screens. They now resolve to
+     the solid, flat palette above (no blur/translucency). */
+  --color-primary:       var(--brand-600);
+  --color-primary-dark:  var(--brand-700);
+  --color-surface-solid: var(--color-surface);
+  --glass-border: 1px solid var(--color-border);
+  --blur: none;
+  --radius-md: var(--radius-sm);
 }
 
 html {
   background: var(--color-bg);
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
-  font-family: 'Heebo', sans-serif;
-  background:
-    radial-gradient(ellipse at 10% 20%, rgba(147, 185, 255, 0.18) 0%, transparent 55%),
-    radial-gradient(ellipse at 90% 80%, rgba(167, 220, 255, 0.15) 0%, transparent 50%),
-    #eef0f7;
-  background-attachment: fixed;
+  font-family: var(--font-sans);
+  background: var(--color-bg);
   color: var(--color-text);
-  font-size: 14px;
+  font-size: var(--text-base);
   line-height: 1.5;
   direction: rtl;
   min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
 }
 
 button {
@@ -56,16 +125,36 @@ input, select, textarea {
   touch-action: manipulation;
 }
 
-/* Fixed background is slow on mobile — disable it */
-@media (max-width: 768px) {
-  body { background-attachment: scroll; }
+a { color: var(--brand-600); }
+
+::selection { background: var(--brand-100); }
+
+/* Keyboard focus is always visible; mouse clicks don't draw a ring. */
+:focus-visible {
+  outline: 2px solid var(--brand-500);
+  outline-offset: 2px;
 }
 
+:focus:not(:focus-visible) { outline: none; }
+
 /* Thin scrollbars on webkit */
-::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(130, 150, 190, 0.3); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(79, 126, 248, 0.4); }
+::-webkit-scrollbar-thumb { background: rgba(130, 145, 180, 0.35); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(90, 110, 160, 0.5); }
+
+/* Screen-reader-only text */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 
 /* Prevent iOS auto-zoom on focus (requires >= 16px) */
 @media (max-width: 768px) {
@@ -73,5 +162,12 @@ input, select, textarea {
   select,
   textarea {
     font-size: 16px !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
   }
 }

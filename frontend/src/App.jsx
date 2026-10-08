@@ -4,9 +4,11 @@ import { useAuth } from './contexts/AuthContext.jsx';
 import { useTransactions } from './hooks/useTransactions.js';
 import { fetchInstitutions, fetchFilterOptions, fetchTransactions } from './services/api.js';
 import { exportXlsx, dateStamp } from './lib/exportXlsx.js';
+import { SCREEN_IDS, findScreen, canSee } from './navigation.js';
+import { Alert, Spinner, StateMessage, useToast } from './components/ui';
 
 // Eager — app shell + the default (transactions) tab, needed on first paint.
-import NavTabs from './components/NavTabs/NavTabs.jsx';
+import AppShell from './components/AppShell/AppShell.jsx';
 import LoginScreen from './components/LoginScreen/LoginScreen.jsx';
 import AccessDenied from './components/AccessDenied/AccessDenied.jsx';
 import FiltersBar from './components/FiltersBar/FiltersBar.jsx';
@@ -35,32 +37,29 @@ const EMPTY_FILTERS = {
 };
 
 const DEFAULT_SORT = { sort_by: 'transaction_time_iso', sort_dir: 'desc' };
+const DEFAULT_TAB = 'transactions';
 
-// Tab is mirrored in the URL hash (#stripe, #receipts…) so a refresh, bookmark,
-// or back/forward keeps you on the same screen instead of resetting to עסקאות.
-const VALID_TABS = new Set([
-  'transactions', 'stripe', 'bank', 'keva', 'grow',
-  'receipts', 'donor-report', 'funds', 'fund-transfer', 'failures', 'bank-refusals', 'email-template', 'users', 'summary',
-]);
-
+// The screen is mirrored in the URL hash (#stripe, #receipts…) so a refresh,
+// bookmark, or back/forward keeps you on the same screen. The sidebar items
+// are plain #links, so navigating is just a hash change.
 function tabFromHash() {
   const h = window.location.hash.slice(1);
-  return VALID_TABS.has(h) ? h : 'transactions';
-}
-
-function UserAvatar({ email }) {
-  const initial = email ? email[0].toUpperCase() : '?';
-  return <div className={styles.avatar}>{initial}</div>;
+  return SCREEN_IDS.has(h) ? h : DEFAULT_TAB;
 }
 
 function Dashboard({ user, signOut, role, allowedMosadim, extraTabs }) {
-  const [activeTab, setActiveTab]   = useState(tabFromHash);
+  const toast = useToast();
+  const [hashTab, setHashTab]       = useState(tabFromHash);
   const [filters, setFilters]       = useState(EMPTY_FILTERS);
   const [sort, setSort]             = useState(DEFAULT_SORT);
   const [institutions, setInstitutions]   = useState([]);
   const [filterOptions, setFilterOptions] = useState({ transaction_types: [], group_names: [] });
   const [loadError, setLoadError]         = useState(null);
   const [exporting, setExporting]         = useState(false);
+
+  // A hash pointing at a screen this user can't open (old bookmark, shared
+  // link) falls back to the default screen instead of an empty page.
+  const activeTab = canSee(findScreen(hashTab), role, extraTabs) ? hashTab : DEFAULT_TAB;
 
   const { transactions, pagination, loading, error, loadPage } =
     useTransactions(filters, sort);
@@ -71,12 +70,19 @@ function Dashboard({ user, signOut, role, allowedMosadim, extraTabs }) {
     fetchFilterOptions().then(setFilterOptions).catch(onLoadErr);
   }, []);
 
-  // Sync the tab when the hash changes (browser back/forward, manual edit).
+  // Sync the screen when the hash changes (sidebar link, back/forward, manual edit).
   useEffect(() => {
-    const onHashChange = () => setActiveTab(tabFromHash());
+    const onHashChange = () => setHashTab(tabFromHash());
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
+
+  // New screen: start at the top, and name the browser tab after it.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    const screen = findScreen(activeTab);
+    document.title = screen ? `${screen.label} · לוח עסקאות` : 'לוח עסקאות';
+  }, [activeTab]);
 
   // Filter institutions by what the user is allowed to see
   const visibleInstitutions = useMemo(() => {
@@ -114,94 +120,74 @@ function Dashboard({ user, signOut, role, allowedMosadim, extraTabs }) {
         'מס\' קבלה': tx.receipt_doc_num ?? '',
       }));
       if (rows.length) await exportXlsx(rows, `transactions-${dateStamp()}.xlsx`, 'עסקאות');
+      else toast.info('אין עסקאות לייצוא בסינון הנוכחי');
     } catch (e) {
-      setLoadError(`הייצוא נכשל: ${e.message}`);
+      toast.error(`הייצוא נכשל: ${e.message}`);
     } finally {
       setExporting(false);
     }
-  }, [filters, sort, visibleInstitutions]);
-
-  const handleTabChange = useCallback((tab) => {
-    // Writing the hash fires 'hashchange', which updates activeTab; when the
-    // hash is already the target (e.g. re-click) set it directly.
-    if (window.location.hash.slice(1) === tab) setActiveTab(tab);
-    else window.location.hash = tab;
-  }, []);
+  }, [filters, sort, visibleInstitutions, toast]);
 
   return (
-    <div className={styles.layout}>
-      <header className={styles.header}>
-        <h1 className={styles.title}>לוח עסקאות</h1>
-        <div className={styles.headerRight}>
-          {role === 'admin' && <span className={styles.roleBadge}>מנהל</span>}
-          <UserAvatar email={user.email} />
-          <span className={styles.userEmail}>{user.email}</span>
-          <button className={styles.signOutBtn} onClick={signOut}>התנתק</button>
-        </div>
-      </header>
+    <AppShell email={user.email} role={role} extraTabs={extraTabs} active={activeTab} onSignOut={signOut}>
+      {loadError && <Alert tone="warning" className={styles.banner} onClose={() => setLoadError(null)}>{loadError}</Alert>}
 
-      <main className={styles.main}>
-        <NavTabs active={activeTab} onChange={handleTabChange} role={role} extraTabs={extraTabs} />
+      {activeTab === 'transactions' && (
+        <>
+          <FiltersBar
+            filters={filters}
+            onChange={handleFiltersChange}
+            institutions={visibleInstitutions}
+            filterOptions={filterOptions}
+            onExport={handleExport}
+            exporting={exporting}
+          />
+          {error && <Alert tone="danger" className={styles.banner}>שגיאה בטעינת העסקאות: {error}</Alert>}
+          <TransactionsTable
+            transactions={transactions}
+            institutions={visibleInstitutions}
+            loading={loading}
+            pagination={pagination}
+            sort={sort}
+            onSort={handleSort}
+            onPageChange={loadPage}
+            role={role}
+          />
+        </>
+      )}
 
-        {loadError && <div className={styles.error}>{loadError}</div>}
-
-        {activeTab === 'transactions' && (
-          <>
-            <FiltersBar
-              filters={filters}
-              onChange={handleFiltersChange}
-              institutions={visibleInstitutions}
-              filterOptions={filterOptions}
-              onExport={handleExport}
-              exporting={exporting}
-            />
-            {error && <div className={styles.error}>שגיאה: {error}</div>}
-            <TransactionsTable
-              transactions={transactions}
-              institutions={visibleInstitutions}
-              loading={loading}
-              pagination={pagination}
-              sort={sort}
-              onSort={handleSort}
-              onPageChange={loadPage}
-              role={role}
-            />
-          </>
+      <Suspense fallback={<StateMessage kind="loading" />}>
+        {activeTab === 'stripe'    && <StripeDonations />}
+        {activeTab === 'bank'      && <BankTransfers institutions={visibleInstitutions} />}
+        {activeTab === 'keva' && (role !== 'institution' || extraTabs?.includes('keva')) && (
+          <StandingOrders institutions={visibleInstitutions} />
         )}
-
-        <Suspense fallback={<div className={styles.loadingText} style={{ padding: 40, textAlign: 'center' }}>טוען…</div>}>
-          {activeTab === 'stripe'    && <StripeDonations />}
-          {activeTab === 'bank'      && <BankTransfers institutions={visibleInstitutions} />}
-          {activeTab === 'keva' && (role !== 'institution' || extraTabs?.includes('keva')) && (
-            <StandingOrders institutions={visibleInstitutions} />
-          )}
-          {activeTab === 'receipts'  && <Receipts />}
-          {activeTab === 'donor-report' && (role !== 'institution' || extraTabs?.includes('donor-report')) && (
-            <DonorReport />
-          )}
-          {activeTab === 'grow'      && <GrowTransactions />}
-          {activeTab === 'funds'     && <FundsManagement />}
-          {activeTab === 'fund-transfer' && <FundTransferForm />}
-          {activeTab === 'failures'  && <PaymentFailures />}
-          {activeTab === 'bank-refusals' && (role !== 'institution' || extraTabs?.includes('bank-refusals')) && (
-            <BankRefusals institutions={visibleInstitutions} />
-          )}
-          {activeTab === 'summary' && role === 'institution' && <InstitutionSummary />}
-          {activeTab === 'email-template' && ['admin', 'editor'].includes(role) && (
-            <EmailTemplate institutions={visibleInstitutions} />
-          )}
-          {activeTab === 'users' && role === 'admin' && (
-            <UserManagement institutions={institutions} groupNames={filterOptions.group_names} />
-          )}
-        </Suspense>
-      </main>
+        {activeTab === 'receipts'  && <Receipts />}
+        {activeTab === 'donor-report' && (role !== 'institution' || extraTabs?.includes('donor-report')) && (
+          <DonorReport />
+        )}
+        {activeTab === 'grow'      && <GrowTransactions />}
+        {activeTab === 'funds'     && <FundsManagement />}
+        {activeTab === 'fund-transfer' && <FundTransferForm />}
+        {activeTab === 'failures'  && <PaymentFailures />}
+        {activeTab === 'bank-refusals' && (role !== 'institution' || extraTabs?.includes('bank-refusals')) && (
+          <BankRefusals institutions={visibleInstitutions} />
+        )}
+        {activeTab === 'summary' && role === 'institution' && <InstitutionSummary />}
+        {activeTab === 'email-template' && ['admin', 'editor'].includes(role) && (
+          <EmailTemplate institutions={visibleInstitutions} />
+        )}
+        {activeTab === 'users' && role === 'admin' && (
+          <UserManagement institutions={institutions} groupNames={filterOptions.group_names} />
+        )}
+      </Suspense>
 
       {role !== 'institution' && (
         <Suspense fallback={null}>
           <AIAssistant />
         </Suspense>
       )}
-    </div>
+    </AppShell>
   );
 }
 
@@ -211,7 +197,7 @@ export default function App() {
   if (loading) {
     return (
       <div className={styles.loadingScreen}>
-        <span className={styles.loadingText}>טוען...</span>
+        <Spinner size={28} className={styles.loadingSpinner} />
       </div>
     );
   }

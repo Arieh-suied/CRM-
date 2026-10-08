@@ -1,0 +1,156 @@
+.wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--text-base);
+}
+
+.table th {
+  background: var(--color-surface-muted);
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-border);
+  text-align: start;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  color: var(--color-text);
+  vertical-align: middle;
+}
+
+.table tbody tr:last-child td { border-bottom: none; }
+.table tbody tr { transition: background-color 0.12s; }
+.table tbody tr:hover > td { background: var(--color-surface-hover); }
+
+/* Rows that open something on click — also reachable with Tab + Enter */
+.clickable { cursor: pointer; }
+.clickable:focus-visible { outline: 2px solid var(--brand-500); outline-offset: -2px; }
+
+/* De-emphasised rows (e.g. refusals already handled) */
+.rowMuted > td { color: var(--color-text-subtle); }
+.rowMuted .amount, .rowMuted .strong { color: var(--color-text-subtle); }
+
+/* ── Cell helpers ── */
+.nowrap { white-space: nowrap; }
+.strong { font-weight: 600; color: var(--color-text); }
+.muted  { color: var(--color-text-muted); }
+.subtle { color: var(--color-text-subtle); }
+.num    { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.date   { color: var(--color-text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.amount { font-weight: 600; color: var(--color-success); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.danger { color: var(--color-danger); }
+.mono   { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--color-text-muted); }
+.truncate {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* ── Sortable header ── */
+.sortBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.sortBtn:hover { color: var(--color-text); }
+.sortBtn:focus-visible { outline: 2px solid var(--brand-500); outline-offset: 2px; border-radius: 4px; }
+.sortIcon { opacity: 0.45; }
+.sortIconActive { opacity: 1; color: var(--brand-600); }
+
+/* ── Whole-row message (loading / empty / error) ── */
+.messageRow:hover > td { background: none !important; }
+.messageRow > td { padding: 0; border-bottom: none; }
+
+/* ── Pagination ── */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  padding: 10px var(--space-4);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface-muted);
+}
+
+.paginationInfo {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.paginationInfo strong { color: var(--color-text); font-weight: 600; }
+
+.paginationButtons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ── Mobile: rows become label/value cards ── */
+@media (max-width: 640px) {
+  .stack thead { display: none; }
+  .stack, .stack tbody, .stack tr { display: block; width: 100%; }
+
+  .stack tbody tr:not(.messageRow) {
+    padding: 10px var(--space-4);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .stack tbody tr:last-child { border-bottom: none; }
+  .stack tbody tr:hover > td { background: none; }
+
+  .stack tbody tr:not(.messageRow) > td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: 4px 0;
+    border: none;
+    text-align: end;
+    min-height: 28px;
+  }
+
+  .stack tbody tr:not(.messageRow) > td::before {
+    content: attr(data-label);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--color-text-muted);
+    text-align: start;
+    flex-shrink: 0;
+  }
+
+  .stack tbody tr:not(.messageRow) > td:not([data-label])::before { content: none; }
+  .stack .truncate { max-width: 60vw; }
+  .stack .messageRow, .stack .messageRow > td { display: block; }
+
+  .pagination { padding: 10px var(--space-3); }
+  .paginationButtons { width: 100%; }
+  .paginationButtons > * { flex: 1; }
+}
