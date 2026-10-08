@@ -104,6 +104,69 @@ export function SearchInput({ value = '', onSearch, placeholder = 'חיפוש...
   );
 }
 
+// Dropdown of matches under an input (wrap both in formStyles.suggestWrap).
+// Options are buttons, so they're reachable with Tab; mousedown is swallowed
+// so picking one doesn't blur the input first.
+export function Suggestions({ items, onSelect, getKey = (it) => it.id, getTitle, getSub }) {
+  if (!items?.length) return null;
+  return (
+    <div className={styles.suggestions} role="listbox">
+      {items.map((it) => {
+        const sub = getSub?.(it);
+        return (
+          <button
+            key={getKey(it)}
+            type="button"
+            role="option"
+            aria-selected="false"
+            className={styles.suggestion}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => onSelect(it)}
+          >
+            <div className={styles.suggestionTitle}>{getTitle(it)}</div>
+            {sub && <div className={styles.suggestionSub}>{sub}</div>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// Click-or-drag file picker. onFiles receives an array of File.
+export function FileDrop({ icon = 'upload', title, hint, accept, multiple = false, onFiles, disabled = false, compact = false, className }) {
+  const inputRef = useRef(null);
+  const [over, setOver] = useState(false);
+  const take = (list) => {
+    const files = [...(list || [])];
+    if (files.length) onFiles(multiple ? files : files.slice(0, 1));
+  };
+  return (
+    <>
+      <input
+        ref={inputRef}
+        type="file"
+        accept={accept}
+        multiple={multiple}
+        hidden
+        onChange={(e) => { take(e.target.files); e.target.value = ''; }}
+      />
+      <button
+        type="button"
+        disabled={disabled}
+        className={cx(styles.drop, compact && styles.dropCompact, over && styles.dropActive, className)}
+        onClick={() => inputRef.current?.click()}
+        onDragOver={(e) => { e.preventDefault(); if (!disabled) setOver(true); }}
+        onDragLeave={() => setOver(false)}
+        onDrop={(e) => { e.preventDefault(); setOver(false); if (!disabled) take(e.dataTransfer.files); }}
+      >
+        <span className={styles.dropIcon}><Icon name={icon} size={20} /></span>
+        <span className={styles.dropTitle}>{title}</span>
+        {hint && <span className={styles.dropHint}>{hint}</span>}
+      </button>
+    </>
+  );
+}
+
 // From/to date pair in one bordered control, with an inline clear button.
 export function DateRange({ from, to, onChange, className, labelFrom = 'מתאריך', labelTo = 'עד תאריך' }) {
   return (

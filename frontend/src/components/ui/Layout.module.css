@@ -34,6 +34,17 @@
   margin-top: 2px;
 }
 
+.cardFooter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  padding: 12px var(--space-5);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface-muted);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+
 .cardActions {
   display: flex;
   align-items: center;

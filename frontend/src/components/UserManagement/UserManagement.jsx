@@ -1,139 +1,72 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useId } from 'react';
 import styles from './UserManagement.module.css';
 import { fetchAdminUsers, createAdminUser, updateAdminUser, deleteAdminUser, resetInstitutionPassword } from '../../services/api.js';
+import { ROLE_LABELS } from '../../navigation.js';
+import {
+  Card, Toolbar, ToolbarSpacer, ToolbarMeta, Modal, Field, Input, Button, IconButton, Badge, Alert, StateMessage,
+  Table, Popover, MenuItem, MenuDivider, formStyles, tableStyles as t, useToast, useConfirm, usePrompt,
+} from '../ui';
 
 const ROLES = [
-  { value: 'viewer',      label: 'צופה',   desc: 'יכול לצפות בנתונים בלבד' },
-  { value: 'editor',      label: 'עורך',   desc: 'יכול לערוך נתונים' },
+  { value: 'viewer',      label: 'צופה',   desc: 'צפייה בנתונים בלבד' },
+  { value: 'editor',      label: 'עורך',   desc: 'צפייה ועריכת נתונים' },
   { value: 'admin',       label: 'מנהל',   desc: 'גישה מלאה וניהול משתמשים' },
   { value: 'institution', label: 'מוסד',   desc: 'כניסה עם סיסמה, צפייה בנתוני המוסד בלבד' },
 ];
 
-const ROLE_LABELS = { admin: 'מנהל', editor: 'עורך', viewer: 'צופה', institution: 'מוסד' };
-const ROLE_COLORS = { admin: 'admin', editor: 'editor', viewer: 'viewer', institution: 'institution' };
+const ROLE_TONE = { admin: 'primary', editor: 'warning', viewer: 'neutral', institution: 'success' };
 
-function RoleBadge({ role }) {
-  return (
-    <span className={`${styles.badge} ${styles[`badge_${ROLE_COLORS[role] ?? 'viewer'}`]}`}>
-      {ROLE_LABELS[role] ?? role}
-    </span>
-  );
-}
+const EXTRA_TABS = [
+  { value: 'bank-refusals', label: 'סירובים בנקאיים', desc: 'צפייה בלבד בדוח הוראות הקבע שחזרו' },
+  { value: 'donor-report', label: 'דוח קבלות שנתי', desc: 'צפייה והורדה, מסונן לפי הקרן/קטגוריה שהוקצתה למשתמש' },
+];
 
-function MosadimSelect({ institutions, value, onChange }) {
-  const [open, setOpen] = useState(false);
+// Inline multi-select: "all" (value null) or a subset. Used for institutions
+// and for the sub-fund categories of an institution user.
+function CheckList({ options, value, onChange, allLabel }) {
   const allSelected = !value || value.length === 0;
-
-  function toggle(mosadNumber) {
-    if (allSelected) {
-      onChange([mosadNumber]);
-    } else if (value.includes(mosadNumber)) {
-      const next = value.filter((n) => n !== mosadNumber);
-      onChange(next.length ? next : null);
-    } else {
-      onChange([...value, mosadNumber]);
+  const toggle = (v) => {
+    if (allSelected) return onChange([v]);
+    if (value.includes(v)) {
+      const next = value.filter((n) => n !== v);
+      return onChange(next.length ? next : null);
     }
-  }
-
-  function toggleAll() {
-    onChange(null);
-  }
-
-  const label = allSelected
-    ? 'כל המוסדות'
-    : `${value.length} מוסד${value.length !== 1 ? 'ות' : ''}`;
-
+    return onChange([...value, v]);
+  };
   return (
-    <div className={styles.mosadDropdown}>
-      <button
-        type="button"
-        className={styles.mosadTrigger}
-        onClick={() => setOpen((v) => !v)}
-      >
-        <span>{label}</span>
-        <svg viewBox="0 0 12 12" fill="none" className={styles.chevron} style={{ transform: open ? 'rotate(180deg)' : '' }}>
-          <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-      </button>
-
-      {open && (
-        <div className={styles.mosadMenu}>
-          <label className={styles.mosadItem}>
-            <input type="checkbox" checked={allSelected} onChange={toggleAll} />
-            <span>כל המוסדות</span>
-          </label>
-          {institutions.map((inst) => (
-            <label key={inst.mosad_number} className={styles.mosadItem}>
-              <input
-                type="checkbox"
-                checked={!allSelected && value.includes(inst.mosad_number)}
-                onChange={() => toggle(inst.mosad_number)}
-              />
-              <span>{inst.mosad_name}</span>
-            </label>
-          ))}
-        </div>
-      )}
+    <div className={styles.checkList}>
+      <label className={`${styles.checkItem} ${styles.checkAll}`}>
+        <input type="checkbox" checked={allSelected} onChange={() => onChange(null)} />
+        <span>{allLabel}</span>
+      </label>
+      {options.map((o) => (
+        <label key={o.value} className={styles.checkItem}>
+          <input type="checkbox" checked={!allSelected && value.includes(o.value)} onChange={() => toggle(o.value)} />
+          <span>{o.label}</span>
+        </label>
+      ))}
     </div>
   );
 }
 
-// Same shape as MosadimSelect but over group_name strings — used to further
-// restrict an institution user to a specific sub-fund (e.g. "יחי ראובן"
-// inside מוסד סומך נופלים, which shares its mosad_number with other funds).
-function GroupNamesSelect({ groupNames, value, onChange }) {
-  const [open, setOpen] = useState(false);
-  const allSelected = !value || value.length === 0;
-
-  function toggle(name) {
-    if (allSelected) {
-      onChange([name]);
-    } else if (value.includes(name)) {
-      const next = value.filter((n) => n !== name);
-      onChange(next.length ? next : null);
-    } else {
-      onChange([...value, name]);
-    }
-  }
-
-  const label = allSelected
-    ? 'כל הקטגוריות במוסד'
-    : `${value.length} קטגורי${value.length !== 1 ? 'ות' : 'ה'}`;
-
+// Selectable card (radio for the role, checkbox for extra screens).
+function OptionCard({ type, name, checked, onChange, label, desc }) {
   return (
-    <div className={styles.mosadDropdown}>
-      <button type="button" className={styles.mosadTrigger} onClick={() => setOpen((v) => !v)}>
-        <span>{label}</span>
-        <svg viewBox="0 0 12 12" fill="none" className={styles.chevron} style={{ transform: open ? 'rotate(180deg)' : '' }}>
-          <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-      </button>
-      {open && (
-        <div className={styles.mosadMenu}>
-          <label className={styles.mosadItem}>
-            <input type="checkbox" checked={allSelected} onChange={() => onChange(null)} />
-            <span>כל הקטגוריות</span>
-          </label>
-          {(groupNames ?? []).map((name) => (
-            <label key={name} className={styles.mosadItem}>
-              <input
-                type="checkbox"
-                checked={!allSelected && value.includes(name)}
-                onChange={() => toggle(name)}
-              />
-              <span>{name}</span>
-            </label>
-          ))}
-        </div>
-      )}
-    </div>
+    <label className={`${styles.option} ${checked ? styles.optionActive : ''}`}>
+      <input type={type} name={name} checked={checked} onChange={onChange} />
+      <span>
+        <span className={styles.optionLabel}>{label}</span>
+        <span className={styles.optionDesc}>{desc}</span>
+      </span>
+    </label>
   );
 }
 
 const EMPTY_FORM = { email: '', full_name: '', role: 'viewer', allowed_mosadim: null, allowed_group_names: null, extra_tabs: null, password: '' };
 
-function UserForm({ institutions, groupNames, initial, onSave, onCancel, saving }) {
+function UserFormModal({ institutions, groupNames, initial, onSave, onCancel, saving, error }) {
   const [form, setForm] = useState(initial ?? EMPTY_FORM);
+  const formId = useId();
   const isEdit = !!initial;
   const isInstitution = form.role === 'institution';
 
@@ -141,160 +74,110 @@ function UserForm({ institutions, groupNames, initial, onSave, onCancel, saving 
   const toggleTab = (tab, checked) => {
     const next = checked
       ? [...(form.extra_tabs ?? []), tab]
-      : (form.extra_tabs ?? []).filter((t) => t !== tab);
+      : (form.extra_tabs ?? []).filter((x) => x !== tab);
     set('extra_tabs', next.length ? next : null);
   };
 
-  function handleSubmit(e) {
-    e.preventDefault();
-    onSave(form);
-  }
-
   return (
-    <form className={styles.formCard} onSubmit={handleSubmit}>
-      <h3 className={styles.formTitle}>{isEdit ? 'עריכת משתמש' : 'הוספת משתמש חדש'}</h3>
+    <Modal
+      size="lg"
+      title={isEdit ? 'עריכת משתמש' : 'הוספת משתמש'}
+      subtitle={isEdit ? form.email : undefined}
+      onClose={saving ? undefined : onCancel}
+      footer={(
+        <>
+          <Button onClick={onCancel} disabled={saving}>ביטול</Button>
+          <Button type="submit" form={formId} variant="primary" loading={saving}>
+            {isEdit ? 'שמירת שינויים' : 'הוספת המשתמש'}
+          </Button>
+        </>
+      )}
+    >
+      <form id={formId} className={styles.form} onSubmit={(e) => { e.preventDefault(); onSave(form); }}>
+        {error && <Alert tone="danger">{error}</Alert>}
 
-      <div className={styles.formRow}>
-        <div className={styles.formField}>
-          <label className={styles.formLabel}>דוא"ל *</label>
-          <input
-            className={styles.formInput}
-            type="email"
-            required
-            placeholder="user@example.com"
-            value={form.email}
-            onChange={(e) => set('email', e.target.value)}
-            disabled={isEdit}
-          />
+        <div className={formStyles.grid2}>
+          <Field label='דוא"ל' required>
+            <Input type="email" required placeholder="user@example.com" dir="ltr" value={form.email} onChange={(e) => set('email', e.target.value)} disabled={isEdit} />
+          </Field>
+          <Field label="שם מלא">
+            <Input placeholder="שם המשתמש" value={form.full_name ?? ''} onChange={(e) => set('full_name', e.target.value)} />
+          </Field>
         </div>
 
-        <div className={styles.formField}>
-          <label className={styles.formLabel}>שם מלא</label>
-          <input
-            className={styles.formInput}
-            type="text"
-            placeholder="שם המשתמש"
-            value={form.full_name ?? ''}
-            onChange={(e) => set('full_name', e.target.value)}
-          />
-        </div>
-      </div>
-
-      <div className={styles.formRow}>
-        <div className={styles.formField}>
-          <label className={styles.formLabel}>תפקיד</label>
-          <div className={styles.roleSelect}>
+        <fieldset className={styles.fieldset}>
+          <legend className={styles.legend}>תפקיד</legend>
+          <div className={styles.options}>
             {ROLES.map((r) => (
-              <label key={r.value} className={`${styles.roleOption} ${form.role === r.value ? styles.roleOptionActive : ''}`}>
-                <input
-                  type="radio"
-                  name="role"
-                  value={r.value}
-                  checked={form.role === r.value}
-                  onChange={() => set('role', r.value)}
-                />
-                <div>
-                  <span className={styles.roleLabel}>{r.label}</span>
-                  <span className={styles.roleDesc}>{r.desc}</span>
-                </div>
-              </label>
+              <OptionCard key={r.value} type="radio" name="role" checked={form.role === r.value} onChange={() => set('role', r.value)} label={r.label} desc={r.desc} />
             ))}
           </div>
-        </div>
+        </fieldset>
 
-        <div className={styles.formField}>
-          <label className={styles.formLabel}>גישה למוסדות</label>
-          <MosadimSelect
-            institutions={institutions}
-            value={form.allowed_mosadim}
-            onChange={(val) => set('allowed_mosadim', val)}
-          />
-          <p className={styles.formHint}>
-            {!form.allowed_mosadim ? 'גישה לכל המוסדות (מומלץ למנהל)' : 'גישה לנבחרים בלבד'}
-          </p>
-        </div>
-      </div>
-
-      {isInstitution && (
-        <div className={styles.formRow}>
-          <div className={styles.formField}>
-            <label className={styles.formLabel}>קטגוריה בתוך המוסד (אופציונלי)</label>
-            <GroupNamesSelect
-              groupNames={groupNames}
-              value={form.allowed_group_names}
-              onChange={(val) => set('allowed_group_names', val)}
+        <div className={formStyles.grid2}>
+          <fieldset className={styles.fieldset}>
+            <legend className={styles.legend}>גישה למוסדות</legend>
+            <CheckList
+              allLabel="כל המוסדות"
+              options={institutions.map((i) => ({ value: i.mosad_number, label: i.mosad_name }))}
+              value={form.allowed_mosadim}
+              onChange={(v) => set('allowed_mosadim', v)}
             />
-            <p className={styles.formHint}>
-              למוסד עם קרן ייעודית תחת מוסד משותף (למשל יחי ראובן תחת סומך נופלים) - הגבל לקטגוריה הספציפית
-            </p>
-          </div>
+          </fieldset>
 
-          {!isEdit && (
-            <div className={styles.formField}>
-              <label className={styles.formLabel}>סיסמה ראשונית *</label>
-              <input
-                className={styles.formInput}
-                type="text"
-                required
-                placeholder="סיסמה למסירה למוסד"
-                value={form.password}
-                onChange={(e) => set('password', e.target.value)}
+          {isInstitution && (
+            <fieldset className={styles.fieldset}>
+              <legend className={styles.legend}>קטגוריה בתוך המוסד (לא חובה)</legend>
+              <CheckList
+                allLabel="כל הקטגוריות במוסד"
+                options={(groupNames ?? []).map((g) => ({ value: g, label: g }))}
+                value={form.allowed_group_names}
+                onChange={(v) => set('allowed_group_names', v)}
               />
-            </div>
+              <p className={styles.hint}>לקרן ייעודית תחת מוסד משותף (למשל יחי ראובן תחת סומך נופלים)</p>
+            </fieldset>
           )}
         </div>
-      )}
 
-      {isInstitution && (
-        <div className={styles.formRow}>
-          <div className={styles.formField}>
-            <label className={styles.formLabel}>לשוניות נוספות</label>
-            <label className={styles.roleOption} style={{ minWidth: 0 }}>
-              <input
-                type="checkbox"
-                checked={(form.extra_tabs ?? []).includes('bank-refusals')}
-                onChange={(e) => toggleTab('bank-refusals', e.target.checked)}
-              />
-              <div>
-                <span className={styles.roleLabel}>סירובים בנקאי</span>
-                <span className={styles.roleDesc}>גישת צפייה בלבד לדוח הוראות הקבע שחזרו</span>
-              </div>
-            </label>
-            <label className={styles.roleOption} style={{ minWidth: 0 }}>
-              <input
-                type="checkbox"
-                checked={(form.extra_tabs ?? []).includes('donor-report')}
-                onChange={(e) => toggleTab('donor-report', e.target.checked)}
-              />
-              <div>
-                <span className={styles.roleLabel}>דוח קבלות שנתי</span>
-                <span className={styles.roleDesc}>צפייה/הורדה של דוח קבלות שנתי, מסונן לפי הקרן/קטגוריה שהוקצתה למשתמש</span>
-              </div>
-            </label>
-          </div>
-        </div>
-      )}
+        {isInstitution && !isEdit && (
+          <Field label="סיסמה ראשונית" required hint="הסיסמה שתימסר למוסד">
+            <Input required value={form.password} onChange={(e) => set('password', e.target.value)} autoComplete="new-password" />
+          </Field>
+        )}
 
-      <div className={styles.formActions}>
-        <button type="submit" className={styles.btnPrimary} disabled={saving}>
-          {saving ? 'שומר...' : isEdit ? 'שמור שינויים' : 'הוסף משתמש'}
-        </button>
-        <button type="button" className={styles.btnSecondary} onClick={onCancel} disabled={saving}>
-          ביטול
-        </button>
-      </div>
-    </form>
+        {isInstitution && (
+          <fieldset className={styles.fieldset}>
+            <legend className={styles.legend}>מסכים נוספים</legend>
+            <div className={styles.options}>
+              {EXTRA_TABS.map((tab) => (
+                <OptionCard
+                  key={tab.value}
+                  type="checkbox"
+                  checked={(form.extra_tabs ?? []).includes(tab.value)}
+                  onChange={(e) => toggleTab(tab.value, e.target.checked)}
+                  label={tab.label}
+                  desc={tab.desc}
+                />
+              ))}
+            </div>
+          </fieldset>
+        )}
+      </form>
+    </Modal>
   );
 }
 
 export default function UserManagement({ institutions, groupNames }) {
+  const toast = useToast();
+  const confirm = useConfirm();
+  const prompt = usePrompt();
   const [users, setUsers]       = useState([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing]   = useState(null);
   const [saving, setSaving]     = useState(false);
-  const [actionError, setActionError] = useState(null);
+  const [formError, setFormError] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -311,27 +194,21 @@ export default function UserManagement({ institutions, groupNames }) {
 
   useEffect(() => { load(); }, [load]);
 
-  function startAdd() {
-    setEditing(null);
-    setShowForm(true);
-    setActionError(null);
-  }
-
-  function startEdit(user) {
+  function openForm(user = null) {
     setEditing(user);
+    setFormError(null);
     setShowForm(true);
-    setActionError(null);
   }
 
   function cancelForm() {
     setShowForm(false);
     setEditing(null);
-    setActionError(null);
+    setFormError(null);
   }
 
   async function handleSave(form) {
     setSaving(true);
-    setActionError(null);
+    setFormError(null);
     try {
       if (editing) {
         await updateAdminUser(editing.id, {
@@ -341,54 +218,67 @@ export default function UserManagement({ institutions, groupNames }) {
           allowed_group_names: form.allowed_group_names,
           extra_tabs:          form.extra_tabs,
         });
+        toast.success('המשתמש עודכן');
       } else {
         await createAdminUser(form);
+        toast.success(`${form.email} נוסף`);
       }
       setShowForm(false);
       setEditing(null);
       await load();
     } catch (e) {
-      setActionError(e.message);
+      setFormError(e.message);
     } finally {
       setSaving(false);
     }
   }
 
   async function toggleActive(user) {
-    setActionError(null);
     try {
       await updateAdminUser(user.id, { is_active: !user.is_active });
+      toast.success(user.is_active ? `${user.email} הושבת` : `${user.email} הופעל`);
       await load();
     } catch (e) {
-      setActionError(e.message);
+      toast.error(e.message);
     }
   }
 
   async function handleDelete(user) {
-    if (!window.confirm(`למחוק את ${user.email}? פעולה זו אינה הפיכה.`)) return;
-    setActionError(null);
+    const ok = await confirm({
+      title: 'מחיקת משתמש',
+      message: `למחוק את ${user.email}? פעולה זו אינה הפיכה.`,
+      confirmText: 'מחיקה',
+      tone: 'danger',
+    });
+    if (!ok) return;
     try {
       await deleteAdminUser(user.id);
+      toast.success(`${user.email} נמחק`);
       await load();
     } catch (e) {
-      setActionError(e.message);
+      toast.error(e.message);
     }
   }
 
   async function handleResetPassword(user) {
-    const password = window.prompt(`סיסמה חדשה עבור ${user.email}:`);
+    const password = await prompt({
+      title: 'איפוס סיסמה',
+      message: `סיסמה חדשה עבור ${user.email}. הסיסמה הקודמת תפסיק לעבוד.`,
+      label: 'סיסמה חדשה',
+      required: true,
+      confirmText: 'עדכון הסיסמה',
+    });
     if (!password) return;
-    setActionError(null);
     try {
       await resetInstitutionPassword(user.id, password);
-      window.alert('הסיסמה עודכנה');
+      toast.success('הסיסמה עודכנה');
     } catch (e) {
-      setActionError(e.message);
+      toast.error(e.message);
     }
   }
 
   function mosadimLabel(user) {
-    if (!user.allowed_mosadim) return 'הכל';
+    if (!user.allowed_mosadim) return 'כל המוסדות';
     const names = user.allowed_mosadim.map((num) => {
       const inst = institutions.find((i) => i.mosad_number === num);
       return inst?.mosad_name ?? num;
@@ -397,39 +287,22 @@ export default function UserManagement({ institutions, groupNames }) {
   }
 
   return (
-    <div className={styles.page}>
-      <div className={styles.pageHeader}>
-        <div>
-          <h2 className={styles.pageTitle}>ניהול משתמשים</h2>
-          <p className={styles.pageSubtitle}>הגדר מי יכול לגשת למערכת ומה הם יכולים לראות</p>
-        </div>
-        {!showForm && (
-          <button className={styles.btnPrimary} onClick={startAdd}>+ הוסף משתמש</button>
-        )}
-      </div>
+    <>
+      <Card clip>
+        <Toolbar>
+          <ToolbarMeta>{loading ? 'טוען…' : `${users.length} משתמשים`}</ToolbarMeta>
+          <ToolbarSpacer />
+          <Button variant="primary" icon="plus" onClick={() => openForm()}>הוספת משתמש</Button>
+        </Toolbar>
 
-      {showForm && (
-        <UserForm
-          institutions={institutions}
-          groupNames={groupNames}
-          initial={editing}
-          onSave={handleSave}
-          onCancel={cancelForm}
-          saving={saving}
-        />
-      )}
-
-      {actionError && (
-        <div className={styles.errorBanner}>{actionError}</div>
-      )}
-
-      {loading ? (
-        <div className={styles.loadingState}>טוען משתמשים...</div>
-      ) : error ? (
-        <div className={styles.errorBanner}>{error}</div>
-      ) : (
-        <div className={styles.tableWrap}>
-          <table className={styles.table}>
+        {loading && !users.length ? (
+          <StateMessage kind="loading" title="טוען משתמשים…" />
+        ) : error ? (
+          <StateMessage kind="error" description={error} action={<Button size="sm" icon="refresh" onClick={load}>נסה שוב</Button>} />
+        ) : users.length === 0 ? (
+          <StateMessage title="אין משתמשים עדיין" icon="users" />
+        ) : (
+          <Table stackOnMobile busy={loading}>
             <thead>
               <tr>
                 <th>דוא"ל</th>
@@ -437,46 +310,60 @@ export default function UserManagement({ institutions, groupNames }) {
                 <th>תפקיד</th>
                 <th>מוסדות</th>
                 <th>סטטוס</th>
-                <th>פעולות</th>
+                <th aria-label="פעולות" />
               </tr>
             </thead>
             <tbody>
               {users.map((u) => (
-                <tr key={u.id} className={!u.is_active ? styles.rowInactive : ''}>
-                  <td className={styles.cellEmail}>{u.email}</td>
-                  <td>{u.full_name || <span className={styles.muted}>—</span>}</td>
-                  <td><RoleBadge role={u.role} /></td>
-                  <td className={styles.cellMosadim}>{mosadimLabel(u)}</td>
-                  <td>
-                    <span className={`${styles.statusDot} ${u.is_active ? styles.statusActive : styles.statusInactive}`}>
-                      {u.is_active ? 'פעיל' : 'מושבת'}
-                    </span>
+                <tr key={u.id} className={!u.is_active ? t.rowMuted : undefined}>
+                  <td data-label='דוא"ל' className={t.strong} dir="ltr">{u.email}</td>
+                  <td data-label="שם">{u.full_name || <span className={t.subtle}>—</span>}</td>
+                  <td data-label="תפקיד"><Badge tone={ROLE_TONE[u.role] ?? 'neutral'}>{ROLE_LABELS[u.role] ?? u.role}</Badge></td>
+                  <td data-label="מוסדות" className={`${t.muted} ${t.truncate}`} title={mosadimLabel(u)}>{mosadimLabel(u)}</td>
+                  <td data-label="סטטוס">
+                    {u.is_active ? <Badge tone="success" dot>פעיל</Badge> : <Badge tone="neutral" dot>מושבת</Badge>}
                   </td>
                   <td>
-                    <div className={styles.actions}>
-                      <button className={styles.btnAction} onClick={() => startEdit(u)}>ערוך</button>
-                      {u.role === 'institution' && (
-                        <button className={styles.btnAction} onClick={() => handleResetPassword(u)}>איפוס סיסמה</button>
-                      )}
-                      <button className={styles.btnAction} onClick={() => toggleActive(u)}>
-                        {u.is_active ? 'השבת' : 'הפעל'}
-                      </button>
-                      <button className={`${styles.btnAction} ${styles.btnDanger}`} onClick={() => handleDelete(u)}>
-                        מחק
-                      </button>
+                    <div className={t.actions}>
+                      <Button size="sm" variant="ghost" icon="edit" onClick={() => openForm(u)}>עריכה</Button>
+                      <Popover
+                        trigger={({ ref, toggle, open }) => (
+                          <IconButton ref={ref} size="sm" icon="more" label={`פעולות נוספות עבור ${u.email}`} onClick={toggle} aria-expanded={open} />
+                        )}
+                      >
+                        {({ close }) => (
+                          <>
+                            {u.role === 'institution' && (
+                              <MenuItem icon="lock" onClick={() => { close(); handleResetPassword(u); }}>איפוס סיסמה</MenuItem>
+                            )}
+                            <MenuItem icon={u.is_active ? 'xCircle' : 'checkCircle'} onClick={() => { close(); toggleActive(u); }}>
+                              {u.is_active ? 'השבתת המשתמש' : 'הפעלת המשתמש'}
+                            </MenuItem>
+                            <MenuDivider />
+                            <MenuItem icon="trash" className={styles.dangerItem} onClick={() => { close(); handleDelete(u); }}>מחיקה</MenuItem>
+                          </>
+                        )}
+                      </Popover>
                     </div>
                   </td>
                 </tr>
               ))}
-              {users.length === 0 && (
-                <tr>
-                  <td colSpan={6} className={styles.emptyState}>אין משתמשים עדיין</td>
-                </tr>
-              )}
             </tbody>
-          </table>
-        </div>
+          </Table>
+        )}
+      </Card>
+
+      {showForm && (
+        <UserFormModal
+          institutions={institutions}
+          groupNames={groupNames}
+          initial={editing}
+          onSave={handleSave}
+          onCancel={cancelForm}
+          saving={saving}
+          error={formError}
+        />
       )}
-    </div>
+    </>
   );
 }

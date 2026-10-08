@@ -26,6 +26,16 @@ export function CardHeader({ title, subtitle, actions, className, children }) {
   );
 }
 
+// Padded content area of a Card (under a CardHeader).
+export function CardBody({ className, children }) {
+  return <div className={cx(styles.padded, className)}>{children}</div>;
+}
+
+// Action row at the bottom of a Card.
+export function CardFooter({ className, children }) {
+  return <div className={cx(styles.cardFooter, className)}>{children}</div>;
+}
+
 // Vertical rhythm between the blocks of a screen.
 export function Stack({ className, children, gap }) {
   return <div className={cx(styles.stack, className)} style={gap ? { gap } : undefined}>{children}</div>;

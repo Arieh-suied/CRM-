@@ -1,10 +1,16 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import styles from './Receipts.module.css';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import s from './BatchReceipts.module.css';
 import { supabase } from '../../lib/supabase.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import { analyzeTransferScreenshot, ALLOWED_IMAGE_TYPES } from './imageUtils.js';
 import { authFetch } from '../../services/api.js';
 import { debounceByKey } from '../../lib/debounce.js';
+import { formatCurrency, formatDateTime, formatNumber } from '../../lib/format.js';
+import {
+  Card, CardHeader, CardBody, CardFooter, Stack, Toolbar, ToolbarSpacer, ToolbarMeta, SearchInput,
+  SegmentedControl, Select, Field, Input, Checkbox, Suggestions, FileDrop, Button, IconButton, Badge, Alert,
+  StateMessage, Table, Icon, formStyles, toolbarSearchClass, useToast, useConfirm,
+} from '../ui';
 
 const BRANCHES = [
   'סומך נופלים',
@@ -28,6 +34,29 @@ const KNOWN_HEADERS = {
   notes:            ['הערות', 'notes', 'סוג תנועה', 'doc_comment'],
   customer_id:      ['מס זהות', 'מספר זהות', 'ת.ז', 'ת.ז.', 'customer_crn'],
 };
+
+const ID_FILTERS = [
+  { value: 'all', label: 'הכל' },
+  { value: 'has_id', label: 'יש ת"ז' },
+  { value: 'no_id', label: 'חסר ת"ז' },
+];
+
+const SORTS = [
+  { value: 'name', label: 'לפי שם (א-ב)' },
+  { value: 'branch', label: 'לפי מוסד' },
+  { value: 'newest', label: 'החדשות קודם' },
+  { value: 'oldest', label: 'הישנות קודם' },
+];
+
+const EMPTY_CHECKPOINT = { customer_name: '', amount: '', reference_number: '', bank_account: '', transfer_date: '' };
+
+const CHECKPOINT_FIELDS = [
+  ['customer_name', 'שם לקוח'],
+  ['amount', 'סכום'],
+  ['reference_number', 'אסמכתא'],
+  ['bank_account', 'חשבון בנק'],
+  ['transfer_date', 'תאריך העברה'],
+];
 
 function sheetToBranch(sheetName) {
   const sn = sheetName.trim();
@@ -83,8 +112,12 @@ function findBestMatch(entryName, customers) {
   return null;
 }
 
+const blurOnEnter = (e) => { if (e.key === 'Enter') e.target.blur(); };
+
 export default function BatchReceipts() {
   const { user } = useAuth();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [entries, setEntries]         = useState([]);
   const [loading, setLoading]         = useState(true);
   const [sendingId, setSendingId]     = useState(null);
@@ -102,14 +135,12 @@ export default function BatchReceipts() {
   // Checkpoint
   const [checkpoint, setCheckpoint]   = useState(null);
   const [showCpForm, setShowCpForm]   = useState(false);
-  const [cpDraft, setCpDraft]         = useState({ customer_name: '', amount: '', reference_number: '', bank_account: '', transfer_date: '' });
+  const [cpDraft, setCpDraft]         = useState(EMPTY_CHECKPOINT);
 
   // Excel import preview — rows wait here for user confirmation before hitting the DB
   const [importPreview, setImportPreview] = useState(null);
   const [importing, setImporting]         = useState(false);
 
-  const xlsxRef = useRef(null);
-  const imagesRef = useRef(null);
   const [imgAnalyzing, setImgAnalyzing] = useState(false);
   const [imgProgress, setImgProgress] = useState({ current: 0, total: 0 });
   const [imgErrors, setImgErrors] = useState([]);
@@ -176,6 +207,7 @@ export default function BatchReceipts() {
       await supabase.from('manual_checkpoints').delete().eq('user_id', user.id);
       await supabase.from('manual_checkpoints').insert({ user_id: user.id, customer_name: cpDraft.customer_name || null, amount: cpDraft.amount ? parseFloat(cpDraft.amount) : null, reference_number: cpDraft.reference_number || null, bank_account: cpDraft.bank_account || null, transfer_date: cpDraft.transfer_date || null });
     }
+    toast.success('נקודת העצירה נשמרה');
   };
 
   const clearCheckpoint = async () => {
@@ -263,9 +295,8 @@ export default function BatchReceipts() {
       allInserts.push(...inserts);
     }
 
-    if (!allInserts.length) { alert('לא נמצאו שורות חדשות לייבוא'); return; }
+    if (!allInserts.length) { toast.info('לא נמצאו שורות חדשות לייבוא בקובץ'); return; }
     setImportPreview(allInserts);
-    if (xlsxRef.current) xlsxRef.current.value = '';
   };
 
   const confirmImport = async () => {
@@ -274,11 +305,12 @@ export default function BatchReceipts() {
     const rows = importPreview.map(({ _uncertain, _key, ...r }) => r);
     const { data: inserted, error } = await supabase.from('pending_receipts').insert(rows).select('id');
     setImporting(false);
-    if (error) { alert('שגיאה בשמירה: ' + error.message); return; }
+    if (error) { toast.error(`השמירה נכשלה: ${error.message}`); return; }
     if (inserted) {
       const newUncertainIds = inserted.filter((row, i) => importPreview[i]?._uncertain).map(row => row.id);
       if (newUncertainIds.length) setUncertainNameIds(prev => new Set([...prev, ...newUncertainIds]));
     }
+    toast.success(`יובאו ${formatNumber(rows.length)} העברות`);
     setImportPreview(null);
     fetchEntries();
   };
@@ -297,7 +329,7 @@ export default function BatchReceipts() {
   // Screenshot upload — analyze multiple bank-transfer screenshots and queue them as pending receipts
   const handleImages = async (fileList) => {
     const files = Array.from(fileList || []).filter(f => ALLOWED_IMAGE_TYPES.includes(f.type));
-    if (!files.length) { alert('לא נבחרו תמונות תקינות (jpg/png/webp)'); return; }
+    if (!files.length) { toast.error('לא נבחרו תמונות תקינות (jpg/png/webp)'); return; }
 
     setImgAnalyzing(true);
     setImgProgress({ current: 0, total: files.length });
@@ -340,7 +372,6 @@ export default function BatchReceipts() {
 
     setImgAnalyzing(false);
     setImgErrors(errors);
-    if (imagesRef.current) imagesRef.current.value = '';
 
     if (!inserts.length) return;
     setImportPreview(prev => (prev?.length ? [...prev, ...inserts] : inserts));
@@ -377,27 +408,42 @@ export default function BatchReceipts() {
     setActiveSuggestId(null);
   };
 
-  const deleteEntry = async (id) => {
-    if (!confirm('למחוק את ההעברה הזו?')) return;
-    await supabase.from('pending_receipts').delete().eq('id', id);
-    setEntries(prev => prev.filter(e => e.id !== id));
+  const deleteEntry = async (entry) => {
+    const ok = await confirm({
+      title: 'מחיקת העברה',
+      message: `למחוק את ההעברה של ${entry.customer_name || 'הלקוח'} (${formatCurrency(entry.amount)})?`,
+      confirmText: 'מחיקה',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    await supabase.from('pending_receipts').delete().eq('id', entry.id);
+    setEntries(prev => prev.filter(e => e.id !== entry.id));
   };
 
   const deleteSelected = async () => {
-    if (!selectedIds.size) { alert('יש לסמן שורות למחיקה'); return; }
+    if (!selectedIds.size) return;
     const ids = [...selectedIds];
-    if (!confirm(`למחוק ${ids.length} רשומות?`)) return;
+    const ok = await confirm({
+      title: 'מחיקת העברות',
+      message: `למחוק ${ids.length} העברות מסומנות?`,
+      confirmText: `מחיקת ${ids.length}`,
+      tone: 'danger',
+    });
+    if (!ok) return;
     await supabase.from('pending_receipts').delete().in('id', ids);
     setEntries(prev => prev.filter(e => !ids.includes(e.id)));
     setSelectedIds(new Set());
   };
 
-  const createReceipt = async (entry) => {
-    if (!entry.branch) return alert('יש לבחור מוסד');
-    if (!entry.amount || entry.amount <= 0) return alert('סכום לא תקין');
+  // Issues the receipt for one pending entry. Returns { ok, error } — the
+  // single-row button reports it with a toast, batch mode with one summary.
+  const createReceipt = async (entry, { batch = false } = {}) => {
+    const fail = (error) => { if (!batch) toast.error(error); return { ok: false, error }; };
+    if (!entry.branch) return fail(`${entry.customer_name || 'העברה'}: יש לבחור מוסד`);
+    if (!entry.amount || entry.amount <= 0) return fail(`${entry.customer_name || 'העברה'}: סכום לא תקין`);
     if (!isIdOptional(entry.branch) && !entry.customer_id?.trim()) {
       setErrorIds(prev => new Set(prev).add(entry.id));
-      return alert('יש למלא ת.ז לפני הפקת קבלה');
+      return fail(`${entry.customer_name || 'העברה'}: יש למלא ת"ז לפני הפקת קבלה`);
     }
     setErrorIds(prev => { const next = new Set(prev); next.delete(entry.id); return next; });
     setSendingId(entry.id);
@@ -429,10 +475,12 @@ export default function BatchReceipts() {
       if (!res.ok || data.error) throw new Error(data.error || 'שגיאה');
       await supabase.from('pending_receipts').update({ status: 'success', doc_number: data.docNumber }).eq('id', entry.id);
       setEntries(prev => prev.filter(e => e.id !== entry.id));
+      if (!batch) toast.success(`קבלה ${data.docNumber} הופקה עבור ${entry.customer_name || 'הלקוח'}`);
+      return { ok: true };
     } catch (err) {
       await supabase.from('pending_receipts').update({ status: 'error' }).eq('id', entry.id);
       setEntries(prev => prev.map(e => e.id === entry.id ? { ...e, status: 'error' } : e));
-      alert('שגיאה: ' + err.message);
+      return fail(`${entry.customer_name || 'העברה'}: ${err.message}`);
     } finally {
       setSendingId(null);
     }
@@ -442,11 +490,20 @@ export default function BatchReceipts() {
     const selected = filteredEntries.filter(e => selectedIds.has(e.id));
     if (!selected.length) return;
     setBatchSending(true);
+    const failures = [];
+    let done = 0;
     for (const entry of selected) {
-      try { await createReceipt(entry); } catch { /* individual errors handled */ }
+      const r = await createReceipt(entry, { batch: true });
+      if (r.ok) done++; else failures.push(r.error);
     }
     setSelectedIds(new Set());
     setBatchSending(false);
+    if (done) toast.success(`הופקו ${formatNumber(done)} קבלות`);
+    if (failures.length) {
+      toast.error(failures.slice(0, 3).join('\n') + (failures.length > 3 ? `\n…ועוד ${failures.length - 3}` : ''), {
+        title: `${failures.length} העברות לא הופקו`,
+      });
+    }
   };
 
   const exportExcel = async () => {
@@ -478,368 +535,323 @@ export default function BatchReceipts() {
 
   const allSelected = filteredEntries.length > 0 && filteredEntries.every(e => selectedIds.has(e.id));
   const toggleAll = () => setSelectedIds(allSelected ? new Set() : new Set(filteredEntries.map(e => e.id)));
+  const toggleOne = (id) => setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  const previewTotal = importPreview ? importPreview.reduce((sum, r) => sum + (r.amount || 0), 0) : 0;
+
+  // Plain render helper (not a component) so re-renders don't remount the
+  // uncontrolled inputs. Each field saves on blur; `key` includes the stored
+  // value so an external change (e.g. a picked suggestion) refreshes it.
+  const entryField = (entry, field, label, { wide, ...props } = {}) => {
+    const id = `pr-${entry.id}-${field}`;
+    return (
+      <Field label={label} htmlFor={id} className={wide ? s.wide : undefined}>
+        <Input
+          id={id}
+          key={`${field}-${entry.id}-${entry[field] ?? ''}`}
+          size="sm"
+          defaultValue={entry[field] ?? ''}
+          onBlur={(e) => updateField(entry.id, field, e.target.value.trim())}
+          onKeyDown={blurOnEnter}
+          {...props}
+        />
+      </Field>
+    );
+  };
 
   return (
-    <div>
-      <h3 className={styles.sectionTitle}>העלאת העברות בנקאיות</h3>
-
-      {/* Upload zones */}
-      <div className={styles.card}>
-        <div className={styles.formGrid}>
-          <input ref={xlsxRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }}
-            onChange={e => { const f = e.target.files?.[0]; if (f) handleExcel(f); }} />
-          <div className={styles.uploadZone} onClick={() => xlsxRef.current?.click()}>
-            <div className={styles.uploadIcon}>📊</div>
-            <div className={styles.uploadLabel}>העלה קובץ אקסל</div>
-            <div className={styles.uploadSub}>xlsx, xls, csv</div>
+    <Stack>
+      <Card>
+        <CardHeader title="ייבוא העברות" subtitle="מקובץ אקסל של הבנק, או מצילומי מסך של אישורי העברה. שום דבר לא נשמר לפני שמאשרים." />
+        <CardBody>
+          <div className={s.uploads}>
+            <FileDrop icon="sheet" title="העלאת קובץ אקסל" hint="xlsx, xls, csv" accept=".xlsx,.xls,.csv" onFiles={([f]) => handleExcel(f)} compact />
+            <FileDrop
+              icon="image"
+              title={imgAnalyzing ? `מנתח ${imgProgress.current} מתוך ${imgProgress.total}…` : 'העלאת צילומי מסך של העברות'}
+              hint="jpg, png, webp — אפשר לבחור כמה תמונות יחד"
+              accept="image/jpeg,image/jpg,image/png,image/webp"
+              multiple
+              disabled={imgAnalyzing}
+              onFiles={handleImages}
+              compact
+            />
           </div>
+          {imgErrors.length > 0 && (
+            <Alert tone="danger" className={s.mt} title={`${imgErrors.length} תמונות לא נותחו`} onClose={() => setImgErrors([])}>
+              <ul className={s.errorList}>
+                {imgErrors.map((e, i) => <li key={i}>{e.fileName} — {e.error}</li>)}
+              </ul>
+            </Alert>
+          )}
+        </CardBody>
+      </Card>
 
-          <input ref={imagesRef} type="file" accept="image/jpeg,image/jpg,image/png,image/webp" multiple style={{ display: 'none' }}
-            onChange={e => { const fs = e.target.files; if (fs?.length) handleImages(fs); }} />
-          <div className={styles.uploadZone} onClick={() => !imgAnalyzing && imagesRef.current?.click()} style={imgAnalyzing ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}>
-            <div className={styles.uploadIcon}>📷</div>
-            <div className={styles.uploadLabel}>
-              {imgAnalyzing ? `מנתח ${imgProgress.current}/${imgProgress.total}...` : 'העלה צילומי מסך של העברות'}
-            </div>
-            <div className={styles.uploadSub}>jpg, png, webp — אפשר לבחור כמה תמונות יחד</div>
-          </div>
-        </div>
-
-        {imgErrors.length > 0 && (
-          <div className={styles.errorMsg} style={{ marginTop: 12, marginBottom: 0 }}>
-            {imgErrors.length} תמונות לא נותחו בהצלחה:
-            <ul style={{ margin: '6px 0 0', paddingRight: 18 }}>
-              {imgErrors.map((e, i) => <li key={i}>{e.fileName} — {e.error}</li>)}
-            </ul>
-          </div>
-        )}
-      </div>
-
-      {/* Excel import preview — nothing is saved until the user confirms */}
+      {/* Import preview — nothing is saved until the user confirms */}
       {importPreview && (
-        <div className={styles.card} style={{ marginBottom: 14, border: '1px solid var(--color-primary, #4f7ef8)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
-            <span style={{ fontSize: 14, fontWeight: 700 }}>אימות לפני ייבוא</span>
-            <span style={{ fontSize: 13 }}>
-              {importPreview.length} שורות · סה"כ ₪{importPreview.reduce((s, r) => s + (r.amount || 0), 0).toLocaleString('he-IL')}
-            </span>
-            <div style={{ display: 'flex', gap: 8, marginRight: 'auto' }}>
-              <button className={`${styles.btn} ${styles.btnPrimary} ${styles.btnSm}`} disabled={importing} onClick={confirmImport}>
-                {importing ? 'מייבא...' : `✓ אשר ייבוא (${importPreview.length})`}
-              </button>
-              <button className={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`} disabled={importing} onClick={() => setImportPreview(null)}>
-                ביטול
-              </button>
-            </div>
-          </div>
-          <div className={styles.tableWrap} style={{ maxHeight: 340, overflowY: 'auto' }}>
-            <table className={styles.table}>
+        <Card className={s.previewCard}>
+          <CardHeader
+            title="בדיקה לפני ייבוא"
+            subtitle={`${formatNumber(importPreview.length)} שורות · סה"כ ${formatCurrency(previewTotal)} · אפשר לתקן או להסיר שורות לפני האישור`}
+            actions={(
+              <>
+                <Button variant="ghost" onClick={() => setImportPreview(null)} disabled={importing}>ביטול</Button>
+                <Button variant="primary" icon="check" onClick={confirmImport} loading={importing}>
+                  אישור ייבוא ({formatNumber(importPreview.length)})
+                </Button>
+              </>
+            )}
+          />
+          <div className={s.previewScroll}>
+            <Table>
               <thead>
-                <tr>
-                  <th>שם</th><th>סכום</th><th>תאריך</th><th>בנק</th><th>חשבון</th><th>אסמכתא</th><th>מוסד</th><th></th>
-                </tr>
+                <tr><th>שם</th><th>סכום</th><th>תאריך</th><th>בנק</th><th>חשבון</th><th>אסמכתא</th><th>מוסד</th><th /></tr>
               </thead>
               <tbody>
                 {importPreview.map((r, i) => (
                   <tr key={r._key ?? i}>
-                    <td style={{ minWidth: 130 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <input className={styles.tableInput} defaultValue={r.customer_name || ''} placeholder="שם"
-                          onBlur={e => updatePreviewField(i, 'customer_name', e.target.value.trim())} />
-                        {r._uncertain && <span title="שם לא מאומת מהצילום (שם בעל החשבון) - יש לבדוק">⚠</span>}
+                    <td>
+                      <div className={s.nameCell}>
+                        <Input size="sm" defaultValue={r.customer_name || ''} placeholder="שם" aria-label="שם"
+                          onBlur={(e) => updatePreviewField(i, 'customer_name', e.target.value.trim())} />
+                        {r._uncertain && (
+                          <Icon name="alertTriangle" size={16} className={s.warnIcon} title="שם לא מאומת מהצילום (שם בעל החשבון) — יש לבדוק" />
+                        )}
                       </div>
                     </td>
-                    <td style={{ width: 90 }}>
-                      <input className={styles.tableInput} type="number" defaultValue={r.amount ?? ''} placeholder="סכום"
-                        onBlur={e => updatePreviewField(i, 'amount', e.target.value ? parseFloat(e.target.value) : null)} />
-                    </td>
-                    <td style={{ minWidth: 120 }}>
-                      <input className={styles.tableInput} style={{ minWidth: 110 }} defaultValue={r.transfer_date || ''} placeholder="dd/mm/yyyy"
-                        onBlur={e => updatePreviewField(i, 'transfer_date', e.target.value.trim())} />
-                    </td>
-                    <td style={{ width: 90 }}>
-                      <input className={styles.tableInput} defaultValue={r.bank_name || ''} placeholder="בנק"
-                        onBlur={e => updatePreviewField(i, 'bank_name', e.target.value.trim())} />
-                    </td>
-                    <td style={{ width: 100 }}>
-                      <input className={styles.tableInput} defaultValue={r.bank_account || ''} placeholder="חשבון"
-                        onBlur={e => updatePreviewField(i, 'bank_account', e.target.value.trim())} />
-                    </td>
-                    <td style={{ width: 100 }}>
-                      <input className={styles.tableInput} defaultValue={r.reference_number || ''} placeholder="אסמכתא"
-                        onBlur={e => updatePreviewField(i, 'reference_number', e.target.value.trim())} />
-                    </td>
-                    <td style={{ width: 130 }}>
-                      <select className={styles.tableInput} value={r.branch || ''} onChange={e => updatePreviewField(i, 'branch', e.target.value)}>
-                        <option value="">בחר מוסד</option>
-                        {BRANCHES.map(b => <option key={b} value={b}>{b}</option>)}
-                      </select>
-                    </td>
+                    <td><Input size="sm" type="number" defaultValue={r.amount ?? ''} placeholder="סכום" aria-label="סכום" dir="ltr"
+                      onBlur={(e) => updatePreviewField(i, 'amount', e.target.value ? parseFloat(e.target.value) : null)} /></td>
+                    <td><Input size="sm" defaultValue={r.transfer_date || ''} placeholder="dd/mm/yyyy" aria-label="תאריך" dir="ltr"
+                      onBlur={(e) => updatePreviewField(i, 'transfer_date', e.target.value.trim())} /></td>
+                    <td><Input size="sm" defaultValue={r.bank_name || ''} placeholder="בנק" aria-label="בנק"
+                      onBlur={(e) => updatePreviewField(i, 'bank_name', e.target.value.trim())} /></td>
+                    <td><Input size="sm" defaultValue={r.bank_account || ''} placeholder="חשבון" aria-label="חשבון" dir="ltr"
+                      onBlur={(e) => updatePreviewField(i, 'bank_account', e.target.value.trim())} /></td>
+                    <td><Input size="sm" defaultValue={r.reference_number || ''} placeholder="אסמכתא" aria-label="אסמכתא" dir="ltr"
+                      onBlur={(e) => updatePreviewField(i, 'reference_number', e.target.value.trim())} /></td>
                     <td>
-                      <button className={styles.btnIconDanger} title="הסר שורה מהייבוא" onClick={() => removePreviewRow(i)}>✕</button>
+                      <Select size="sm" value={r.branch || ''} aria-label="מוסד" onChange={(e) => updatePreviewField(i, 'branch', e.target.value)}>
+                        <option value="">בחר מוסד…</option>
+                        {BRANCHES.map(b => <option key={b} value={b}>{b}</option>)}
+                      </Select>
                     </td>
+                    <td><IconButton size="sm" icon="x" label="הסרת השורה מהייבוא" onClick={() => removePreviewRow(i)} /></td>
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </Table>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Checkpoint */}
-      <div style={{ marginBottom: 14 }}>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button
-            className={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`}
-            onClick={() => { setCpDraft(checkpoint ?? { customer_name: '', amount: '', reference_number: '', bank_account: '', transfer_date: '' }); setShowCpForm(!showCpForm); }}
-          >
-            {checkpoint ? '✓ checkpoint ידני פעיל' : 'הגדר קבלה אחרונה'}
-          </button>
-          {checkpoint && (
-            <button className={`${styles.btn} ${styles.btnDanger} ${styles.btnSm}`} onClick={clearCheckpoint}>נקה</button>
+      <Card>
+        <CardHeader
+          title="נקודת עצירה לייבוא מאקסל"
+          subtitle="פרטי הקבלה האחרונה שהונפקה — בייבוא הבא ייקלטו רק שורות חדשות ממנה"
+          actions={(
+            <>
+              {checkpoint && !showCpForm && <Button size="sm" variant="ghost" icon="x" onClick={clearCheckpoint}>ניקוי</Button>}
+              <Button
+                size="sm"
+                variant={checkpoint ? 'secondary' : 'soft'}
+                icon={checkpoint ? 'edit' : 'plus'}
+                onClick={() => { setCpDraft(checkpoint ?? EMPTY_CHECKPOINT); setShowCpForm(!showCpForm); }}
+              >
+                {showCpForm ? 'סגירה' : checkpoint ? 'עריכה' : 'הגדרת נקודת עצירה'}
+              </Button>
+            </>
           )}
-        </div>
-        {checkpoint && !showCpForm && (
-          <div className={styles.checkpointBar}>
-            <span className={styles.checkpointBarLabel}>קבלה אחרונה:</span>
-            {checkpoint.customer_name && <span>{checkpoint.customer_name}</span>}
-            {checkpoint.amount && <span>₪{checkpoint.amount}</span>}
-            {checkpoint.transfer_date && <span>תאריך: {checkpoint.transfer_date}</span>}
-            {checkpoint.reference_number && <span>אסמכתא: {checkpoint.reference_number}</span>}
-            {checkpoint.bank_account && <span>חשבון: {checkpoint.bank_account}</span>}
-          </div>
-        )}
-        {showCpForm && (
-          <div className={styles.card} style={{ marginTop: 8 }}>
-            <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 0 }}>פרטי הקבלה האחרונה שהונפקה. שורות חדשות יותר ממנה בלבד ייובאו.</p>
-            <div className={styles.formGrid}>
-              {[['customer_name','שם לקוח'],['amount','סכום'],['reference_number','אסמכתא'],['bank_account','חשבון בנק'],['transfer_date','תאריך העברה']].map(([key, lbl]) => (
-                <div key={key} className={styles.fieldGroup}>
-                  <label className={styles.fieldLabel}>{lbl}</label>
-                  <input className={styles.fieldInput} value={cpDraft[key]} onChange={e => setCpDraft(p => ({ ...p, [key]: e.target.value }))} placeholder={key === 'transfer_date' ? 'DD/MM/YYYY' : lbl} type={key === 'amount' ? 'number' : 'text'} />
+        />
+        {(checkpoint || showCpForm) && (
+          <CardBody>
+            {showCpForm ? (
+              <>
+                <div className={formStyles.grid}>
+                  {CHECKPOINT_FIELDS.map(([key, lbl]) => (
+                    <Field key={key} label={lbl} required={key === 'amount'}>
+                      <Input
+                        value={cpDraft[key]}
+                        onChange={(e) => setCpDraft(p => ({ ...p, [key]: e.target.value }))}
+                        placeholder={key === 'transfer_date' ? 'DD/MM/YYYY' : lbl}
+                        type={key === 'amount' ? 'number' : 'text'}
+                      />
+                    </Field>
+                  ))}
                 </div>
-              ))}
-            </div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-              <button className={`${styles.btn} ${styles.btnPrimary} ${styles.btnSm}`} onClick={saveCheckpoint} disabled={!cpDraft.amount.trim()}>שמור</button>
-              <button className={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`} onClick={() => setShowCpForm(false)}>ביטול</button>
-            </div>
-          </div>
+                <div className={s.entryFooter}>
+                  <Button variant="primary" onClick={saveCheckpoint} disabled={!cpDraft.amount.trim()}>שמירה</Button>
+                  <Button variant="ghost" onClick={() => setShowCpForm(false)}>ביטול</Button>
+                </div>
+              </>
+            ) : (
+              <div className={s.checkpointSummary}>
+                {checkpoint.customer_name && <span><strong>{checkpoint.customer_name}</strong></span>}
+                {checkpoint.amount && <span>סכום: <strong>{formatCurrency(Number(checkpoint.amount))}</strong></span>}
+                {checkpoint.transfer_date && <span>תאריך: <strong>{checkpoint.transfer_date}</strong></span>}
+                {checkpoint.reference_number && <span>אסמכתא: <strong>{checkpoint.reference_number}</strong></span>}
+                {checkpoint.bank_account && <span>חשבון: <strong>{checkpoint.bank_account}</strong></span>}
+              </div>
+            )}
+          </CardBody>
         )}
-      </div>
+      </Card>
 
-      {/* Entries list */}
-      {loading ? (
-        <div className={styles.placeholder}>טוען...</div>
-      ) : entries.length === 0 ? (
-        <div className={styles.empty}>אין העברות ממתינות. העלה קובץ אקסל.</div>
-      ) : (
-        <>
-          {/* Toolbar */}
-          <div className={styles.toolbar}>
-            <span style={{ fontSize: 13, fontWeight: 600 }}>{filteredEntries.length} העברות ממתינות</span>
-            <input
-              className={styles.fieldInput}
-              style={{ height: 32, width: 200, fontSize: 13 }}
-              placeholder="🔍 חיפוש: שם, ת.ז, סכום, אסמכתא..."
-              value={search}
-              onChange={e => { setSearch(e.target.value); setSelectedIds(new Set()); }}
-            />
-            <div className={styles.filterBtns}>
-              {(['all','has_id','no_id']).map(f => (
-                <button key={f} className={`${styles.filterBtn} ${idFilter === f ? styles.filterBtnActive : ''}`}
-                  onClick={() => { setIdFilter(f); setSelectedIds(new Set()); }}>
-                  {f === 'all' ? 'הכל' : f === 'has_id' ? 'יש ת.ז' : 'חסר ת.ז'}
-                </button>
-              ))}
-              <span style={{ margin: '0 4px', borderRight: '1px solid var(--color-border)', height: 16, alignSelf: 'center' }} />
-              {(['name','branch','newest','oldest']).map(s => (
-                <button key={s} className={`${styles.filterBtn} ${sortBy === s ? styles.filterBtnActive : ''}`}
-                  onClick={() => setSortBy(s)}>
-                  {s === 'name' ? 'א-ב' : s === 'branch' ? 'מוסד' : s === 'newest' ? 'חדש→ישן' : 'ישן→חדש'}
-                </button>
-              ))}
-            </div>
-            <div className={styles.toolbarRight}>
-              <button className={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`} onClick={exportExcel}>⬇ ייצוא</button>
-              <button className={`${styles.btn} ${styles.btnDanger} ${styles.btnSm}`} disabled={selectedIds.size === 0} title={selectedIds.size === 0 ? 'סמן שורות למחיקה' : undefined} onClick={deleteSelected}>🗑 מחק</button>
-            </div>
-          </div>
+      {/* Pending entries */}
+      <Card>
+        {loading ? (
+          <StateMessage kind="loading" />
+        ) : entries.length === 0 ? (
+          <StateMessage title="אין העברות שממתינות לקבלה" description="מעלים קובץ אקסל או צילומי מסך, והן יופיעו כאן" icon="inbox" />
+        ) : (
+          <>
+            <Toolbar>
+              <SearchInput
+                className={toolbarSearchClass}
+                value={search}
+                delay={150}
+                onSearch={(q) => { setSearch(q); setSelectedIds(new Set()); }}
+                placeholder='חיפוש: שם, ת"ז, סכום, אסמכתא…'
+              />
+              <SegmentedControl
+                aria-label="סינון לפי תעודת זהות"
+                options={ID_FILTERS}
+                value={idFilter}
+                onChange={(v) => { setIdFilter(v); setSelectedIds(new Set()); }}
+              />
+              <Select value={sortBy} onChange={(e) => setSortBy(e.target.value)} aria-label="מיון">
+                {SORTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </Select>
+              <ToolbarSpacer />
+              <ToolbarMeta>{formatNumber(filteredEntries.length)} ממתינות</ToolbarMeta>
+              <Button icon="download" onClick={exportExcel}>ייצוא</Button>
+            </Toolbar>
 
-          {/* Select all bar */}
-          <div className={styles.selectBar}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <input type="checkbox" className={styles.checkbox} checked={allSelected} onChange={toggleAll} />
-              <span>סמן הכל ({selectedIds.size} נבחרו)</span>
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div className={s.selectBar}>
+              <Checkbox checked={allSelected} onChange={toggleAll} label={selectedIds.size ? `${selectedIds.size} נבחרו` : 'סימון הכל'} />
               {selectedIds.size > 0 && (
-                <button className={`${styles.btn} ${styles.btnDanger} ${styles.btnSm}`} onClick={deleteSelected}>
-                  🗑 מחק {selectedIds.size}
-                </button>
-              )}
-              {idFilter === 'has_id' && selectedIds.size > 0 && (
-                <button className={`${styles.btn} ${styles.btnPrimary} ${styles.btnSm}`} disabled={batchSending} onClick={batchCreate}>
-                  {batchSending ? 'שולח...' : `הפק ${selectedIds.size} קבלות`}
-                </button>
+                <>
+                  <Button size="sm" variant="dangerSoft" icon="trash" onClick={deleteSelected}>מחיקת {selectedIds.size}</Button>
+                  {idFilter === 'has_id' ? (
+                    <Button size="sm" variant="primary" icon="receipt" onClick={batchCreate} loading={batchSending}>
+                      {batchSending ? 'מפיק…' : `הפקת ${selectedIds.size} קבלות`}
+                    </Button>
+                  ) : (
+                    <span className={s.selectHint}>להפקה מרובה עוברים לסינון "יש ת"ז"</span>
+                  )}
+                </>
               )}
             </div>
-          </div>
 
-          {/* Entry cards */}
-          {filteredEntries.map(entry => (
-            <div key={entry.id} className={`${styles.entryCard} ${entry.status === 'error' ? styles.entryCardError : ''}`}>
-              {/* Row 1: Name + Amount */}
-              <div className={styles.entryRow} style={{ alignItems: 'flex-start' }}>
-                <input type="checkbox" className={styles.checkbox} style={{ marginTop: 4 }}
-                  checked={selectedIds.has(entry.id)}
-                  onChange={() => setSelectedIds(prev => { const n = new Set(prev); n.has(entry.id) ? n.delete(entry.id) : n.add(entry.id); return n; })} />
-                <div style={{ flex: 1, position: 'relative' }}>
-                  <div className={styles.entryMeta}>
-                    <span>שם</span>
-                    {entry.created_at && <span>נוסף: {new Date(entry.created_at).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>}
+            {filteredEntries.length === 0 && <StateMessage compact title="אין תוצאות" description="נסה לשנות את החיפוש או את הסינון" />}
+
+            {filteredEntries.map((entry) => {
+              const missingId = errorIds.has(entry.id) && !entry.customer_id?.trim();
+              const busy = sendingId === entry.id;
+              const nameId = `pr-${entry.id}-customer_name`;
+              return (
+                <div key={entry.id} className={[s.entry, selectedIds.has(entry.id) && s.entrySelected, entry.status === 'error' && s.entryError].filter(Boolean).join(' ')}>
+                  <div className={s.entryHead}>
+                    <input
+                      type="checkbox"
+                      className={s.entryCheck}
+                      checked={selectedIds.has(entry.id)}
+                      onChange={() => toggleOne(entry.id)}
+                      aria-label={`סימון ${entry.customer_name || 'העברה'}`}
+                    />
+                    <Field label="שם" htmlFor={nameId}>
+                      <div className={formStyles.suggestWrap}>
+                        <Input
+                          id={nameId}
+                          key={`n-${entry.id}-${entry.customer_name}`}
+                          size="sm"
+                          defaultValue={entry.customer_name || ''}
+                          placeholder="שם לקוח"
+                          autoComplete="off"
+                          onChange={(e) => searchNameSuggestions(entry.id, e.target.value)}
+                          onFocus={() => setActiveSuggestId(entry.id)}
+                          onBlur={(e) => { updateField(entry.id, 'customer_name', e.target.value.trim()); setTimeout(() => setActiveSuggestId(null), 150); }}
+                          onKeyDown={blurOnEnter}
+                        />
+                        {activeSuggestId === entry.id && (
+                          <Suggestions
+                            items={nameSuggestions[entry.id]}
+                            onSelect={(c) => applyNameSuggestion(entry, c)}
+                            getTitle={(c) => c.name}
+                            getSub={(c) => [c.id_number, c.bank_account, c.email].filter(Boolean).join(' · ')}
+                          />
+                        )}
+                      </div>
+                      {uncertainNameIds.has(entry.id) && (
+                        <div className={s.warnText}>שם לא מאומת מהצילום (שם בעל החשבון) — יש לבדוק</div>
+                      )}
+                    </Field>
+                    {entryField(entry, 'amount', 'סכום (₪)', {
+                      type: 'number',
+                      dir: 'ltr',
+                      className: s.amount,
+                      onBlur: (e) => updateField(entry.id, 'amount', e.target.value ? parseFloat(e.target.value) : null),
+                    })}
+                    <div className={s.entryMeta}>
+                      {entry.status === 'error' && <Badge tone="danger">שגיאה — נסה שוב</Badge>}
+                      {entry.created_at && <span>נוסף {formatDateTime(entry.created_at)}</span>}
+                    </div>
                   </div>
-                  <input key={`n-${entry.id}-${entry.customer_name}`}
-                    defaultValue={entry.customer_name || ''}
-                    className={styles.inlineInput}
-                    placeholder="שם לקוח"
-                    onChange={e => searchNameSuggestions(entry.id, e.target.value)}
-                    onFocus={() => setActiveSuggestId(entry.id)}
-                    onBlur={e => { updateField(entry.id, 'customer_name', e.target.value.trim()); setTimeout(() => setActiveSuggestId(null), 150); }}
-                    onKeyDown={e => e.key === 'Enter' && e.target.blur()}
-                  />
-                  {activeSuggestId === entry.id && (nameSuggestions[entry.id]?.length > 0) && (
-                    <div className={styles.autocompleteDropdown}>
-                      {nameSuggestions[entry.id].map(c => (
-                        <div key={c.id} className={styles.autocompleteItem}
-                          onMouseDown={e => e.preventDefault()}
-                          onClick={() => applyNameSuggestion(entry, c)}>
-                          <div className={styles.autocompleteItemName}>{c.name}</div>
-                          <div className={styles.autocompleteItemSub}>
-                            {[c.id_number, c.bank_account, c.email].filter(Boolean).join(' · ')}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {uncertainNameIds.has(entry.id) && (
-                    <div style={{ fontSize: 11, color: '#744210', marginTop: 4 }}>
-                      ⚠ שם לא מאומת מהצילום (שם בעל החשבון) - יש לבדוק
-                    </div>
-                  )}
-                </div>
-                <div style={{ width: 110 }}>
-                  <div className={styles.entryMeta}><span>סכום</span></div>
-                  <input key={`a-${entry.id}`}
-                    defaultValue={entry.amount ?? ''}
-                    className={`${styles.inlineInput} ${styles.amountInput}`}
-                    type="number" placeholder="סכום"
-                    onBlur={e => updateField(entry.id, 'amount', e.target.value ? parseFloat(e.target.value) : null)}
-                    onKeyDown={e => e.key === 'Enter' && e.target.blur()}
-                  />
-                </div>
-              </div>
 
-              {/* Row 2: ID + Date */}
-              <div className={styles.entryRow}>
-                <div style={{ flex: 1 }}>
-                  <div className={styles.entryMeta}><span>ת.ז *</span></div>
-                  <input key={`id-${entry.id}-${entry.customer_id}`}
-                    defaultValue={entry.customer_id || ''}
-                    className={`${styles.inlineInput} ${errorIds.has(entry.id) && !entry.customer_id?.trim() ? styles.inlineInputError : ''}`}
-                    placeholder="מספר זהות"
-                    onBlur={e => { updateField(entry.id, 'customer_id', e.target.value.trim()); if (e.target.value.trim()) setErrorIds(p => { const n = new Set(p); n.delete(entry.id); return n; }); }}
-                    onKeyDown={e => e.key === 'Enter' && e.target.blur()}
-                  />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div className={styles.entryMeta}><span>תאריך</span></div>
-                  <input key={`d-${entry.id}`}
-                    defaultValue={entry.transfer_date || ''}
-                    className={styles.inlineInput} placeholder="dd/mm/yyyy"
-                    onBlur={e => updateField(entry.id, 'transfer_date', e.target.value.trim())}
-                    onKeyDown={e => e.key === 'Enter' && e.target.blur()}
-                  />
-                </div>
-              </div>
+                  <div className={s.entryFields}>
+                    <Field label={isIdOptional(entry.branch) ? 'ת"ז' : 'ת"ז *'} htmlFor={`pr-${entry.id}-customer_id`} error={missingId ? 'חובה להפקת קבלה' : undefined}>
+                      <Input
+                        id={`pr-${entry.id}-customer_id`}
+                        key={`id-${entry.id}-${entry.customer_id}`}
+                        size="sm"
+                        dir="ltr"
+                        inputMode="numeric"
+                        defaultValue={entry.customer_id || ''}
+                        placeholder="מספר זהות"
+                        aria-invalid={missingId || undefined}
+                        onBlur={(e) => {
+                          updateField(entry.id, 'customer_id', e.target.value.trim());
+                          if (e.target.value.trim()) setErrorIds(p => { const n = new Set(p); n.delete(entry.id); return n; });
+                        }}
+                        onKeyDown={blurOnEnter}
+                      />
+                    </Field>
+                    {entryField(entry, 'transfer_date', 'תאריך', { placeholder: 'dd/mm/yyyy', dir: 'ltr' })}
+                    {entryField(entry, 'bank_name', 'בנק', { placeholder: 'בנק' })}
+                    {entryField(entry, 'bank_branch', 'סניף', { placeholder: 'סניף', dir: 'ltr' })}
+                    {entryField(entry, 'bank_account', 'חשבון', { placeholder: 'חשבון', dir: 'ltr' })}
+                    {entryField(entry, 'reference_number', 'אסמכתא', { placeholder: 'מספר אסמכתא', dir: 'ltr' })}
+                    {entryField(entry, 'customer_email', 'מייל (הקבלה תישלח אליו)', { wide: true, type: 'email', dir: 'ltr', placeholder: 'email@example.com' })}
+                    {entryField(entry, 'notes', 'הערות', {
+                      wide: true,
+                      placeholder: 'הערות',
+                      onBlur: (e) => updateField(entry.id, 'notes', e.target.value),
+                    })}
+                  </div>
 
-              {/* Row 3: Bank details */}
-              <div className={styles.entryRow}>
-                <div style={{ flex: 1 }}>
-                  <div className={styles.entryMeta}><span>בנק</span></div>
-                  <input key={`bk-${entry.id}-${entry.bank_name}`} defaultValue={entry.bank_name || ''} className={styles.inlineInput} placeholder="בנק"
-                    onBlur={e => updateField(entry.id, 'bank_name', e.target.value.trim())} onKeyDown={e => e.key === 'Enter' && e.target.blur()} />
+                  <div className={s.entryFooter}>
+                    <Select size="sm" value={entry.branch || ''} aria-label="מוסד" aria-invalid={!entry.branch || undefined}
+                      onChange={(e) => updateField(entry.id, 'branch', e.target.value)}>
+                      <option value="">בחר מוסד…</option>
+                      {BRANCHES.map(b => <option key={b} value={b}>{b}</option>)}
+                    </Select>
+                    <Select size="sm" value={entry.fund_id || ''} aria-label="קרן" onChange={(e) => updateField(entry.id, 'fund_id', e.target.value)}>
+                      <option value="">ללא קרן</option>
+                      {funds.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                    </Select>
+                    <Checkbox checked={!!entry.send_telegram} onChange={(e) => updateField(entry.id, 'send_telegram', e.target.checked)} label="שליחה לטלגרם" />
+                    <ToolbarSpacer />
+                    <IconButton size="sm" icon="trash" label="מחיקת ההעברה" onClick={() => deleteEntry(entry)} disabled={busy} />
+                    <Button size="sm" variant="primary" icon="receipt" onClick={() => createReceipt(entry)} loading={busy}>
+                      {busy ? 'מפיק…' : 'הפקת קבלה'}
+                    </Button>
+                  </div>
                 </div>
-                <div style={{ width: 70 }}>
-                  <div className={styles.entryMeta}><span>סניף</span></div>
-                  <input key={`br-${entry.id}-${entry.bank_branch}`} defaultValue={entry.bank_branch || ''} className={styles.inlineInput} placeholder="סניף"
-                    onBlur={e => updateField(entry.id, 'bank_branch', e.target.value.trim())} onKeyDown={e => e.key === 'Enter' && e.target.blur()} />
-                </div>
-                <div style={{ width: 100 }}>
-                  <div className={styles.entryMeta}><span>חשבון</span></div>
-                  <input key={`ac-${entry.id}-${entry.bank_account}`} defaultValue={entry.bank_account || ''} className={styles.inlineInput} placeholder="חשבון"
-                    onBlur={e => updateField(entry.id, 'bank_account', e.target.value.trim())} onKeyDown={e => e.key === 'Enter' && e.target.blur()} />
-                </div>
-              </div>
-
-              {/* Row 4: Reference + Notes */}
-              <div className={styles.entryRow}>
-                <div style={{ flex: 1 }}>
-                  <div className={styles.entryMeta}><span>אסמכתא</span></div>
-                  <input key={`ref-${entry.id}`} defaultValue={entry.reference_number || ''} className={styles.inlineInput} placeholder="מספר אסמכתא"
-                    onBlur={e => updateField(entry.id, 'reference_number', e.target.value.trim())} onKeyDown={e => e.key === 'Enter' && e.target.blur()} />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div className={styles.entryMeta}><span>הערות</span></div>
-                  <input key={`no-${entry.id}`} defaultValue={entry.notes || ''} className={styles.inlineInput} placeholder="הערות"
-                    onBlur={e => updateField(entry.id, 'notes', e.target.value)} onKeyDown={e => e.key === 'Enter' && e.target.blur()} />
-                </div>
-              </div>
-
-              {/* Row 5: Email */}
-              <div style={{ marginBottom: 10 }}>
-                <div className={styles.entryMeta}><span>דוא"ל (ישלח קבלה אוטומטית)</span></div>
-                <input key={`em-${entry.id}-${entry.customer_email}`} defaultValue={entry.customer_email || ''} className={styles.inlineInput} placeholder="email@example.com" type="email" dir="ltr"
-                  onBlur={e => updateField(entry.id, 'customer_email', e.target.value.trim())} onKeyDown={e => e.key === 'Enter' && e.target.blur()} />
-              </div>
-
-              {entry.status === 'error' && (
-                <span className={`${styles.badge} ${styles.badgeError}`} style={{ marginBottom: 8, display: 'inline-block' }}>שגיאה - נסה שוב</span>
-              )}
-
-              {/* Fund sheet + Telegram */}
-              <div className={styles.entryRow} style={{ marginBottom: 8 }}>
-                <select className={styles.fieldSelect} style={{ height: 34, flex: 1, fontSize: 12 }} value={entry.fund_id || ''}
-                  onChange={e => updateField(entry.id, 'fund_id', e.target.value)}>
-                  <option value="">ללא קרן</option>
-                  {funds.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-                </select>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, whiteSpace: 'nowrap' }}>
-                  <input type="checkbox" checked={!!entry.send_telegram} onChange={e => updateField(entry.id, 'send_telegram', e.target.checked)} />
-                  שלח לטלגרם
-                </label>
-              </div>
-
-              {/* Actions */}
-              <div className={styles.entryActions}>
-                <select className={styles.fieldSelect} style={{ height: 34, flex: 1, fontSize: 12 }} value={entry.branch}
-                  onChange={e => updateField(entry.id, 'branch', e.target.value)}>
-                  <option value="">בחר מוסד</option>
-                  {BRANCHES.map(b => <option key={b} value={b}>{b}</option>)}
-                </select>
-                <button
-                  className={`${styles.btn} ${styles.btnPrimary} ${styles.btnSm}`}
-                  disabled={sendingId === entry.id}
-                  onClick={() => createReceipt(entry)}
-                >
-                  {sendingId === entry.id ? 'שולח...' : '📄 צור קבלה'}
-                </button>
-                <button className={styles.btnIconDanger} disabled={sendingId === entry.id} onClick={() => deleteEntry(entry.id)}>🗑</button>
-              </div>
-            </div>
-          ))}
-        </>
-      )}
-    </div>
+              );
+            })}
+          </>
+        )}
+      </Card>
+    </Stack>
   );
 }

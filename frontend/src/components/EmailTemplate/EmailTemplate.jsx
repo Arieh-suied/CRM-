@@ -3,8 +3,13 @@ import styles from './EmailTemplate.module.css';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import { fetchEmailTemplates, saveEmailTemplate, deleteEmailTemplate } from '../../services/api.js';
 import { fillTemplate, fillTemplateHtml, ensureHtml, htmlIsEmpty, PLACEHOLDERS, DEFAULT_TEMPLATE } from '../../lib/emailTemplate.js';
+import { formatDateTime } from '../../lib/format.js';
 import RichTextEditor from '../RichTextEditor/RichTextEditor.jsx';
 import SendEmailModal from '../SendEmailModal/SendEmailModal.jsx';
+import {
+  Card, CardHeader, CardBody, CardFooter, Stack, Field, Input, Select, Checkbox, Button, Alert, StateMessage, Icon,
+  useToast, useConfirm,
+} from '../ui';
 
 // Sample transaction for the live preview
 const SAMPLE_TX = {
@@ -42,6 +47,8 @@ export function readFileAsAttachment(file) {
 
 export default function EmailTemplate({ institutions = [] }) {
   const { role } = useAuth();
+  const toast = useToast();
+  const confirm = useConfirm();
   const canEdit = CAN_EDIT.has(role);
 
   const [templates, setTemplates] = useState({}); // mosad_number → template row
@@ -56,7 +63,7 @@ export default function EmailTemplate({ institutions = [] }) {
   const [meta, setMeta]           = useState(null);
   const [loading, setLoading]     = useState(true);
   const [saving, setSaving]       = useState(false);
-  const [msg, setMsg]             = useState(null); // { text, ok }
+  const [error, setError]         = useState('');
   const [sendOpen, setSendOpen]   = useState(false);
   const editorRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -66,7 +73,7 @@ export default function EmailTemplate({ institutions = [] }) {
       .then((rows) => {
         setTemplates(Object.fromEntries((rows ?? []).map((t) => [t.mosad_number, t])));
       })
-      .catch((e) => setMsg({ text: `שגיאה בטעינת התבניות: ${e.message}`, ok: false }))
+      .catch((e) => setError(`שגיאה בטעינת התבניות: ${e.message}`))
       .finally(() => setLoading(false));
   }, []);
 
@@ -74,7 +81,7 @@ export default function EmailTemplate({ institutions = [] }) {
 
   function selectMosad(m) {
     setMosad(m);
-    setMsg(null);
+    setError('');
     const tpl = templates[m];
     setSubject(tpl?.subject ?? DEFAULT_TEMPLATE.subject);
     setBody(ensureHtml(tpl?.body ?? DEFAULT_TEMPLATE.body));
@@ -93,16 +100,16 @@ export default function EmailTemplate({ institutions = [] }) {
     try {
       setNewFile(await readFileAsAttachment(file));
       setRemoveFile(false);
-      setMsg(null);
+      setError('');
     } catch (err) {
-      setMsg({ text: err.message, ok: false });
+      setError(err.message);
     }
   }
 
   async function save() {
-    if (htmlIsEmpty(body)) return setMsg({ text: 'חסר תוכן להודעה', ok: false });
+    if (htmlIsEmpty(body)) return setError('חסר תוכן להודעה');
     setSaving(true);
-    setMsg(null);
+    setError('');
     try {
       const saved = await saveEmailTemplate({
         mosad_number: mosad,
@@ -118,9 +125,9 @@ export default function EmailTemplate({ institutions = [] }) {
       setNewFile(null);
       setRemoveFile(false);
       setMeta({ updated_by: saved.updated_by, updated_at: saved.updated_at });
-      setMsg({ text: 'התבנית נשמרה בהצלחה', ok: true });
+      toast.success('התבנית נשמרה');
     } catch (e) {
-      setMsg({ text: `השמירה נכשלה: ${e.message}`, ok: false });
+      setError(`השמירה נכשלה: ${e.message}`);
     } finally {
       setSaving(false);
     }
@@ -128,8 +135,15 @@ export default function EmailTemplate({ institutions = [] }) {
 
   async function remove() {
     if (!hasTemplate) return;
+    const ok = await confirm({
+      title: 'מחיקת תבנית',
+      message: 'למחוק את התבנית של המוסד הזה? לא יישלחו יותר מיילי תודה אוטומטיים לתורמים שלו.',
+      confirmText: 'מחיקה',
+      tone: 'danger',
+    });
+    if (!ok) return;
     setSaving(true);
-    setMsg(null);
+    setError('');
     try {
       await deleteEmailTemplate(mosad);
       setTemplates((prev) => {
@@ -143,15 +157,15 @@ export default function EmailTemplate({ institutions = [] }) {
       setNewFile(null);
       setRemoveFile(false);
       setMeta(null);
-      setMsg({ text: 'התבנית נמחקה — לא יישלחו יותר מיילים אוטומטיים למוסד הזה', ok: true });
+      toast.success('התבנית נמחקה — לא יישלחו יותר מיילים אוטומטיים למוסד הזה');
     } catch (e) {
-      setMsg({ text: `המחיקה נכשלה: ${e.message}`, ok: false });
+      setError(`המחיקה נכשלה: ${e.message}`);
     } finally {
       setSaving(false);
     }
   }
 
-  if (loading) return <div className={styles.loading}>טוען תבניות…</div>;
+  if (loading) return <Card><StateMessage kind="loading" title="טוען תבניות…" /></Card>;
 
   // Thank-you templates are only relevant for these institutions — the rest
   // (bookkeeping שכ"ל variants, funds, campaign entities) are hidden here.
@@ -164,183 +178,125 @@ export default function EmailTemplate({ institutions = [] }) {
   const attachedFileName = newFile ? newFile.name : (!removeFile && existingFile) || null;
 
   return (
-    <div className={styles.wrapper}>
-      <div className={styles.editor}>
-        <div className={styles.headRow}>
-          <h2 className={styles.heading}>תבניות מייל תודה לפי מוסד</h2>
-          {canEdit && (
-            <button type="button" className={styles.sendToDonorBtn} onClick={() => setSendOpen(true)}>
-              ✉ שליחת מייל לתורם
-            </button>
-          )}
-        </div>
-        <p className={styles.hint}>
-          לכל מוסד תבנית משלו. מייל אוטומטי נשלח רק לתורמים של מוסדות שבהם
-          "שליחה אוטומטית" מופעלת. המיילים נשלחים מהכתובת som.noflim@gmail.com.
+    <Stack>
+      <div className={styles.topRow}>
+        <p className={styles.intro}>
+          לכל מוסד תבנית משלו. מייל אוטומטי נשלח רק לתורמים של מוסדות שבהם "שליחה אוטומטית" מופעלת.
+          המיילים נשלחים מהכתובת som.noflim@gmail.com.
         </p>
+        {canEdit && <Button variant="soft" icon="send" onClick={() => setSendOpen(true)}>שליחת מייל לתורם</Button>}
+      </div>
 
-        <label className={styles.label}>
-          מוסד
-          <select
-            className={styles.input}
-            value={mosad}
-            onChange={(e) => selectMosad(e.target.value)}
-          >
-            <option value="">— בחר מוסד —</option>
-            {pickerInstitutions.map((i) => {
-              const tpl = templates[i.mosad_number];
-              const marker = tpl ? (tpl.auto_send ? ' ✓ אוטומטי' : ' • יש תבנית') : '';
-              return (
-                <option key={i.mosad_number} value={i.mosad_number}>
-                  {i.mosad_name}{marker}
-                </option>
-              );
-            })}
-          </select>
-        </label>
+      {error && <Alert tone="danger" onClose={() => setError('')}>{error}</Alert>}
+
+      <div className={styles.columns}>
+        <Card>
+          <CardBody>
+            <Field label="מוסד">
+              <Select value={mosad} onChange={(e) => selectMosad(e.target.value)}>
+                <option value="">בחר מוסד…</option>
+                {pickerInstitutions.map((i) => {
+                  const tpl = templates[i.mosad_number];
+                  const marker = tpl ? (tpl.auto_send ? ' — שליחה אוטומטית פעילה' : ' — יש תבנית') : '';
+                  return (
+                    <option key={i.mosad_number} value={i.mosad_number}>{i.mosad_name}{marker}</option>
+                  );
+                })}
+              </Select>
+            </Field>
+
+            {!mosad ? (
+              <StateMessage compact kind="info" icon="mail" title="בחר מוסד" description="כדי לערוך את תבנית מייל התודה שלו" />
+            ) : (
+              <div className={styles.form}>
+                <div>
+                  <div className={styles.chipsLabel}>הוספת שדה מהעסקה:</div>
+                  <div className={styles.chips}>
+                    {PLACEHOLDERS.map((ph) => (
+                      <button key={ph} type="button" className={styles.chip} onClick={() => editorRef.current?.insertText(ph)} disabled={!canEdit}>
+                        {ph}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <Field label="נושא">
+                  <Input value={subject} onChange={(e) => setSubject(e.target.value)} disabled={!canEdit} dir="rtl" />
+                </Field>
+
+                <div>
+                  <div className={styles.fieldLabel}>תוכן ההודעה</div>
+                  <RichTextEditor ref={editorRef} value={body} onChange={setBody} disabled={!canEdit} />
+                </div>
+
+                <div>
+                  <input ref={fileInputRef} type="file" hidden onChange={onPickFile} />
+                  <div className={styles.fileRow}>
+                    {attachedFileName ? (
+                      <>
+                        <span className={styles.fileName}><Icon name="fileText" size={15} />{attachedFileName}</span>
+                        {canEdit && (
+                          <>
+                            <Button size="sm" variant="ghost" onClick={() => fileInputRef.current?.click()}>החלפה</Button>
+                            <Button size="sm" variant="ghost" icon="x" onClick={() => { setNewFile(null); setRemoveFile(true); }}>הסרה</Button>
+                          </>
+                        )}
+                      </>
+                    ) : canEdit && (
+                      <Button size="sm" variant="soft" icon="upload" onClick={() => fileInputRef.current?.click()}>צירוף תמונה או קובץ לתבנית</Button>
+                    )}
+                  </div>
+                  <p className={styles.hint}>הקובץ יצורף לכל מייל שיישלח מהתבנית הזו (עד 3.5MB).</p>
+                </div>
+
+                <div className={styles.toggles}>
+                  <Checkbox
+                    checked={autoSend}
+                    onChange={(e) => setAutoSend(e.target.checked)}
+                    disabled={!canEdit}
+                    label="שליחה אוטומטית לכל תורם חדש של המוסד"
+                  />
+                  {autoSend && <p className={styles.warn}>כל עסקה חדשה של המוסד שיש בה כתובת מייל תקבל את המייל מיד.</p>}
+                  <Checkbox
+                    checked={attachReceipt}
+                    onChange={(e) => setAttachReceipt(e.target.checked)}
+                    disabled={!canEdit}
+                    label="צירוף הקבלה (PDF מ-EZCount) כשיש לעסקה קבלה"
+                  />
+                </div>
+              </div>
+            )}
+          </CardBody>
+
+          {mosad && (canEdit || meta?.updated_at) && (
+            <CardFooter>
+              {canEdit && <Button variant="primary" icon="check" onClick={save} loading={saving}>שמירת התבנית</Button>}
+              {canEdit && hasTemplate && <Button variant="dangerSoft" icon="trash" onClick={remove} disabled={saving}>מחיקה</Button>}
+              {meta?.updated_at && (
+                <span className={styles.meta}>
+                  עודכן {formatDateTime(meta.updated_at)}{meta.updated_by ? ` · ${meta.updated_by}` : ''}
+                </span>
+              )}
+            </CardFooter>
+          )}
+        </Card>
 
         {mosad && (
-          <>
-            <div className={styles.chips}>
-              {PLACEHOLDERS.map((ph) => (
-                <button
-                  key={ph}
-                  type="button"
-                  className={styles.chip}
-                  onClick={() => editorRef.current?.insertText(ph)}
-                  disabled={!canEdit}
-                >
-                  {ph}
-                </button>
-              ))}
-            </div>
-
-            <label className={styles.label}>
-              נושא
-              <input
-                className={styles.input}
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-                disabled={!canEdit}
-                dir="rtl"
-              />
-            </label>
-
-            <div className={styles.label}>
-              תוכן ההודעה
-              <RichTextEditor ref={editorRef} value={body} onChange={setBody} disabled={!canEdit} />
-            </div>
-
-            <div className={styles.fileRow}>
-              <input ref={fileInputRef} type="file" hidden onChange={onPickFile} />
-              {attachedFileName ? (
-                <>
-                  <span className={styles.fileName}>📎 {attachedFileName}</span>
-                  {canEdit && (
-                    <>
-                      <button type="button" className={styles.fileBtn} onClick={() => fileInputRef.current?.click()}>
-                        החלף קובץ
-                      </button>
-                      <button
-                        type="button"
-                        className={styles.fileRemoveBtn}
-                        onClick={() => { setNewFile(null); setRemoveFile(true); }}
-                      >
-                        הסר
-                      </button>
-                    </>
-                  )}
-                </>
-              ) : (
-                canEdit && (
-                  <button type="button" className={styles.fileBtn} onClick={() => fileInputRef.current?.click()}>
-                    📎 צרף תמונה או קובץ לתבנית
-                  </button>
-                )
-              )}
-            </div>
-            <p className={styles.fileHint}>
-              הקובץ יצורף לכל מייל שנשלח מהתבנית הזו (עד 3.5MB).
-            </p>
-
-            <label className={styles.toggleRow}>
-              <input
-                type="checkbox"
-                checked={autoSend}
-                onChange={(e) => setAutoSend(e.target.checked)}
-                disabled={!canEdit}
-              />
-              <span>
-                שליחה אוטומטית לכל תורם חדש של המוסד הזה
-                <span className={styles.toggleWarn}>
-                  {' '}— כשמופעל, כל עסקה חדשה של המוסד עם כתובת מייל תקבל את המייל מיד
-                </span>
-              </span>
-            </label>
-
-            <label className={styles.toggleRow}>
-              <input
-                type="checkbox"
-                checked={attachReceipt}
-                onChange={(e) => setAttachReceipt(e.target.checked)}
-                disabled={!canEdit}
-              />
-              <span>
-                צירוף הקבלה למייל — כשלעסקה יש קבלה (EZCount), קובץ ה-PDF יצורף אוטומטית
-              </span>
-            </label>
-
-            {canEdit && (
-              <div className={styles.btnRow}>
-                <button className={styles.saveBtn} onClick={save} disabled={saving}>
-                  {saving ? 'שומר…' : 'שמור תבנית'}
-                </button>
-                {hasTemplate && (
-                  <button className={styles.deleteBtn} onClick={remove} disabled={saving}>
-                    מחק תבנית
-                  </button>
-                )}
+          <Card className={styles.preview}>
+            <CardHeader title="תצוגה מקדימה" subtitle="עם נתוני עסקה לדוגמה" />
+            <CardBody>
+              <div className={styles.mail}>
+                <div className={styles.mailSubject}>{previewSubject || '(ללא נושא)'}</div>
+                <div className={styles.mailFrom}>מאת: סומך נופלים &lt;som.noflim@gmail.com&gt;</div>
+                <div className={styles.mailBody} dir="rtl" dangerouslySetInnerHTML={{ __html: previewBody }} />
+                {attachedFileName && <div className={styles.mailAttachment}><Icon name="fileText" size={15} />{attachedFileName}</div>}
               </div>
-            )}
-
-            {meta?.updated_at && (
-              <div className={styles.meta}>
-                עודכן לאחרונה: {new Date(meta.updated_at).toLocaleString('he-IL')}
-                {meta.updated_by ? ` על ידי ${meta.updated_by}` : ''}
-              </div>
-            )}
-          </>
-        )}
-
-        {msg && (
-          <div className={msg.ok ? styles.msgOk : styles.msgErr}>{msg.text}</div>
+            </CardBody>
+          </Card>
         )}
       </div>
 
-      {mosad && (
-        <div className={styles.preview}>
-          <h3 className={styles.previewTitle}>תצוגה מקדימה</h3>
-          <div className={styles.previewCard}>
-            <div className={styles.previewSubject}>{previewSubject || '(ללא נושא)'}</div>
-            <div className={styles.previewFrom}>מאת: סומך נופלים &lt;som.noflim@gmail.com&gt;</div>
-            <div
-              className={styles.previewBody}
-              dir="rtl"
-              dangerouslySetInnerHTML={{ __html: previewBody }}
-            />
-            {attachedFileName && (
-              <div className={styles.previewAttachment}>📎 {attachedFileName}</div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {sendOpen && (
-        <SendEmailModal
-          institutions={institutions}
-          onClose={() => setSendOpen(false)}
-        />
-      )}
-    </div>
+      {sendOpen && <SendEmailModal institutions={institutions} onClose={() => setSendOpen(false)} />}
+    </Stack>
   );
 }

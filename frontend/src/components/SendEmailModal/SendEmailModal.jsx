@@ -4,6 +4,7 @@ import { fetchEmailTemplate, sendDonorEmail, searchDonors } from '../../services
 import { fillTemplate, fillTemplateHtml, ensureHtml, htmlIsEmpty, DEFAULT_TEMPLATE } from '../../lib/emailTemplate.js';
 import RichTextEditor from '../RichTextEditor/RichTextEditor.jsx';
 import { readFileAsAttachment } from '../EmailTemplate/EmailTemplate.jsx';
+import { Modal, Field, Input, Checkbox, Button, Alert, StateMessage, Spinner, Icon, useToast } from '../ui';
 
 // Manual "send email to donor" modal. Entry points:
 //   - with `tx`   (transactions table row) — straight to compose
@@ -16,6 +17,7 @@ import { readFileAsAttachment } from '../EmailTemplate/EmailTemplate.jsx';
 // editable, confirm before send. Attachments: EZCount receipt, the template's
 // stored file, and/or one ad-hoc uploaded file.
 export default function SendEmailModal({ tx: initialTx = null, institutionName, institutions = [], onClose }) {
+  const toast = useToast();
   const [tx, setTx]           = useState(initialTx);
   const [to, setTo]           = useState(initialTx?.email || '');
   const [subject, setSubject] = useState('');
@@ -86,14 +88,6 @@ export default function SendEmailModal({ tx: initialTx = null, institutionName, 
     return () => clearTimeout(t);
   }, [query, tx]);
 
-  useEffect(() => {
-    function handleKey(e) {
-      if (e.key === 'Escape') onClose();
-    }
-    document.addEventListener('keydown', handleKey);
-    return () => document.removeEventListener('keydown', handleKey);
-  }, [onClose]);
-
   function pickDonor(donor) {
     setTx(donor);
     setTo(donor.email || '');
@@ -134,7 +128,8 @@ export default function SendEmailModal({ tx: initialTx = null, institutionName, 
         mosadNumber: tx?.mosad_number,
         customFile: customFile || undefined,
       });
-      setMsg({ text: `המייל נשלח בהצלחה אל ${to}`, ok: true });
+      setMsg({ text: `המייל נשלח אל ${to}`, ok: true });
+      toast.success(`המייל נשלח אל ${to}`);
       setConfirming(false);
     } catch (e) {
       setMsg({ text: e.message, ok: false });
@@ -147,161 +142,115 @@ export default function SendEmailModal({ tx: initialTx = null, institutionName, 
   const canSend = to.trim().includes('@') && subject.trim() && !htmlIsEmpty(body);
   const searchStep = !tx;
   const isFreeform = Boolean(tx?.freeform);
+  const sent = msg?.ok;
+
+  const title = searchStep ? 'שליחת מייל לתורם' : isFreeform ? 'שליחת מייל לכתובת חופשית' : `שליחת מייל — ${tx.client_name || 'תורם'}`;
+
+  const footer = searchStep ? null : confirming ? (
+    <>
+      <span className={styles.confirmText}>לשלוח את המייל אל <strong dir="ltr">{to}</strong>?</span>
+      <Button onClick={() => setConfirming(false)} disabled={sending}>ביטול</Button>
+      <Button variant="primary" icon="send" onClick={send} loading={sending}>כן, לשלוח</Button>
+    </>
+  ) : sent ? (
+    <Button variant="primary" onClick={onClose}>סגירה</Button>
+  ) : (
+    <>
+      <Button onClick={onClose}>ביטול</Button>
+      <Button variant="primary" icon="send" onClick={() => setConfirming(true)} disabled={loading || !canSend}>שליחה</Button>
+    </>
+  );
 
   return (
-    <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.modal} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="שליחת מייל לתורם">
-        <div className={styles.header}>
-          <span className={styles.title}>
-            {searchStep ? 'שליחת מייל לתורם' : isFreeform ? 'שליחת מייל לכתובת חופשית' : `שליחת מייל — ${tx.client_name || 'תורם'}`}
-          </span>
-          <button className={styles.closeBtn} onClick={onClose} aria-label="סגור">✕</button>
-        </div>
-
-        <div className={styles.body}>
-          {searchStep ? (
-            <>
-              <label className={styles.label}>
-                חיפוש תורם (שם, מייל או טלפון)
-                <input
-                  className={styles.input}
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="לפחות 2 תווים…"
-                  dir="rtl"
-                  autoFocus
-                />
-              </label>
-              {searching && <div className={styles.searchHint}>מחפש…</div>}
-              {!searching && query.trim().length >= 2 && results.length === 0 && (
-                <div className={styles.searchHint}>לא נמצאו תורמים עם כתובת מייל</div>
-              )}
-              <div className={styles.results}>
-                {results.map((d) => (
-                  <button key={d.id} type="button" className={styles.resultRow} onClick={() => pickDonor(d)}>
-                    <span className={styles.resultName}>{d.client_name || '—'}</span>
-                    <span className={styles.resultEmail} dir="ltr">{d.email}</span>
-                    <span className={styles.resultMeta}>
-                      {institutionMap[d.mosad_number] || d.mosad_number || ''}
-                      {d.transaction_time_raw ? ` · ${d.transaction_time_raw}` : ''}
-                    </span>
-                  </button>
-                ))}
-              </div>
-              <button type="button" className={styles.freeformBtn} onClick={pickFreeform}>
-                ✍ שליחה לכתובת שלא קיימת במערכת
-              </button>
-            </>
-          ) : loading ? (
-            <div className={styles.loading}>טוען תבנית…</div>
-          ) : (
-            <>
-              {!initialTx && (
-                <button type="button" className={styles.backBtn} onClick={() => { setTx(null); setMsg(null); setCustomFile(null); }}>
-                  ‹ חזרה לחיפוש
-                </button>
-              )}
-              <label className={styles.label}>
-                אל
-                <input
-                  className={styles.input}
-                  value={to}
-                  onChange={(e) => setTo(e.target.value)}
-                  placeholder="name@example.com"
-                  dir="ltr"
-                  autoFocus={isFreeform && !to}
-                />
-              </label>
-              <label className={styles.label}>
-                נושא
-                <input
-                  className={styles.input}
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                  dir="rtl"
-                />
-              </label>
-              <div className={styles.label}>
-                תוכן ההודעה
-                <RichTextEditor value={body} onChange={setBody} />
-              </div>
-
-              {!isFreeform && (tx.receipt_data ? (
-                <label className={styles.attachRow}>
-                  <input
-                    type="checkbox"
-                    checked={attachReceipt}
-                    onChange={(e) => setAttachReceipt(e.target.checked)}
-                  />
-                  <span>צרף את הקבלה {tx.receipt_doc_num ? `(מס' ${tx.receipt_doc_num}) ` : ''}כקובץ PDF</span>
-                </label>
-              ) : (
-                <div className={styles.attachRow}>
-                  <span className={styles.attachMuted}>לעסקה זו אין קבלה במערכת לצירוף</span>
-                </div>
-              ))}
-
-              {templateFileName && (
-                <label className={styles.attachRow}>
-                  <input
-                    type="checkbox"
-                    checked={attachTemplateFile}
-                    onChange={(e) => setAttachTemplateFile(e.target.checked)}
-                  />
-                  <span>צרף את הקובץ מהתבנית ({templateFileName})</span>
-                </label>
-              )}
-
-              <div className={styles.attachRow}>
-                <input ref={fileInputRef} type="file" hidden onChange={onPickFile} />
-                {customFile ? (
-                  <>
-                    <span>📎 {customFile.name}</span>
-                    <button type="button" className={styles.fileRemoveBtn} onClick={() => setCustomFile(null)}>
-                      הסר
-                    </button>
-                  </>
-                ) : (
-                  <button type="button" className={styles.fileBtn} onClick={() => fileInputRef.current?.click()}>
-                    📎 צרף תמונה או קובץ
-                  </button>
-                )}
-              </div>
-            </>
+    <Modal size="lg" title={title} onClose={onClose} footer={footer}>
+      {searchStep ? (
+        <div className={styles.stack}>
+          <Field label="חיפוש תורם" hint="שם, מייל או טלפון — לפחות 2 תווים">
+            <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="חיפוש…" data-autofocus />
+          </Field>
+          {searching && <div className={styles.searchHint}><Spinner size={14} /> מחפש…</div>}
+          {!searching && query.trim().length >= 2 && results.length === 0 && (
+            <div className={styles.searchHint}>לא נמצאו תורמים עם כתובת מייל</div>
           )}
-
-          {msg && <div className={msg.ok ? styles.msgOk : styles.msgErr}>{msg.text}</div>}
+          {results.length > 0 && (
+            <div className={styles.results}>
+              {results.map((d) => (
+                <button key={d.id} type="button" className={styles.resultRow} onClick={() => pickDonor(d)}>
+                  <span className={styles.resultName}>{d.client_name || '—'}</span>
+                  <span className={styles.resultEmail} dir="ltr">{d.email}</span>
+                  <span className={styles.resultMeta}>
+                    {institutionMap[d.mosad_number] || d.mosad_number || ''}
+                    {d.transaction_time_raw ? ` · ${d.transaction_time_raw}` : ''}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+          <div>
+            <Button variant="ghost" icon="edit" onClick={pickFreeform}>שליחה לכתובת שלא קיימת במערכת</Button>
+          </div>
         </div>
+      ) : loading ? (
+        <StateMessage kind="loading" title="טוען תבנית…" />
+      ) : (
+        <div className={styles.stack}>
+          {!initialTx && (
+            <div>
+              <Button size="sm" variant="ghost" icon="chevronRight" onClick={() => { setTx(null); setMsg(null); setCustomFile(null); setConfirming(false); }}>
+                חזרה לחיפוש
+              </Button>
+            </div>
+          )}
+          <Field label="אל">
+            <Input value={to} onChange={(e) => setTo(e.target.value)} placeholder="name@example.com" dir="ltr" type="email" data-autofocus={(isFreeform && !to) || undefined} />
+          </Field>
+          <Field label="נושא">
+            <Input value={subject} onChange={(e) => setSubject(e.target.value)} dir="rtl" />
+          </Field>
+          <div>
+            <div className={styles.fieldLabel}>תוכן ההודעה</div>
+            <RichTextEditor value={body} onChange={setBody} />
+          </div>
 
-        {!searchStep && (
-          <div className={styles.footer}>
-            {confirming ? (
-              <>
-                <span className={styles.confirmText}>לשלוח את המייל אל {to}?</span>
-                <button className={styles.sendBtn} onClick={send} disabled={sending}>
-                  {sending ? 'שולח…' : 'כן, שלח'}
-                </button>
-                <button className={styles.cancelBtn} onClick={() => setConfirming(false)} disabled={sending}>
-                  ביטול
-                </button>
-              </>
-            ) : msg?.ok ? (
-              <button className={styles.cancelBtn} onClick={onClose}>סגור</button>
+          <div className={styles.attachments}>
+            <div className={styles.fieldLabel}>קבצים מצורפים</div>
+            {!isFreeform && (tx.receipt_data ? (
+              <Checkbox
+                checked={attachReceipt}
+                onChange={(e) => setAttachReceipt(e.target.checked)}
+                label={`צירוף הקבלה ${tx.receipt_doc_num ? `(מס' ${tx.receipt_doc_num}) ` : ''}כקובץ PDF`}
+              />
             ) : (
-              <>
-                <button
-                  className={styles.sendBtn}
-                  onClick={() => setConfirming(true)}
-                  disabled={loading || !canSend}
-                >
-                  שלח
-                </button>
-                <button className={styles.cancelBtn} onClick={onClose}>ביטול</button>
-              </>
+              <span className={styles.muted}>לעסקה הזו אין קבלה במערכת לצירוף</span>
+            ))}
+            {templateFileName && (
+              <Checkbox
+                checked={attachTemplateFile}
+                onChange={(e) => setAttachTemplateFile(e.target.checked)}
+                label={`צירוף הקובץ מהתבנית (${templateFileName})`}
+              />
+            )}
+            <input ref={fileInputRef} type="file" hidden onChange={onPickFile} />
+            {customFile ? (
+              <div className={styles.fileRow}>
+                <Icon name="fileText" size={15} />
+                <span>{customFile.name}</span>
+                <Button size="sm" variant="ghost" icon="x" onClick={() => setCustomFile(null)}>הסרה</Button>
+              </div>
+            ) : (
+              <div>
+                <Button size="sm" variant="soft" icon="upload" onClick={() => fileInputRef.current?.click()}>צירוף תמונה או קובץ</Button>
+              </div>
             )}
           </div>
-        )}
-      </div>
-    </div>
+        </div>
+      )}
+
+      {msg && (
+        <Alert tone={msg.ok ? 'success' : 'danger'} className={styles.msg} onClose={msg.ok ? undefined : () => setMsg(null)}>
+          {msg.text}
+        </Alert>
+      )}
+    </Modal>
   );
 }

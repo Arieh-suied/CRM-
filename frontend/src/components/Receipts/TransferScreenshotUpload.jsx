@@ -1,7 +1,8 @@
 import { useState, useRef } from 'react';
-import styles from './Receipts.module.css';
+import styles from './ReceiptForms.module.css';
 import { compressImage, ALLOWED_IMAGE_TYPES } from './imageUtils.js';
 import { authFetch } from '../../services/api.js';
+import { Card, CardHeader, CardBody, FileDrop, Button, Alert } from '../ui';
 
 const ACCEPT = 'image/jpeg,image/jpg,image/png,image/webp';
 const ALLOWED_TYPES = ALLOWED_IMAGE_TYPES;
@@ -21,7 +22,7 @@ export default function TransferScreenshotUpload({ onExtracted }) {
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState('');
   const [result, setResult]     = useState(null);
-  const fileRef = useRef(null);
+  const replaceRef = useRef(null);
 
   const handleFile = async (file) => {
     setError('');
@@ -67,72 +68,51 @@ export default function TransferScreenshotUpload({ onExtracted }) {
     setImageData(null);
     setResult(null);
     setError('');
-    if (fileRef.current) fileRef.current.value = '';
   };
 
   const nameUncertain = !!result && !result.donor_name && !!result.account_name;
 
-  const missing = result ? REQUIRED_FIELDS.filter(f => {
+  const missing = result ? REQUIRED_FIELDS.filter((f) => {
     if (f.key === 'donor_name') return !result.donor_name && !result.account_name;
     return result[f.key] == null;
   }) : [];
 
   return (
-    <div className={styles.card}>
-      <h3 className={styles.sectionTitle} style={{ marginBottom: 12 }}>מילוי אוטומטי מצילום מסך של העברה</h3>
-
-      <input
-        ref={fileRef}
-        type="file"
-        accept={ACCEPT}
-        style={{ display: 'none' }}
-        onChange={e => handleFile(e.target.files?.[0])}
-      />
-
-      {!preview ? (
-        <div className={styles.uploadZone} onClick={() => fileRef.current?.click()}>
-          <div className={styles.uploadIcon}>📷</div>
-          <div className={styles.uploadLabel}>העלה צילום מסך של אישור העברה בנקאית</div>
-          <div className={styles.uploadSub}>jpg, png, webp</div>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-          <img
-            src={preview}
-            alt="תצוגה מקדימה"
-            style={{ maxWidth: 160, maxHeight: 160, borderRadius: 8, border: '1px solid var(--color-border)', objectFit: 'contain' }}
-          />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <button type="button" className={`${styles.btn} ${styles.btnPrimary}`} onClick={analyze} disabled={loading}>
-              {loading ? 'מנתח...' : '🔍 נתח צילום מסך'}
-            </button>
-            <button type="button" className={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`} onClick={() => fileRef.current?.click()} disabled={loading}>
-              החלף תמונה
-            </button>
-            <button type="button" className={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`} onClick={reset} disabled={loading}>
-              נקה
-            </button>
+    <Card>
+      <CardHeader title="מילוי אוטומטי מצילום מסך" subtitle="מעלים צילום של אישור העברה בנקאית, והפרטים ימולאו בטופס" />
+      <CardBody>
+        {!preview ? (
+          <FileDrop icon="image" title="העלאת צילום מסך של אישור העברה" hint="לחיצה או גרירה · jpg, png, webp" accept={ACCEPT} onFiles={([f]) => handleFile(f)} compact />
+        ) : (
+          <div className={styles.preview}>
+            <img src={preview} alt="תצוגה מקדימה של צילום המסך" className={styles.previewImg} />
+            <div className={styles.previewActions}>
+              <Button variant="primary" icon="search" onClick={analyze} loading={loading}>
+                {loading ? 'מנתח…' : 'זיהוי הפרטים מהתמונה'}
+              </Button>
+              <input ref={replaceRef} type="file" accept={ACCEPT} hidden onChange={(e) => { handleFile(e.target.files?.[0]); e.target.value = ''; }} />
+              <Button size="sm" variant="ghost" icon="image" onClick={() => replaceRef.current?.click()} disabled={loading}>החלפת תמונה</Button>
+              <Button size="sm" variant="ghost" icon="x" onClick={reset} disabled={loading}>הסרה</Button>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {error && <div className={styles.errorMsg} style={{ marginTop: 12, marginBottom: 0 }}>{error}</div>}
+        {error && <Alert tone="danger" className={styles.sectionGap}>{error}</Alert>}
 
-      {result && (
-        <div className={styles.successMsg} style={{ marginTop: 12, marginBottom: 0 }}>
-          <div>הנתונים שזוהו מולאו בטופס למטה — יש לבדוק ולתקן לפני הפקת הקבלה.</div>
-          {nameUncertain && (
-            <div style={{ marginTop: 6, color: '#744210' }}>
-              ⚠️ השם שמולא ("{result.account_name}") הוא שם בעל החשבון מהצילום ולא בהכרח שם התורם בפועל — יש לאמת ולתקן את שם הלקוח.
-            </div>
-          )}
-          {missing.length > 0 && (
-            <div style={{ marginTop: 6, color: '#744210' }}>
-              ⚠️ לא זוהו בבירור בתמונה: {missing.map(f => f.label).join(', ')} — יש למלא ידנית.
-            </div>
-          )}
-        </div>
-      )}
-    </div>
+        {result && (
+          <Alert tone={nameUncertain || missing.length ? 'warning' : 'success'} className={styles.sectionGap}>
+            הפרטים שזוהו מולאו בטופס למטה — כדאי לבדוק ולתקן לפני הפקת הקבלה.
+            {(nameUncertain || missing.length > 0) && (
+              <ul className={styles.alertList}>
+                {nameUncertain && (
+                  <li>השם שמולא ("{result.account_name}") הוא שם בעל החשבון מהצילום, ולא בהכרח שם התורם — יש לאמת את שם הלקוח.</li>
+                )}
+                {missing.length > 0 && <li>לא זוהו בבירור: {missing.map((f) => f.label).join(', ')} — יש למלא ידנית.</li>}
+              </ul>
+            )}
+          </Alert>
+        )}
+      </CardBody>
+    </Card>
   );
 }

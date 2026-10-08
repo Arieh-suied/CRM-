@@ -1,24 +1,17 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import styles from '../Receipts/Receipts.module.css';
-import { supabase } from '../../lib/supabase.js';
+import styles from './Funds.module.css';
 import { authFetch } from '../../services/api.js';
+import { formatCurrency, toInputDate } from '../../lib/format.js';
+import {
+  Card, CardBody, CardFooter, Stack, SegmentedControl, Field, Input, Select, Button, Alert, formStyles, useToast,
+} from '../ui';
 
 const DEFAULT_DESCRIPTION = 'בוצע העברה';
 
 const DIRECTIONS = [
-  { value: 'transfer', label: 'העברה לנתמך' },
-  { value: 'donation', label: 'תרומה שהתקבלה (מזומן/העברה ידנית)' },
+  { value: 'transfer', label: 'העברה לנתמך', icon: 'arrowLeftRight' },
+  { value: 'donation', label: 'תרומה שהתקבלה (מזומן / העברה ידנית)', icon: 'plus' },
 ];
-
-const today = () => new Date().toISOString().slice(0, 10);
-
-const formatILS = (n) => `₪${Math.abs(n).toLocaleString('he-IL', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
-
-// The shared .fieldInput/.fieldSelect border is a translucent white edge meant
-// for cards over a colored backdrop — invisible on this form's plain white
-// card. Give the fields a real visible border here without touching the
-// shared style (used as-is elsewhere).
-const fieldBorder = { border: '1px solid var(--color-border)' };
 
 // DD/MM/YYYY, matching how the row will actually be written to the sheet.
 function formatDmy(isoDate) {
@@ -26,36 +19,32 @@ function formatDmy(isoDate) {
   return `${d}/${m}/${y}`;
 }
 
-async function authHeaders() {
-  const { data: { session } } = await supabase.auth.getSession();
-  const headers = { 'Content-Type': 'application/json' };
-  if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
-  return headers;
-}
-
 export default function FundTransferForm() {
+  const toast = useToast();
   const [funds, setFunds]     = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [direction, setDirection]   = useState('transfer');
   const [fundId, setFundId]         = useState('');
-  const [date, setDate]             = useState(today);
+  const [date, setDate]             = useState(() => toInputDate());
   const [description, setDescription] = useState(DEFAULT_DESCRIPTION);
   const [amount, setAmount]         = useState('');
   const [saving, setSaving]         = useState(false);
-  const [msg, setMsg]               = useState({ text: '', ok: false });
+  const [error, setError]           = useState('');
   const amountRef = useRef(null);
 
   const isDonation = direction === 'donation';
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError('');
     try {
       const res = await authFetch('/api/funds');
       if (!res.ok) throw new Error('load failed');
       const data = await res.json();
       setFunds(Array.isArray(data) ? data : []);
     } catch {
-      setMsg({ text: 'שגיאה בטעינת הקרנות. נסה לרענן את הדף.', ok: false });
+      setLoadError('שגיאה בטעינת הקרנות. נסה לרענן את הדף.');
       setFunds([]);
     } finally {
       setLoading(false);
@@ -85,105 +74,86 @@ export default function FundTransferForm() {
     if (!canSubmit) return;
 
     setSaving(true);
-    setMsg({ text: '', ok: false });
+    setError('');
     try {
-      const res = await fetch('/api/fund-transfer', {
+      const res = await authFetch('/api/fund-transfer', {
         method: 'POST',
-        headers: await authHeaders(),
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fundId, date, description, amount: Number(amount), direction }),
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'שגיאה ברישום');
       const verb = isDonation ? 'נרשמה תרומה' : 'נרשמה העברה';
-      setMsg({ text: `${verb} של ${formatILS(Number(amount))} מקרן "${data.fundName}"`, ok: true });
+      toast.success(`${verb} של ${formatCurrency(Number(amount))} בקרן "${data.fundName}"`);
       setAmount('');
-      setDate(today());
+      setDate(toInputDate());
       if (isDonation) setDescription('');
       amountRef.current?.focus();
     } catch (err) {
-      setMsg({ text: err.message, ok: false });
+      setError(err.message);
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <div>
-      <h3 className={styles.sectionTitle}>תנועה בקרן</h3>
-
-      <div className={styles.subNav} style={{ padding: 0, border: 'none', background: 'none', marginBottom: 14 }}>
-        {DIRECTIONS.map((d) => (
-          <button
-            key={d.value}
-            type="button"
-            className={`${styles.subNavBtn} ${direction === d.value ? styles.subNavActive : ''}`}
-            onClick={() => changeDirection(d.value)}
-          >
-            {d.label}
-          </button>
-        ))}
+    <Stack>
+      <div>
+        <SegmentedControl options={DIRECTIONS} value={direction} onChange={changeDirection} aria-label="סוג התנועה" />
       </div>
 
-      {msg.text && (
-        <div className={msg.ok ? styles.successMsg : styles.errorMsg}>{msg.text}</div>
-      )}
+      {loadError && <Alert tone="danger">{loadError}</Alert>}
 
-      <form onSubmit={submit} className={styles.card}>
-        <div className={styles.formGrid}>
-          <div className={`${styles.fieldGroup} ${styles.formGridFull}`}>
-            <label className={styles.fieldLabel}>קרן</label>
-            <select className={styles.fieldSelect} style={fieldBorder} value={fundId} onChange={(e) => setFundId(e.target.value)} required>
-              <option value="" disabled>{loading ? 'טוען...' : 'בחר קרן'}</option>
-              {funds.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
-            </select>
+      <Card as="form" onSubmit={submit} className={styles.formCard}>
+        <CardBody>
+          {error && <Alert tone="danger" className={styles.mb} onClose={() => setError('')}>{error}</Alert>}
+          <div className={formStyles.grid2}>
+            <Field label="קרן" required className={formStyles.full}>
+              <Select value={fundId} onChange={(e) => setFundId(e.target.value)} required>
+                <option value="" disabled>{loading ? 'טוען…' : 'בחר קרן…'}</option>
+                {funds.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+              </Select>
+            </Field>
+            <Field label="תאריך" required>
+              <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+            </Field>
+            <Field label="סכום (₪)" required>
+              <Input
+                ref={amountRef}
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                min="0"
+                placeholder="0"
+                dir="ltr"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                required
+              />
+            </Field>
+            <Field label={isDonation ? 'שם התורם' : 'תיאור (יופיע בגיליון)'} required={isDonation} className={formStyles.full}>
+              <Input
+                placeholder={isDonation ? 'שם התורם' : ''}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                required={isDonation}
+              />
+            </Field>
           </div>
 
-          <div className={styles.fieldGroup}>
-            <label className={styles.fieldLabel}>תאריך</label>
-            <input className={styles.fieldInput} style={fieldBorder} type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
-          </div>
-          <div className={styles.fieldGroup}>
-            <label className={styles.fieldLabel}>סכום</label>
-            <input
-              ref={amountRef}
-              className={styles.fieldInput}
-              style={fieldBorder}
-              type="number"
-              inputMode="decimal"
-              step="0.01"
-              min="0"
-              placeholder="0"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              required
-            />
-          </div>
-
-          <div className={`${styles.fieldGroup} ${styles.formGridFull}`}>
-            <label className={styles.fieldLabel}>{isDonation ? 'שם התורם' : 'תיאור (יופיע בגיליון)'}</label>
-            <input
-              className={styles.fieldInput}
-              style={fieldBorder}
-              placeholder={isDonation ? 'שם התורם' : ''}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              required={isDonation}
-            />
-          </div>
-        </div>
-
-        {fundId && validAmount && (
-          <p style={{ fontSize: 12, color: 'var(--color-text-muted)', margin: '14px 0 0' }}>
-            {isDonation ? 'יתווסף' : 'ייכתב'} בגיליון של "{selectedFundName}": {formatDmy(date)} · {description || DEFAULT_DESCRIPTION} · ‎{isDonation ? '+' : '-'}{formatILS(Number(amount))}
-          </p>
-        )}
-
-        <div style={{ marginTop: 16 }}>
-          <button type="submit" className={`${styles.btn} ${styles.btnPrimary}`} disabled={saving || loading || !canSubmit}>
-            {saving ? 'רושם...' : isDonation ? 'רשום תרומה' : 'רשום העברה'}
-          </button>
-        </div>
-      </form>
-    </div>
+          {fundId && validAmount && (
+            <p className={styles.preview}>
+              {isDonation ? 'יתווסף' : 'ייכתב'} בגיליון של <strong>{selectedFundName}</strong>:{' '}
+              {formatDmy(date)} · {description || DEFAULT_DESCRIPTION} · <strong dir="ltr">{isDonation ? '+' : '-'}{formatCurrency(Number(amount))}</strong>
+            </p>
+          )}
+        </CardBody>
+        <CardFooter>
+          <Button type="submit" variant="primary" icon="check" loading={saving} disabled={loading || !canSubmit}>
+            {isDonation ? 'רישום התרומה' : 'רישום ההעברה'}
+          </Button>
+        </CardFooter>
+      </Card>
+    </Stack>
   );
 }

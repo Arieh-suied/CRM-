@@ -1,40 +1,28 @@
 import { useState } from 'react';
-import styles from './Receipts.module.css';
 import QuickReceipt from './QuickReceipt.jsx';
 import BatchReceipts from './BatchReceipts.jsx';
 import ExternalTransfers from './ExternalTransfers.jsx';
-import DonorReport from './DonorReport.jsx';
+import { Stack, SegmentedControl } from '../ui';
 
+// The annual donor report used to be a fourth view here too; it has its own
+// sidebar entry (דוח קבלות שנתי), so it's no longer duplicated.
 const VIEWS = [
-  { id: 'quick',        label: 'קבלה מהירה' },
-  { id: 'batch',        label: 'העלאת העברות' },
-  { id: 'external',     label: 'העברות מהדף החיצוני' },
-  { id: 'donor-report', label: 'דוח שנתי לתורם' },
+  { value: 'quick',    label: 'קבלה מהירה', icon: 'receipt' },
+  { value: 'batch',    label: 'העלאת העברות', icon: 'upload' },
+  { value: 'external', label: 'העברות מהדף החיצוני', icon: 'inbox' },
 ];
 
 export default function Receipts() {
   const [view, setView] = useState('quick');
 
   return (
-    <div className={styles.wrapper}>
-      <div className={styles.subNav}>
-        {VIEWS.map(v => (
-          <button
-            key={v.id}
-            className={`${styles.subNavBtn} ${view === v.id ? styles.subNavActive : ''}`}
-            onClick={() => setView(v.id)}
-          >
-            {v.label}
-          </button>
-        ))}
+    <Stack>
+      <div>
+        <SegmentedControl options={VIEWS} value={view} onChange={setView} aria-label="אופן הפקת הקבלה" />
       </div>
-
-      <div style={{ padding: '20px 18px' }}>
-        {view === 'quick' && <QuickReceipt />}
-        {view === 'batch' && <BatchReceipts />}
-        {view === 'external' && <ExternalTransfers />}
-        {view === 'donor-report' && <DonorReport />}
-      </div>
-    </div>
+      {view === 'quick' && <QuickReceipt />}
+      {view === 'batch' && <BatchReceipts />}
+      {view === 'external' && <ExternalTransfers />}
+    </Stack>
   );
 }

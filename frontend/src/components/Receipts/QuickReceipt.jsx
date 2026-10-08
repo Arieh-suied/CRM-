@@ -1,10 +1,15 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import styles from './Receipts.module.css';
+import styles from './ReceiptForms.module.css';
 import { supabase } from '../../lib/supabase.js';
 import { authFetch } from '../../services/api.js';
 import { debounce } from '../../lib/debounce.js';
 import { buildReceiptProxyUrl } from '../../lib/receiptProxy.js';
+import { formatCurrency, toInputDate } from '../../lib/format.js';
 import TransferScreenshotUpload from './TransferScreenshotUpload.jsx';
+import {
+  Card, CardHeader, CardBody, Stack, Field, Input, Select, Textarea, Checkbox, Suggestions,
+  Button, IconButton, Alert, formStyles, useToast,
+} from '../ui';
 
 const BRANCHES = [
   'סומך נופלים',
@@ -22,6 +27,8 @@ const PAYMENT_METHODS = [
   { value: '2', label: 'המחאה' },
 ];
 
+const DATE_LABEL = { '1': 'תאריך הפקדה', '2': 'תאריך המחאה', '4': 'תאריך העברה' };
+
 const newPayment = () => ({
   id: Math.random().toString(36).slice(2),
   method: '4',
@@ -34,6 +41,7 @@ const newPayment = () => ({
 });
 
 export default function QuickReceipt() {
+  const toast = useToast();
   const [branch, setBranch]     = useState('');
   const [funds, setFunds]       = useState([]);
   const [fundId, setFundId]     = useState('');
@@ -111,7 +119,7 @@ export default function QuickReceipt() {
     setPhone(c.phone    || '');
     setEmail(c.email    || '');
     setSelectedCustomerId(c.id);
-    setPayments(prev => {
+    setPayments((prev) => {
       const updated = [...prev];
       if (c.bank_name)    updated[0] = { ...updated[0], bankName:    c.bank_name };
       if (c.bank_branch)  updated[0] = { ...updated[0], bankBranch:  c.bank_branch };
@@ -127,7 +135,7 @@ export default function QuickReceipt() {
   }, [selectedCustomerId]);
 
   const updatePayment = (id, field, val) =>
-    setPayments(prev => prev.map(p => p.id === id ? { ...p, [field]: val } : p));
+    setPayments((prev) => prev.map((p) => (p.id === id ? { ...p, [field]: val } : p)));
 
   const handleExtracted = (data) => {
     // Discount Bank's "מחויב" confirmation screen always belongs to חכמי ירושלים
@@ -139,7 +147,7 @@ export default function QuickReceipt() {
       setName(nameToUse);
       searchCustomers(nameToUse);
     }
-    setPayments(prev => {
+    setPayments((prev) => {
       const updated = [...prev];
       const first = { ...updated[0], method: '4' };
       if (data.amount != null)         first.amount      = String(data.amount);
@@ -154,29 +162,38 @@ export default function QuickReceipt() {
     if (data.asmachta) extras.push(`אסמכתא: ${data.asmachta}`);
     if (data.account_name && data.account_name !== nameToUse) extras.push(`שם בעל חשבון: ${data.account_name}`);
     if (extras.length) {
-      setNotes(prev => prev.trim() ? `${prev.trim()}\n${extras.join(' | ')}` : extras.join(' | '));
+      setNotes((prev) => (prev.trim() ? `${prev.trim()}\n${extras.join(' | ')}` : extras.join(' | ')));
     }
   };
 
+  const addPayment = () => setPayments((prev) => {
+    const first = prev[0];
+    const p = newPayment();
+    if (first) { p.bankName = first.bankName; p.bankBranch = first.bankBranch; p.bankAccount = first.bankAccount; }
+    return [...prev, p];
+  });
+
   const removePayment = (id) =>
-    setPayments(prev => prev.filter(p => p.id !== id));
+    setPayments((prev) => prev.filter((p) => p.id !== id));
 
   const totalAmount = payments.reduce((s, p) => {
     const v = parseFloat(p.amount);
     return s + (isNaN(v) ? 0 : v);
   }, 0);
 
+  const fail = (text) => setMsg({ text, ok: false });
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!branch)     return setMsg({ text: 'יש לבחור מוסד', ok: false });
-    if (!name.trim()) return setMsg({ text: 'יש להזין שם לקוח', ok: false });
+    if (!branch)     return fail('יש לבחור מוסד');
+    if (!name.trim()) return fail('יש להזין שם לקוח');
 
-    const validPayments = payments.filter(p => p.amount && parseFloat(p.amount) > 0);
-    if (!validPayments.length) return setMsg({ text: 'יש להזין לפחות תשלום אחד', ok: false });
-    if (validPayments.some(p => p.method === '2' && !p.checkNumber.trim()))
-      return setMsg({ text: 'יש למלא מספר המחאה', ok: false });
-    if (validPayments.some(p => !p.date))
-      return setMsg({ text: 'יש למלא תאריך לכל תשלום', ok: false });
+    const validPayments = payments.filter((p) => p.amount && parseFloat(p.amount) > 0);
+    if (!validPayments.length) return fail('יש להזין לפחות תשלום אחד');
+    if (validPayments.some((p) => p.method === '2' && !p.checkNumber.trim()))
+      return fail('יש למלא מספר המחאה');
+    if (validPayments.some((p) => !p.date))
+      return fail('יש למלא תאריך לכל תשלום');
 
     setLoading(true); setMsg({ text: '', ok: false });
     try {
@@ -187,7 +204,7 @@ export default function QuickReceipt() {
         customerEmail: email.trim() || undefined,
         amount: totalAmount,
         branch,
-        payments: validPayments.map(p => ({
+        payments: validPayments.map((p) => ({
           paymentMethod: Number(p.method),
           amount: parseFloat(p.amount),
           bankName:    p.bankName    || undefined,
@@ -210,277 +227,178 @@ export default function QuickReceipt() {
       if (!res.ok || data.error) throw new Error(data.error || 'שגיאה ביצירת הקבלה');
 
       setLastReceipt({ docNumber: data.docNumber, url: data.docUrl });
-      let successText = `קבלה מספר ${data.docNumber} הופקה בהצלחה!`;
-      if (fundId && !data.fundWarning) successText += ' נוספה שורה לאקסל.';
-      if (data.telegramSent) successText += ' נשלחה הודעה בטלגרם.';
-      if (data.fundWarning) successText += ` ${data.fundWarning}`;
-      setMsg({ text: successText, ok: true });
+      const extras = [];
+      if (fundId && !data.fundWarning) extras.push('נוספה שורה לאקסל של הקרן.');
+      if (data.telegramSent) extras.push('נשלחה הודעה בטלגרם.');
+      if (data.fundWarning) extras.push(data.fundWarning);
+      setMsg({ text: extras.join(' '), ok: true });
+      toast.success(`קבלה מספר ${data.docNumber} הופקה`);
 
       // Reset form
       setBranch(''); setName(''); setIdNum(''); setPhone(''); setEmail(''); setNotes('');
       setPayments([newPayment()]); setSelectedCustomerId(null); setFundId('');
     } catch (err) {
-      setMsg({ text: err.message, ok: false });
+      fail(err.message);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div>
-      <h3 className={styles.sectionTitle}>הפקת קבלה חדשה</h3>
-
-      {msg.text && (
-        <div className={msg.ok ? styles.successMsg : styles.errorMsg}>{msg.text}</div>
-      )}
-
-      {lastReceipt && (
-        <div className={styles.receiptSuccess}>
-          <span className={styles.receiptSuccessIcon}>✅</span>
-          <div>
-            <div style={{ fontWeight: 700, marginBottom: 4 }}>קבלה הופקה בהצלחה</div>
-            <div style={{ fontSize: 13 }}>מספר קבלה: <strong>{lastReceipt.docNumber}</strong></div>
-            {lastReceiptLink && (
-              <a
-                href={lastReceiptLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={styles.receiptSuccessLink}
-              >
-                צפה בקבלה ←
-              </a>
-            )}
-          </div>
-        </div>
-      )}
-
+    <Stack>
       <TransferScreenshotUpload onExtracted={handleExtracted} />
 
-      <form onSubmit={handleSubmit}>
-        <div className={styles.card}>
-          {/* Branch */}
-          <div className={styles.formGrid}>
-            <div className={styles.fieldGroup}>
-              <label className={styles.fieldLabel}>מוסד *</label>
-              <select className={styles.fieldSelect} value={branch} onChange={e => setBranch(e.target.value)} required>
-                <option value="">בחר מוסד</option>
-                {BRANCHES.map(b => <option key={b} value={b}>{b}</option>)}
-              </select>
-            </div>
-
-            <div className={styles.fieldGroup}>
-              <label className={styles.fieldLabel}>קרן (אופציונלי — גם לאקסל וגם לשיוך בדוחות מסוננים)</label>
-              <select className={styles.fieldSelect} value={fundId} onChange={e => setFundId(e.target.value)}>
-                <option value="">ללא</option>
-                {funds.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-              </select>
-            </div>
-
-            <div className={styles.fieldGroup}>
-              <label className={styles.fieldLabel} style={{ visibility: 'hidden' }}>טלגרם</label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, height: 38 }}>
-                <input type="checkbox" checked={sendTelegram} onChange={e => setSendTelegram(e.target.checked)} />
-                שלח הודעה לערוץ הטלגרם של המוסד (אם קיים)
-              </label>
-            </div>
-
-          </div>
-
-          {/* Customer */}
-          <div className={styles.formGrid} style={{ marginTop: 14 }}>
-            <div className={styles.fieldGroup}>
-              <label className={styles.fieldLabel}>שם הלקוח *</label>
-              <div ref={suggRef} style={{ position: 'relative' }}>
-                <input
-                  className={styles.fieldInput}
-                  value={name}
-                  onChange={e => { setName(e.target.value); setSelectedCustomerId(null); searchCustomers(e.target.value); }}
-                  onFocus={() => suggestions.length && setShowSugg(true)}
-                  placeholder="שם מלא"
-                  autoComplete="off"
-                />
-                {showSugg && suggestions.length > 0 && (
-                  <div className={styles.autocompleteDropdown}>
-                    {suggestions.map(c => (
-                      <div key={c.id} className={styles.autocompleteItem} onClick={() => selectCustomer(c)}>
-                        <div className={styles.autocompleteItemName}>{c.name}</div>
-                        <div className={styles.autocompleteItemSub}>
-                          {[c.id_number, c.bank_account, c.email].filter(Boolean).join(' · ')}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+      <form onSubmit={handleSubmit} noValidate>
+        <Stack>
+          <Card>
+            <CardHeader title="פרטי הקבלה" />
+            <CardBody>
+              <div className={formStyles.grid}>
+                <Field label="מוסד" required>
+                  <Select value={branch} onChange={(e) => setBranch(e.target.value)}>
+                    <option value="">בחר מוסד…</option>
+                    {BRANCHES.map((b) => <option key={b} value={b}>{b}</option>)}
+                  </Select>
+                </Field>
+                <Field label="קרן" hint="לא חובה — נרשמת גם באקסל של הקרן וגם לשיוך בדוחות מסוננים">
+                  <Select value={fundId} onChange={(e) => setFundId(e.target.value)}>
+                    <option value="">ללא קרן</option>
+                    {funds.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+                  </Select>
+                </Field>
               </div>
-            </div>
-
-            <div className={styles.fieldGroup}>
-              <label className={styles.fieldLabel}>מספר זהות / ח.פ.</label>
-              <input
-                className={styles.fieldInput}
-                value={idNum}
-                onChange={e => setIdNum(e.target.value)}
-                onBlur={e => saveCustomerField('id_number', e.target.value)}
-                placeholder="ת.ז. או ח.פ."
-                dir="ltr"
+              <Checkbox
+                className={styles.sectionGap}
+                checked={sendTelegram}
+                onChange={(e) => setSendTelegram(e.target.checked)}
+                label="שליחת הודעה לערוץ הטלגרם של המוסד (אם קיים)"
               />
-            </div>
 
-            <div className={styles.fieldGroup}>
-              <label className={styles.fieldLabel}>טלפון</label>
-              <input
-                className={styles.fieldInput}
-                value={phone}
-                onChange={e => setPhone(e.target.value)}
-                onBlur={e => saveCustomerField('phone', e.target.value)}
-                placeholder="050-0000000"
-                type="tel"
-              />
-            </div>
-
-            <div className={styles.fieldGroup}>
-              <label className={styles.fieldLabel}>אימייל</label>
-              <input
-                className={styles.fieldInput}
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                onBlur={e => saveCustomerField('email', e.target.value)}
-                placeholder="email@example.com"
-                type="email"
-                dir="ltr"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Payments */}
-        <div className={styles.card}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-            <h3 className={styles.sectionTitle} style={{ margin: 0 }}>תשלומים</h3>
-            <button
-              type="button"
-              className={styles.btnAddPayment}
-              onClick={() => setPayments(prev => {
-                const first = prev[0];
-                const p = newPayment();
-                if (first) { p.bankName = first.bankName; p.bankBranch = first.bankBranch; p.bankAccount = first.bankAccount; }
-                return [...prev, p];
-              })}
-            >
-              + הוסף תשלום
-            </button>
-          </div>
-
-          {payments.map((p, idx) => (
-            <div key={p.id} className={styles.paymentCard} style={{ marginBottom: 12 }}>
-              <div className={styles.paymentCardHeader}>
-                <span>תשלום {idx + 1}</span>
-                {payments.length > 1 && (
-                  <button type="button" className={styles.btnIconDanger} onClick={() => removePayment(p.id)}>✕</button>
-                )}
-              </div>
-
-              <div className={styles.paymentGrid}>
-                <div className={styles.fieldGroup}>
-                  <label className={styles.fieldLabel}>אמצעי תשלום</label>
-                  <select className={styles.fieldSelect} value={p.method} onChange={e => updatePayment(p.id, 'method', e.target.value)}>
-                    {PAYMENT_METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-                  </select>
-                </div>
-                <div className={styles.fieldGroup}>
-                  <label className={styles.fieldLabel}>סכום (₪) *</label>
-                  <input
-                    className={`${styles.fieldInput} ${styles.amountInput}`}
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={p.amount}
-                    onChange={e => updatePayment(p.id, 'amount', e.target.value)}
-                    placeholder="0.00"
-                    dir="ltr"
-                  />
-                </div>
-              </div>
-
-              {(p.method === '4' || p.method === '2') && (
-                <div className={styles.bankGrid} style={{ marginTop: 10 }}>
-                  <div className={styles.fieldGroup}>
-                    <label className={styles.fieldLabel}>בנק</label>
-                    <input className={styles.fieldInput} value={p.bankName} onChange={e => updatePayment(p.id, 'bankName', e.target.value)} placeholder="בנק" />
-                  </div>
-                  <div className={styles.fieldGroup}>
-                    <label className={styles.fieldLabel}>סניף</label>
-                    <input className={styles.fieldInput} value={p.bankBranch} onChange={e => updatePayment(p.id, 'bankBranch', e.target.value)} placeholder="סניף" dir="ltr" />
-                  </div>
-                  <div className={styles.fieldGroup}>
-                    <label className={styles.fieldLabel}>חשבון</label>
-                    <input
-                      className={styles.fieldInput}
-                      value={p.bankAccount}
-                      onChange={e => updatePayment(p.id, 'bankAccount', e.target.value)}
-                      onBlur={e => lookupByAccount(e.target.value)}
-                      placeholder="חשבון"
-                      dir="ltr"
+              <div className={`${formStyles.grid} ${styles.sectionGap}`}>
+                <Field label="שם הלקוח" required htmlFor="qr-name">
+                  <div ref={suggRef} className={formStyles.suggestWrap}>
+                    <Input
+                      id="qr-name"
+                      value={name}
+                      onChange={(e) => { setName(e.target.value); setSelectedCustomerId(null); searchCustomers(e.target.value); }}
+                      onFocus={() => suggestions.length && setShowSugg(true)}
+                      placeholder="שם מלא"
+                      autoComplete="off"
                     />
+                    {showSugg && (
+                      <Suggestions
+                        items={suggestions}
+                        onSelect={selectCustomer}
+                        getTitle={(c) => c.name}
+                        getSub={(c) => [c.id_number, c.bank_account, c.email].filter(Boolean).join(' · ')}
+                      />
+                    )}
                   </div>
-                </div>
-              )}
-
-              {p.method === '2' && (
-                <div className={styles.formGrid} style={{ marginTop: 10 }}>
-                  <div className={styles.fieldGroup}>
-                    <label className={styles.fieldLabel}>מספר המחאה *</label>
-                    <input className={styles.fieldInput} value={p.checkNumber} onChange={e => updatePayment(p.id, 'checkNumber', e.target.value)} placeholder="מספר המחאה" dir="ltr" />
-                  </div>
-                </div>
-              )}
-
-              <div className={styles.fieldGroup} style={{ marginTop: 10 }}>
-                <label className={styles.fieldLabel}>
-                  {p.method === '1' ? 'תאריך הפקדה' : p.method === '2' ? 'תאריך המחאה' : 'תאריך העברה'} *
-                </label>
-                <input
-                  className={styles.fieldInput}
-                  type="date"
-                  value={p.date}
-                  onChange={e => updatePayment(p.id, 'date', e.target.value)}
-                  max={new Date().toISOString().slice(0, 10)}
-                />
+                </Field>
+                <Field label="מספר זהות / ח.פ.">
+                  <Input value={idNum} onChange={(e) => setIdNum(e.target.value)} onBlur={(e) => saveCustomerField('id_number', e.target.value)} placeholder='ת"ז או ח.פ.' dir="ltr" inputMode="numeric" />
+                </Field>
+                <Field label="טלפון">
+                  <Input value={phone} onChange={(e) => setPhone(e.target.value)} onBlur={(e) => saveCustomerField('phone', e.target.value)} placeholder="050-0000000" type="tel" dir="ltr" />
+                </Field>
+                <Field label="אימייל">
+                  <Input value={email} onChange={(e) => setEmail(e.target.value)} onBlur={(e) => saveCustomerField('email', e.target.value)} placeholder="email@example.com" type="email" dir="ltr" />
+                </Field>
               </div>
-            </div>
-          ))}
+            </CardBody>
+          </Card>
 
-          {payments.length > 1 && (
-            <div className={styles.paymentTotal}>
-              <span>סה״כ</span>
-              <span className={styles.paymentTotalAmount}>₪{totalAmount.toFixed(2)}</span>
-            </div>
+          <Card>
+            <CardHeader title="תשלומים" actions={<Button size="sm" variant="soft" icon="plus" onClick={addPayment}>הוספת תשלום</Button>} />
+            <CardBody>
+              {payments.map((p, idx) => (
+                <div key={p.id} className={styles.payment}>
+                  <div className={styles.paymentHead}>
+                    <span>תשלום {idx + 1}</span>
+                    {payments.length > 1 && <IconButton size="sm" icon="trash" label={`הסרת תשלום ${idx + 1}`} onClick={() => removePayment(p.id)} />}
+                  </div>
+
+                  <div className={formStyles.grid}>
+                    <Field label="אמצעי תשלום">
+                      <Select value={p.method} onChange={(e) => updatePayment(p.id, 'method', e.target.value)}>
+                        {PAYMENT_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                      </Select>
+                    </Field>
+                    <Field label="סכום (₪)" required>
+                      <Input
+                        className={styles.amountInput}
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        step="0.01"
+                        value={p.amount}
+                        onChange={(e) => updatePayment(p.id, 'amount', e.target.value)}
+                        placeholder="0.00"
+                        dir="ltr"
+                      />
+                    </Field>
+                    <Field label={DATE_LABEL[p.method]} required>
+                      <Input type="date" value={p.date} onChange={(e) => updatePayment(p.id, 'date', e.target.value)} max={toInputDate()} />
+                    </Field>
+                    {p.method === '2' && (
+                      <Field label="מספר המחאה" required>
+                        <Input value={p.checkNumber} onChange={(e) => updatePayment(p.id, 'checkNumber', e.target.value)} placeholder="מספר המחאה" dir="ltr" />
+                      </Field>
+                    )}
+                  </div>
+
+                  {(p.method === '4' || p.method === '2') && (
+                    <div className={`${styles.bankGrid} ${styles.sectionGap}`}>
+                      <Field label="בנק">
+                        <Input value={p.bankName} onChange={(e) => updatePayment(p.id, 'bankName', e.target.value)} placeholder="בנק" />
+                      </Field>
+                      <Field label="סניף">
+                        <Input value={p.bankBranch} onChange={(e) => updatePayment(p.id, 'bankBranch', e.target.value)} placeholder="סניף" dir="ltr" inputMode="numeric" />
+                      </Field>
+                      <Field label="חשבון">
+                        <Input
+                          value={p.bankAccount}
+                          onChange={(e) => updatePayment(p.id, 'bankAccount', e.target.value)}
+                          onBlur={(e) => lookupByAccount(e.target.value)}
+                          placeholder="חשבון"
+                          dir="ltr"
+                          inputMode="numeric"
+                        />
+                      </Field>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardBody>
+              <Field label="הערות" hint="לא חובה">
+                <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="הערות נוספות…" rows={2} />
+              </Field>
+            </CardBody>
+          </Card>
+
+          {msg.text && !msg.ok && <Alert tone="danger" onClose={() => setMsg({ text: '', ok: false })}>{msg.text}</Alert>}
+          {lastReceipt && (
+            <Alert tone="success" title={`קבלה מספר ${lastReceipt.docNumber} הופקה בהצלחה`} onClose={() => { setLastReceipt(null); setMsg({ text: '', ok: false }); }}>
+              {msg.ok && msg.text && <div>{msg.text}</div>}
+              {lastReceiptLink && <a href={lastReceiptLink} target="_blank" rel="noopener noreferrer">פתיחת הקבלה בלשונית חדשה</a>}
+            </Alert>
           )}
-        </div>
 
-        {/* Notes */}
-        <div className={styles.card}>
-          <div className={styles.fieldGroup}>
-            <label className={styles.fieldLabel}>הערות (אופציונלי)</label>
-            <textarea
-              className={styles.fieldTextarea}
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              placeholder="הערות נוספות..."
-              rows={2}
-            />
-          </div>
-        </div>
-
-        <button
-          type="submit"
-          className={`${styles.btn} ${styles.btnPrimary}`}
-          style={{ width: '100%', justifyContent: 'center', padding: '12px 24px', fontSize: 14 }}
-          disabled={loading}
-        >
-          {loading ? 'מפיק קבלה...' : '📄 הפק קבלה'}
-        </button>
+          <Card className={styles.submitBar}>
+            <div className={styles.total}>
+              סה״כ לקבלה
+              <span className={styles.totalValue}>{formatCurrency(totalAmount)}</span>
+            </div>
+            <Button type="submit" variant="primary" size="lg" icon="receipt" loading={loading}>
+              {loading ? 'מפיק קבלה…' : 'הפקת קבלה'}
+            </Button>
+          </Card>
+        </Stack>
       </form>
-    </div>
+    </Stack>
   );
 }

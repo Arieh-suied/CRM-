@@ -1,37 +1,17 @@
-import { useState, useEffect, useRef, useCallback, useMemo, useLayoutEffect } from 'react';
-import { createPortal } from 'react-dom';
-import styles from './Receipts.module.css';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { supabase } from '../../lib/supabase.js';
 import { fetchDonorReport, downloadDonorReportPdf, searchDonors } from '../../services/api.js';
 import { buildReceiptProxyUrl } from '../../lib/receiptProxy.js';
 import { debounce } from '../../lib/debounce.js';
+import { formatCurrency, formatDate, formatNumber } from '../../lib/format.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
+import {
+  Card, CardBody, CardFooter, Stack, Field, Input, Select, Suggestions, Button, Alert, StateMessage,
+  StatGrid, Stat, Table, buttonClass, formStyles, tableStyles as t,
+} from '../ui';
 
 const CURRENT_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: 6 }, (_, i) => CURRENT_YEAR - i);
-
-// The dropdown is portaled to <body> with position:fixed, anchored to the
-// input's rect — Receipts.module.css's .wrapper has overflow:hidden (for the
-// glass-card rounded corners), which would otherwise clip the suggestion
-// list whenever the card above it is short (as this report's is).
-function useAnchoredPos(anchorRef, open) {
-  const [pos, setPos] = useState(null);
-  useLayoutEffect(() => {
-    if (!open || !anchorRef.current) { setPos(null); return; }
-    const update = () => {
-      const r = anchorRef.current.getBoundingClientRect();
-      setPos({ top: r.bottom + 4, left: r.left, width: r.width });
-    };
-    update();
-    window.addEventListener('scroll', update, true);
-    window.addEventListener('resize', update);
-    return () => {
-      window.removeEventListener('scroll', update, true);
-      window.removeEventListener('resize', update);
-    };
-  }, [open, anchorRef]);
-  return pos;
-}
 
 function ReceiptLink({ receipt }) {
   const [href, setHref] = useState(null);
@@ -43,21 +23,22 @@ function ReceiptLink({ receipt }) {
     }
     return () => { cancelled = true; };
   }, [receipt.pdf_url, receipt.receipt_number]);
-  if (!href) return null;
-  return <a className={styles.receiptSuccessLink} href={href} target="_blank" rel="noreferrer">הצג קבלה</a>;
+  if (!href) return <span className={t.subtle}>—</span>;
+  return (
+    <a className={buttonClass({ variant: 'soft', size: 'sm' })} href={href} target="_blank" rel="noreferrer">
+      {receipt.receipt_number ? `קבלה ${receipt.receipt_number}` : 'צפייה בקבלה'}
+    </a>
+  );
 }
 
 export default function DonorReport() {
   const { role } = useAuth();
   const [name, setName] = useState('');
   const [idNumber, setIdNumber] = useState('');
-  const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [year, setYear] = useState(String(CURRENT_YEAR));
   const [suggestions, setSuggestions] = useState([]);
   const [showSugg, setShowSugg] = useState(false);
-  const inputRef = useRef(null);
-  const panelRef = useRef(null);
-  const pos = useAnchoredPos(inputRef, showSugg && suggestions.length > 0);
+  const wrapRef = useRef(null);
 
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -66,7 +47,7 @@ export default function DonorReport() {
 
   useEffect(() => {
     const handler = (e) => {
-      if (inputRef.current?.contains(e.target) || panelRef.current?.contains(e.target)) return;
+      if (wrapRef.current?.contains(e.target)) return;
       setShowSugg(false);
     };
     document.addEventListener('mousedown', handler);
@@ -98,22 +79,22 @@ export default function DonorReport() {
   const selectCustomer = (c) => {
     setName(c.name);
     if (c.id_number) setIdNumber(c.id_number);
-    setSelectedCustomer(c);
     setShowSugg(false);
     setResult(null);
   };
 
   const handleNameChange = (v) => {
     setName(v);
-    setSelectedCustomer(null);
     setResult(null);
     searchCustomers(v);
   };
 
   const canRun = name.trim() || idNumber.trim();
 
-  const runReport = async () => {
+  const runReport = async (e) => {
+    e?.preventDefault();
     if (!canRun) return;
+    setShowSugg(false);
     setLoading(true);
     setError('');
     setResult(null);
@@ -147,74 +128,76 @@ export default function DonorReport() {
     }
   };
 
+  const who = name.trim() || `ת"ז ${idNumber}`;
+
   return (
-    <div className={styles.card}>
-      <div className={styles.sectionTitle}>דוח קבלות שנתי לתורם</div>
-
-      <div className={styles.formGrid}>
-        <div className={styles.fieldGroup}>
-          <label className={styles.fieldLabel}>שם תורם</label>
-          <input
-            ref={inputRef}
-            className={styles.fieldInput}
-            value={name}
-            onChange={(e) => handleNameChange(e.target.value)}
-            placeholder="הקלד שם לחיפוש..."
-          />
-          {showSugg && suggestions.length > 0 && pos && createPortal(
-            <div
-              ref={panelRef}
-              className={styles.autocompleteDropdown}
-              style={{ position: 'fixed', top: pos.top, left: pos.left, right: 'auto', width: pos.width, maxHeight: 260, overflowY: 'auto' }}
-            >
-              {suggestions.map((c) => (
-                <div key={c.id} className={styles.autocompleteItem} onClick={() => selectCustomer(c)}>
-                  <div className={styles.autocompleteItemName}>{c.name}</div>
-                  <div className={styles.autocompleteItemSub}>{c.id_number || ''}</div>
-                </div>
-              ))}
-            </div>,
-            document.body
+    <Stack>
+      <Card as="form" onSubmit={runReport}>
+        <CardBody>
+          <div className={formStyles.grid}>
+            <Field label="שם תורם" htmlFor="dr-name">
+              <div ref={wrapRef} className={formStyles.suggestWrap}>
+                <Input
+                  id="dr-name"
+                  value={name}
+                  onChange={(e) => handleNameChange(e.target.value)}
+                  onFocus={() => suggestions.length > 0 && setShowSugg(true)}
+                  placeholder="הקלדת שם לחיפוש…"
+                  autoComplete="off"
+                />
+                {showSugg && (
+                  <Suggestions
+                    items={suggestions}
+                    onSelect={selectCustomer}
+                    getTitle={(c) => c.name}
+                    getSub={(c) => c.id_number || ''}
+                  />
+                )}
+              </div>
+            </Field>
+            <Field label="מספר זהות" hint="חיפוש מדויק — עדיף כשהמספר ידוע">
+              <Input
+                value={idNumber}
+                onChange={(e) => { setIdNumber(e.target.value); setResult(null); }}
+                placeholder="לדוגמה: 203043757"
+                dir="ltr"
+                inputMode="numeric"
+              />
+            </Field>
+            <Field label="שנה">
+              <Select value={year} onChange={(e) => { setYear(e.target.value); setResult(null); }}>
+                {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
+              </Select>
+            </Field>
+          </div>
+        </CardBody>
+        <CardFooter>
+          <Button type="submit" variant="primary" icon="search" disabled={!canRun} loading={loading}>הצגת הדוח</Button>
+          {result?.receipts?.length > 0 && (
+            <Button icon="download" onClick={downloadMerged} loading={downloading}>
+              {downloading ? 'מכין PDF…' : 'הורדת PDF מאוחד'}
+            </Button>
           )}
-        </div>
+        </CardFooter>
+      </Card>
 
-        <div className={styles.fieldGroup}>
-          <label className={styles.fieldLabel}>מספר זהות (מדויק — עדיף כשידוע)</label>
-          <input
-            className={styles.fieldInput}
-            value={idNumber}
-            onChange={(e) => { setIdNumber(e.target.value); setResult(null); }}
-            placeholder="לדוגמה: 203043757"
-          />
-        </div>
+      {error && <Alert tone="danger" onClose={() => setError('')}>{error}</Alert>}
 
-        <div className={styles.fieldGroup}>
-          <label className={styles.fieldLabel}>שנה</label>
-          <select className={styles.fieldSelect} value={year} onChange={(e) => setYear(e.target.value)}>
-            {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
-          </select>
-        </div>
-      </div>
+      {!result && !loading && !error && (
+        <Card><StateMessage kind="info" icon="fileText" title="חיפוש תורם" description="בוחרים תורם (בשם או במספר זהות) ושנה, ומקבלים את כל הקבלות שלו באותה שנה" /></Card>
+      )}
 
-      <div className={styles.entryActions} style={{ marginTop: 14 }}>
-        <button className={`${styles.btn} ${styles.btnPrimary}`} disabled={!canRun || loading} onClick={runReport}>
-          {loading ? 'טוען...' : 'הצג דוח'}
-        </button>
-        {result?.receipts?.length > 0 && (
-          <button className={`${styles.btn} ${styles.btnGhost}`} disabled={downloading} onClick={downloadMerged}>
-            {downloading ? 'מכין PDF...' : 'הורד PDF מאוחד'}
-          </button>
-        )}
-      </div>
-
-      {error && <div className={styles.errorMsg} style={{ marginTop: 14 }}>{error}</div>}
-
-      {result && (
-        result.receipts.length === 0 ? (
-          <div className={styles.empty}>לא נמצאו קבלות עבור {name || `ת.ז ${idNumber}`} בשנת {year}</div>
-        ) : (
-          <div className={styles.tableWrap} style={{ marginTop: 16 }}>
-            <table className={styles.table}>
+      {result && (result.receipts.length === 0 ? (
+        <Card><StateMessage title="לא נמצאו קבלות" description={`עבור ${who} בשנת ${year}`} /></Card>
+      ) : (
+        <>
+          <StatGrid>
+            <Stat label="תורם" value={who} />
+            <Stat label={`קבלות בשנת ${year}`} value={formatNumber(result.count)} />
+            <Stat label='סה"כ תרומות' value={formatCurrency(result.total)} tone="success" />
+          </StatGrid>
+          <Card clip>
+            <Table stackOnMobile>
               <thead>
                 <tr>
                   <th>תאריך</th>
@@ -223,30 +206,26 @@ export default function DonorReport() {
                   <th>קרן</th>
                   <th>סוג קבלה</th>
                   <th>סכום</th>
-                  <th>קישור</th>
+                  <th>קבלה</th>
                 </tr>
               </thead>
               <tbody>
                 {result.receipts.map((r, i) => (
                   <tr key={r.receipt_number || i}>
-                    <td>{r.issue_date}</td>
-                    <td>{r.customer_name || '—'}</td>
-                    <td>{r.institution_name}</td>
-                    <td>{r.category || '—'}</td>
-                    <td>{r.receipt_type}</td>
-                    <td>{Number(r.amount).toLocaleString('he-IL')} ₪</td>
-                    <td><ReceiptLink receipt={r} /></td>
+                    <td data-label="תאריך" className={t.date}>{formatDate(r.issue_date)}</td>
+                    <td data-label="שם תורם" className={t.strong}>{r.customer_name || '—'}</td>
+                    <td data-label="מוסד">{r.institution_name}</td>
+                    <td data-label="קרן" className={t.muted}>{r.category || '—'}</td>
+                    <td data-label="סוג קבלה" className={t.muted}>{r.receipt_type}</td>
+                    <td data-label="סכום" className={t.amount}>{formatCurrency(Number(r.amount))}</td>
+                    <td data-label="קבלה"><ReceiptLink receipt={r} /></td>
                   </tr>
                 ))}
               </tbody>
-            </table>
-            <div className={styles.paymentTotal} style={{ marginTop: 10 }}>
-              <span>סה"כ {result.count} קבלות</span>
-              <span className={styles.paymentTotalAmount}>{result.total.toLocaleString('he-IL')} ₪</span>
-            </div>
-          </div>
-        )
-      )}
-    </div>
+            </Table>
+          </Card>
+        </>
+      ))}
+    </Stack>
   );
 }
