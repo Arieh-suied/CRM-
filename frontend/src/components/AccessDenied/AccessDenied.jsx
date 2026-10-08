@@ -1,22 +1,18 @@
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import styles from './AccessDenied.module.css';
+import AuthCard from '../AuthCard/AuthCard.jsx';
+import { Button } from '../ui';
 
 export default function AccessDenied() {
   const { user, signOut } = useAuth();
 
   return (
-    <div className={styles.page}>
-      <div className={styles.card}>
-        <div className={styles.icon}>⛔</div>
-        <h1 className={styles.title}>אין גישה</h1>
-        <p className={styles.message}>
-          הכתובת <strong>{user?.email}</strong> אינה מורשית לגשת למערכת.
-        </p>
-        <p className={styles.hint}>פנה למנהל המערכת להוספת הרשאה.</p>
-        <button className={styles.signOutBtn} onClick={signOut}>
-          התנתק
-        </button>
-      </div>
-    </div>
+    <AuthCard icon="lock" tone="danger" title="אין גישה למערכת">
+      <p className={styles.message}>
+        הכתובת <strong dir="ltr">{user?.email}</strong> אינה מורשית לגשת למערכת.
+      </p>
+      <p className={styles.hint}>כדי לקבל גישה, יש לפנות למנהל המערכת.</p>
+      <Button block icon="logout" onClick={signOut}>התנתקות וכניסה עם חשבון אחר</Button>
+    </AuthCard>
   );
 }

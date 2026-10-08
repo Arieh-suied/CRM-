@@ -201,7 +201,13 @@ export default function PublicTransfer() {
         ) : (
           <>
             {!preview && (
-              <label className="pt-drop">
+              <label
+                className="pt-drop"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileRef.current?.click(); }
+                }}
+              >
                 <input
                   ref={fileRef}
                   type="file"

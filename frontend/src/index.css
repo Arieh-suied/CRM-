@@ -87,15 +87,6 @@
   --z-drawer: 400;
   --z-modal: 1000;
   --z-toast: 1100;
-
-  /* Legacy names still used by not-yet-migrated screens. They now resolve to
-     the solid, flat palette above (no blur/translucency). */
-  --color-primary:       var(--brand-600);
-  --color-primary-dark:  var(--brand-700);
-  --color-surface-solid: var(--color-surface);
-  --glass-border: 1px solid var(--color-border);
-  --blur: none;
-  --radius-md: var(--radius-sm);
 }
 
 html {

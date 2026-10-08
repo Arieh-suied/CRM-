@@ -1,38 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
 import styles from './AIAssistant.module.css';
-import { supabase } from '../../lib/supabase.js';
+import { authFetch } from '../../services/api.js';
+import { Icon, IconButton } from '../ui';
 
-function SparkleBubbleIcon({ size = 24 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path
-        d="M11.5 2.5c.45 4.6 1.9 6.55 6.5 7-4.6.45-6.05 2.4-6.5 7-.45-4.6-1.9-6.55-6.5-7 4.6-.45 6.05-2.4 6.5-7z"
-        fill="white"
-      />
-      <path
-        d="M18 14.5c.27 2.1.95 2.95 3 3.2-2.05.25-2.73 1.1-3 3.2-.27-2.1-.95-2.95-3-3.2 2.05-.25 2.73-1.1 3-3.2z"
-        fill="white"
-        opacity="0.85"
-      />
-    </svg>
-  );
-}
-
-function CloseIcon({ size = 14 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M5 5l14 14M19 5L5 19" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function SendIcon({ size = 16 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M3.5 12L20 4l-5.5 16-3.2-6.8L3.5 12z" fill="currentColor" />
-    </svg>
-  );
-}
+const EXAMPLES = [
+  'מתי ישראל ישראלי תרם בפעם האחרונה?',
+  'כמה תרומות היו החודש בסומך נופלים?',
+  'אילו קבלות הופקו היום?',
+];
 
 export default function AIAssistant() {
   const [open, setOpen]       = useState(false);
@@ -40,55 +15,74 @@ export default function AIAssistant() {
   const [input, setInput]     = useState('');
   const [loading, setLoading] = useState(false);
   const listRef = useRef(null);
+  const inputRef = useRef(null);
+  const fabRef = useRef(null);
 
   useEffect(() => {
     if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
-  }, [messages, open]);
+  }, [messages, open, loading]);
 
-  const send = async () => {
-    const text = input.trim();
+  // Focus the question box on open; Esc closes and returns focus to the button.
+  useEffect(() => {
+    if (!open) return undefined;
+    inputRef.current?.focus();
+    const onKey = (e) => {
+      if (e.key === 'Escape') { setOpen(false); fabRef.current?.focus(); }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open]);
+
+  const send = async (preset) => {
+    const text = (preset ?? input).trim();
     if (!text || loading) return;
     const history = [...messages, { role: 'user', content: text }];
     setMessages(history);
     setInput('');
     setLoading(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const headers = { 'Content-Type': 'application/json' };
-      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
-
-      const res = await fetch('/api/ai-assistant', {
+      const res = await authFetch('/api/ai-assistant', {
         method: 'POST',
-        headers,
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: history }),
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'שגיאה בקבלת תשובה');
-      setMessages(prev => [...prev, { role: 'assistant', content: data.reply || '' }]);
+      setMessages((prev) => [...prev, { role: 'assistant', content: data.reply || '' }]);
     } catch (err) {
-      setMessages(prev => [...prev, { role: 'error', content: err.message }]);
+      setMessages((prev) => [...prev, { role: 'error', content: err.message }]);
     } finally {
       setLoading(false);
+      inputRef.current?.focus();
     }
   };
 
   return (
     <>
       {open && (
-        <div className={styles.panel}>
+        <section className={styles.panel} aria-label="עוזר AI">
           <div className={styles.header}>
             <span className={styles.headerTitle}>
-              <span className={styles.headerIcon}><SparkleBubbleIcon size={15} /></span>
+              <span className={styles.headerIcon}><Icon name="sparkles" size={15} strokeWidth={2} /></span>
               עוזר AI
             </span>
-            <button className={styles.closeBtn} onClick={() => setOpen(false)}><CloseIcon size={13} /></button>
+            <div className={styles.headerActions}>
+              {messages.length > 0 && (
+                <IconButton size="sm" icon="refresh" label="שיחה חדשה" onClick={() => setMessages([])} disabled={loading} />
+              )}
+              <IconButton size="sm" icon="x" label="סגירה" onClick={() => setOpen(false)} />
+            </div>
           </div>
 
-          <div className={styles.messages} ref={listRef}>
+          <div className={styles.messages} ref={listRef} aria-live="polite">
             {messages.length === 0 && (
               <div className={styles.empty}>
-                שאל אותי שאלה על תורמים, תרומות, קבלות או העברות במערכת —<br />
-                לדוגמה: "מתי ישראל תרם בפעם האחרונה?"
+                <p>אפשר לשאול על תורמים, תרומות, קבלות והעברות במערכת. למשל:</p>
+                <div className={styles.examples}>
+                  {EXAMPLES.map((q) => (
+                    <button key={q} type="button" className={styles.example} onClick={() => send(q)}>{q}</button>
+                  ))}
+                </div>
               </div>
             )}
             {messages.map((m, i) => (
@@ -101,29 +95,41 @@ export default function AIAssistant() {
                 {m.content}
               </div>
             ))}
-            {loading && <div className={`${styles.bubble} ${styles.bubbleAssistant}`}>חושב...</div>}
+            {loading && (
+              <div className={`${styles.bubble} ${styles.bubbleAssistant} ${styles.typing}`} aria-label="העוזר כותב">
+                <span /><span /><span />
+              </div>
+            )}
           </div>
 
-          <div className={styles.inputBar}>
+          <form className={styles.inputBar} onSubmit={(e) => { e.preventDefault(); send(); }}>
             <input
+              ref={inputRef}
               className={styles.input}
               value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
-              placeholder="שאל שאלה..."
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="מה תרצה לדעת?"
+              aria-label="שאלה לעוזר"
               disabled={loading}
             />
-            <button className={styles.sendBtn} onClick={send} disabled={loading || !input.trim()}><SendIcon /></button>
-          </div>
-        </div>
+            <button type="submit" className={styles.sendBtn} disabled={loading || !input.trim()} aria-label="שליחה" title="שליחה">
+              <Icon name="send" size={16} />
+            </button>
+          </form>
+        </section>
       )}
 
-      <div className={styles.fabWrap}>
-        {!open && <div className={styles.fabRing} />}
-        <button className={styles.fab} onClick={() => setOpen(o => !o)} title="עוזר AI">
-          {open ? <CloseIcon size={20} /> : <SparkleBubbleIcon size={26} />}
-        </button>
-      </div>
+      <button
+        ref={fabRef}
+        type="button"
+        className={styles.fab}
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-label={open ? 'סגירת עוזר ה-AI' : 'פתיחת עוזר ה-AI'}
+        title="עוזר AI"
+      >
+        <Icon name={open ? 'x' : 'sparkles'} size={open ? 20 : 22} strokeWidth={2} />
+      </button>
     </>
   );
 }

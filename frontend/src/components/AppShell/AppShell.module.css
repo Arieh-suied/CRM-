@@ -162,8 +162,9 @@
   min-width: 0;
 }
 
+/* Bottom padding keeps the last table rows clear of the AI button */
 .main {
-  padding: 28px 32px 48px;
+  padding: 28px 32px 96px;
   max-width: 1680px;
   margin: 0 auto;
 }

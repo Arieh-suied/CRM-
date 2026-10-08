@@ -1,16 +1,18 @@
 * { box-sizing: border-box; }
 
+/* Same palette as the CRM (frontend/src/index.css), text colors at WCAG AA */
 :root {
-  --pt-blue: #4f7ef8;
-  --pt-blue-dark: #3a63d0;
-  --pt-bg: #eef2fb;
+  --pt-blue: #3366e8;
+  --pt-blue-dark: #2a55c9;
+  --pt-bg: #f3f5fa;
   --pt-card: #ffffff;
-  --pt-text: #1e2540;
-  --pt-muted: #6b7390;
-  --pt-border: #dde3f0;
-  --pt-error-bg: #fdecec;
-  --pt-error: #c0392b;
-  --pt-ok: #2ecc71;
+  --pt-text: #1a1f36;
+  --pt-muted: #5b6784;
+  --pt-border: #d5dcea;
+  --pt-error-bg: #fdeeee;
+  --pt-error: #c9372c;
+  --pt-ok: #0b7a55;
+  --pt-ring: 0 0 0 3px rgba(79, 126, 248, 0.28);
 }
 
 body {
@@ -103,7 +105,8 @@ body {
   border: 1px solid var(--pt-border); border-radius: 10px;
   background: #fbfcff; color: var(--pt-text);
 }
-.pt-field input:focus, .pt-field select:focus { outline: none; border-color: var(--pt-blue); background: #fff; }
+.pt-field input:focus, .pt-field select:focus { outline: none; border-color: var(--pt-blue); background: #fff; box-shadow: var(--pt-ring); }
+.pt-drop:focus-visible, .pt-btn:focus-visible, .pt-link:focus-visible { outline: none; box-shadow: var(--pt-ring); }
 
 .pt-btn {
   margin-top: 8px;

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import styles from './InstitutionSummary.module.css';
 import { fetchInstitutionSummary } from '../../services/api.js';
+import { formatCurrency, formatNumber } from '../../lib/format.js';
+import { Card, Stack, StatGrid, Stat, StateMessage, Table, Button, tableStyles as t } from '../ui';
 
 const MONTH_NAMES = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
 
@@ -9,67 +11,66 @@ function formatMonth(dateStr) {
   return `${MONTH_NAMES[m - 1]} ${y}`;
 }
 
-function formatAmount(n) {
-  return `${Number(n).toLocaleString('he-IL', { maximumFractionDigits: 0 })}₪`;
-}
-
 export default function InstitutionSummary() {
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
 
-  useEffect(() => {
+  const load = () => {
+    setLoading(true);
+    setError(null);
     fetchInstitutionSummary()
       .then(setData)
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, []);
+  };
 
-  if (loading) return <div className={styles.loadingState}>טוען...</div>;
-  if (error)   return <div className={styles.errorBanner}>{error}</div>;
+  useEffect(load, []);
+
+  if (loading) return <Card><StateMessage kind="loading" /></Card>;
+  if (error) {
+    return <Card><StateMessage kind="error" description={error} action={<Button size="sm" icon="refresh" onClick={load}>נסה שוב</Button>} /></Card>;
+  }
 
   const months = [...data.months].reverse();
+  const best = Math.max(0, ...months.map((m) => Number(m.total_amount) || 0));
 
   return (
-    <div className={styles.page}>
-      <div className={styles.cards}>
-        <div className={styles.card}>
-          <span className={styles.cardLabel}>סה"כ החודש</span>
-          <span className={styles.cardValue}>{formatAmount(data.monthTotal)}</span>
-        </div>
-        <div className={styles.card}>
-          <span className={styles.cardLabel}>סה"כ השנה</span>
-          <span className={styles.cardValue}>{formatAmount(data.yearTotal)}</span>
-        </div>
-        <div className={styles.card}>
-          <span className={styles.cardLabel}>מספר תרומות השנה</span>
-          <span className={styles.cardValue}>{data.yearCount.toLocaleString('he-IL')}</span>
-        </div>
-      </div>
+    <Stack>
+      <StatGrid>
+        <Stat label='סה"כ החודש' value={formatCurrency(data.monthTotal)} tone="success" />
+        <Stat label='סה"כ השנה' value={formatCurrency(data.yearTotal)} />
+        <Stat label="מספר תרומות השנה" value={formatNumber(data.yearCount)} />
+      </StatGrid>
 
-      <div className={styles.tableWrap}>
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              <th>חודש</th>
-              <th>סה"כ</th>
-              <th>מספר תרומות</th>
-            </tr>
-          </thead>
-          <tbody>
-            {months.map((row) => (
-              <tr key={row.month}>
-                <td>{formatMonth(row.month)}</td>
-                <td>{formatAmount(row.total_amount)}</td>
-                <td>{row.donation_count}</td>
+      <Card clip>
+        {months.length === 0 ? (
+          <StateMessage title="אין נתונים עדיין" icon="barChart" />
+        ) : (
+          <Table stackOnMobile>
+            <thead>
+              <tr>
+                <th>חודש</th>
+                <th>סה"כ</th>
+                <th>מספר תרומות</th>
+                <th className={styles.barCol} aria-hidden="true" />
               </tr>
-            ))}
-            {months.length === 0 && (
-              <tr><td colSpan={3} className={styles.emptyState}>אין נתונים עדיין</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
+            </thead>
+            <tbody>
+              {months.map((row) => (
+                <tr key={row.month}>
+                  <td data-label="חודש" className={t.strong}>{formatMonth(row.month)}</td>
+                  <td data-label='סה"כ' className={t.amount}>{formatCurrency(row.total_amount)}</td>
+                  <td data-label="תרומות" className={t.num}>{formatNumber(row.donation_count)}</td>
+                  <td className={styles.barCol} aria-hidden="true">
+                    <div className={styles.bar} style={{ width: `${best ? (Number(row.total_amount) / best) * 100 : 0}%` }} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        )}
+      </Card>
+    </Stack>
   );
 }
