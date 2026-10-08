@@ -102,7 +102,7 @@ export default function BatchReceipts() {
   // Checkpoint
   const [checkpoint, setCheckpoint]   = useState(null);
   const [showCpForm, setShowCpForm]   = useState(false);
-  const [cpDraft, setCpDraft]         = useState({ customer_name: '', amount: '', reference_number: '', bank_account: '' });
+  const [cpDraft, setCpDraft]         = useState({ customer_name: '', amount: '', reference_number: '', bank_account: '', transfer_date: '' });
 
   // Excel import preview — rows wait here for user confirmation before hitting the DB
   const [importPreview, setImportPreview] = useState(null);
@@ -164,7 +164,7 @@ export default function BatchReceipts() {
     if (!user) return;
     supabase.from('manual_checkpoints').select('*').eq('user_id', user.id).single()
       .then(({ data }) => {
-        if (data) setCheckpoint({ customer_name: data.customer_name ?? '', amount: data.amount != null ? String(data.amount) : '', reference_number: data.reference_number ?? '', bank_account: data.bank_account ?? '' });
+        if (data) setCheckpoint({ customer_name: data.customer_name ?? '', amount: data.amount != null ? String(data.amount) : '', reference_number: data.reference_number ?? '', bank_account: data.bank_account ?? '', transfer_date: data.transfer_date ?? '' });
       });
   }, [user]);
 
@@ -174,7 +174,7 @@ export default function BatchReceipts() {
     setShowCpForm(false);
     if (user) {
       await supabase.from('manual_checkpoints').delete().eq('user_id', user.id);
-      await supabase.from('manual_checkpoints').insert({ user_id: user.id, customer_name: cpDraft.customer_name || null, amount: cpDraft.amount ? parseFloat(cpDraft.amount) : null, reference_number: cpDraft.reference_number || null, bank_account: cpDraft.bank_account || null });
+      await supabase.from('manual_checkpoints').insert({ user_id: user.id, customer_name: cpDraft.customer_name || null, amount: cpDraft.amount ? parseFloat(cpDraft.amount) : null, reference_number: cpDraft.reference_number || null, bank_account: cpDraft.bank_account || null, transfer_date: cpDraft.transfer_date || null });
     }
   };
 
@@ -237,6 +237,7 @@ export default function BatchReceipts() {
         notes:         getVal(row, 'notes') ? String(getVal(row, 'notes')).trim() : null,
         branch,
         status: 'pending',
+        _key: crypto.randomUUID(),
       })).filter(r => r.amount && r.amount > 0);
 
       // Checkpoint deduplication (file is sorted newest-first)
@@ -252,7 +253,8 @@ export default function BatchReceipts() {
           const sameName    = normN(r.customer_name).includes(normN(checkpointData.customer_name).substring(0, 8));
           const sameRef     = norm(r.reference_number) && norm(r.reference_number) === norm(checkpointData.reference_number);
           const sameAccount = norm(r.bank_account) && norm(r.bank_account) === norm(checkpointData.bank_account);
-          if (sameName || sameRef || sameAccount) { cpIdx = i; break; }
+          const sameDate    = norm(r.transfer_date) && norm(r.transfer_date) === norm(checkpointData.transfer_date);
+          if (sameName || sameRef || sameAccount || sameDate) { cpIdx = i; break; }
         }
       }
 
@@ -269,7 +271,7 @@ export default function BatchReceipts() {
   const confirmImport = async () => {
     if (!importPreview?.length || importing) return;
     setImporting(true);
-    const rows = importPreview.map(({ _uncertain, ...r }) => r);
+    const rows = importPreview.map(({ _uncertain, _key, ...r }) => r);
     const { data: inserted, error } = await supabase.from('pending_receipts').insert(rows).select('id');
     setImporting(false);
     if (error) { alert('שגיאה בשמירה: ' + error.message); return; }
@@ -329,6 +331,7 @@ export default function BatchReceipts() {
           branch: data.is_discount_chachmei_screen ? 'חכמי ירושלים' : '',
           status: 'pending',
           _uncertain: nameUncertain,
+          _key: crypto.randomUUID(),
         });
       } catch (err) {
         errors.push({ fileName: files[i].name, error: err.message });
@@ -381,8 +384,9 @@ export default function BatchReceipts() {
   };
 
   const deleteSelected = async () => {
-    const ids = selectedIds.size > 0 ? [...selectedIds] : filteredEntries.map(e => e.id);
-    if (!ids.length || !confirm(`למחוק ${ids.length} רשומות?`)) return;
+    if (!selectedIds.size) { alert('יש לסמן שורות למחיקה'); return; }
+    const ids = [...selectedIds];
+    if (!confirm(`למחוק ${ids.length} רשומות?`)) return;
     await supabase.from('pending_receipts').delete().in('id', ids);
     setEntries(prev => prev.filter(e => !ids.includes(e.id)));
     setSelectedIds(new Set());
@@ -537,7 +541,7 @@ export default function BatchReceipts() {
               </thead>
               <tbody>
                 {importPreview.map((r, i) => (
-                  <tr key={i}>
+                  <tr key={r._key ?? i}>
                     <td style={{ minWidth: 130 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                         <input className={styles.tableInput} defaultValue={r.customer_name || ''} placeholder="שם"
@@ -549,8 +553,8 @@ export default function BatchReceipts() {
                       <input className={styles.tableInput} type="number" defaultValue={r.amount ?? ''} placeholder="סכום"
                         onBlur={e => updatePreviewField(i, 'amount', e.target.value ? parseFloat(e.target.value) : null)} />
                     </td>
-                    <td style={{ width: 100 }}>
-                      <input className={styles.tableInput} defaultValue={r.transfer_date || ''} placeholder="dd/mm/yyyy"
+                    <td style={{ minWidth: 120 }}>
+                      <input className={styles.tableInput} style={{ minWidth: 110 }} defaultValue={r.transfer_date || ''} placeholder="dd/mm/yyyy"
                         onBlur={e => updatePreviewField(i, 'transfer_date', e.target.value.trim())} />
                     </td>
                     <td style={{ width: 90 }}>
@@ -587,7 +591,7 @@ export default function BatchReceipts() {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button
             className={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`}
-            onClick={() => { setCpDraft(checkpoint ?? { customer_name: '', amount: '', reference_number: '', bank_account: '' }); setShowCpForm(!showCpForm); }}
+            onClick={() => { setCpDraft(checkpoint ?? { customer_name: '', amount: '', reference_number: '', bank_account: '', transfer_date: '' }); setShowCpForm(!showCpForm); }}
           >
             {checkpoint ? '✓ checkpoint ידני פעיל' : 'הגדר קבלה אחרונה'}
           </button>
@@ -600,6 +604,7 @@ export default function BatchReceipts() {
             <span className={styles.checkpointBarLabel}>קבלה אחרונה:</span>
             {checkpoint.customer_name && <span>{checkpoint.customer_name}</span>}
             {checkpoint.amount && <span>₪{checkpoint.amount}</span>}
+            {checkpoint.transfer_date && <span>תאריך: {checkpoint.transfer_date}</span>}
             {checkpoint.reference_number && <span>אסמכתא: {checkpoint.reference_number}</span>}
             {checkpoint.bank_account && <span>חשבון: {checkpoint.bank_account}</span>}
           </div>
@@ -608,10 +613,10 @@ export default function BatchReceipts() {
           <div className={styles.card} style={{ marginTop: 8 }}>
             <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 0 }}>פרטי הקבלה האחרונה שהונפקה. שורות חדשות יותר ממנה בלבד ייובאו.</p>
             <div className={styles.formGrid}>
-              {[['customer_name','שם לקוח'],['amount','סכום'],['reference_number','אסמכתא'],['bank_account','חשבון בנק']].map(([key, lbl]) => (
+              {[['customer_name','שם לקוח'],['amount','סכום'],['reference_number','אסמכתא'],['bank_account','חשבון בנק'],['transfer_date','תאריך העברה']].map(([key, lbl]) => (
                 <div key={key} className={styles.fieldGroup}>
                   <label className={styles.fieldLabel}>{lbl}</label>
-                  <input className={styles.fieldInput} value={cpDraft[key]} onChange={e => setCpDraft(p => ({ ...p, [key]: e.target.value }))} placeholder={lbl} type={key === 'amount' ? 'number' : 'text'} />
+                  <input className={styles.fieldInput} value={cpDraft[key]} onChange={e => setCpDraft(p => ({ ...p, [key]: e.target.value }))} placeholder={key === 'transfer_date' ? 'DD/MM/YYYY' : lbl} type={key === 'amount' ? 'number' : 'text'} />
                 </div>
               ))}
             </div>
@@ -657,7 +662,7 @@ export default function BatchReceipts() {
             </div>
             <div className={styles.toolbarRight}>
               <button className={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`} onClick={exportExcel}>⬇ ייצוא</button>
-              <button className={`${styles.btn} ${styles.btnDanger} ${styles.btnSm}`} onClick={deleteSelected}>🗑 מחק</button>
+              <button className={`${styles.btn} ${styles.btnDanger} ${styles.btnSm}`} disabled={selectedIds.size === 0} title={selectedIds.size === 0 ? 'סמן שורות למחיקה' : undefined} onClick={deleteSelected}>🗑 מחק</button>
             </div>
           </div>
 
