@@ -5,7 +5,7 @@ import { useTransactions } from './hooks/useTransactions.js';
 import { fetchInstitutions, fetchFilterOptions, fetchTransactions } from './services/api.js';
 import { exportXlsx, dateStamp } from './lib/exportXlsx.js';
 import { SCREEN_IDS, findScreen, canSee } from './navigation.js';
-import { Alert, Spinner, StateMessage, useToast } from './components/ui';
+import { Alert, Card, Spinner, StateMessage, useToast } from './components/ui';
 
 // Eager — app shell + the default (transactions) tab, needed on first paint.
 import AppShell from './components/AppShell/AppShell.jsx';
@@ -133,7 +133,7 @@ function Dashboard({ user, signOut, role, allowedMosadim, extraTabs }) {
       {loadError && <Alert tone="warning" className={styles.banner} onClose={() => setLoadError(null)}>{loadError}</Alert>}
 
       {activeTab === 'transactions' && (
-        <>
+        <Card clip>
           <FiltersBar
             filters={filters}
             onChange={handleFiltersChange}
@@ -141,19 +141,22 @@ function Dashboard({ user, signOut, role, allowedMosadim, extraTabs }) {
             filterOptions={filterOptions}
             onExport={handleExport}
             exporting={exporting}
+            total={loading && !transactions.length ? null : pagination.total}
           />
-          {error && <Alert tone="danger" className={styles.banner}>שגיאה בטעינת העסקאות: {error}</Alert>}
           <TransactionsTable
             transactions={transactions}
             institutions={visibleInstitutions}
             loading={loading}
+            error={error}
+            onRetry={() => loadPage(pagination.page)}
+            filtered={Object.values(filters).some(Boolean)}
             pagination={pagination}
             sort={sort}
             onSort={handleSort}
             onPageChange={loadPage}
             role={role}
           />
-        </>
+        </Card>
       )}
 
       <Suspense fallback={<StateMessage kind="loading" />}>

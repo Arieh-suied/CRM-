@@ -1,23 +1,17 @@
 import { useState, useEffect, useCallback } from 'react';
 import styles from './PaymentFailures.module.css';
 import { fetchPaymentFailures, syncGmailFailures, setPaymentFailureResolved } from '../../services/api.js';
-import SortTh from '../shared/SortTh.jsx';
 import { exportXlsx, dateStamp } from '../../lib/exportXlsx.js';
+import { formatCurrency, formatDate, formatNumber } from '../../lib/format.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
-
-const fmt = (n) => {
-  if (n == null) return '—';
-  return new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 }).format(n);
-};
-
-const fmtDate = (iso) => {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: '2-digit' });
-};
+import {
+  Card, Toolbar, ToolbarSpacer, ToolbarMeta, SearchInput, Select, DateRange, Button,
+  Table, SortTh, toggleSort, TableMessage, Pagination, tableStyles as t, toolbarSearchClass, useToast,
+} from '../ui';
 
 const toExportRow = (row, showCategory) => ({
   'טופל':        row.resolved ? 'כן' : 'לא',
-  'תאריך':       fmtDate(row.created_at),
+  'תאריך':       formatDate(row.created_at),
   'מוסד':        (showCategory ? row.category : row.institution_name) ?? '',
   'שם לקוח':     row.customer_name ?? '',
   'ת"ז':         row.customer_id_number ?? '',
@@ -31,6 +25,7 @@ const toExportRow = (row, showCategory) => ({
 
 export default function PaymentFailures() {
   const { role } = useAuth();
+  const toast = useToast();
   const canSync = role !== 'institution'; // syncing pulls Gmail globally — staff-only, the server also 403s this for institution
   // institution_name is free text parsed from the refusal email and can name
   // an unrelated institution for a sub-fund's rows (see payment-failures.js
@@ -44,34 +39,25 @@ export default function PaymentFailures() {
   const [total, setTotal]         = useState(0);
   const [page, setPage]           = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [search, setSearch]       = useState('');
   const [query, setQuery]         = useState('');
   const [instFilter, setInstFilter] = useState('');
   const [instOptions, setInstOptions] = useState([]);
   const [resolvedFilter, setResolvedFilter] = useState(''); // '', 'false', 'true'
-  const [dateFrom, setDateFrom]   = useState('');
-  const [dateTo, setDateTo]       = useState('');
+  const [dates, setDates]         = useState({ from: '', to: '' });
   const [sort, setSort]           = useState({ col: 'created_at', dir: 'desc' });
   const [loading, setLoading]     = useState(false);
   const [errorMsg, setErrorMsg]   = useState('');
   const [syncing, setSyncing]     = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [syncResult, setSyncResult] = useState(null);
-
-  const handleSort = useCallback((col) => {
-    setSort((prev) => prev.col === col
-      ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
-      : { col, dir: 'desc' });
-  }, []);
 
   const filterParams = useCallback(() => ({
     ...(query ? { search: query } : {}),
     ...(instFilter ? { institution: instFilter } : {}),
     ...(resolvedFilter ? { resolved: resolvedFilter } : {}),
-    ...(dateFrom ? { date_from: dateFrom } : {}),
-    ...(dateTo ? { date_to: dateTo } : {}),
+    ...(dates.from ? { date_from: dates.from } : {}),
+    ...(dates.to ? { date_to: dates.to } : {}),
     sort_by: sort.col, sort_dir: sort.dir,
-  }), [query, instFilter, resolvedFilter, dateFrom, dateTo, sort]);
+  }), [query, instFilter, resolvedFilter, dates, sort]);
 
   const load = useCallback(async (p = 1) => {
     setLoading(true);
@@ -97,17 +83,16 @@ export default function PaymentFailures() {
     fetchPaymentFailures({ action: 'institutions' })
       .then((res) => setInstOptions(res.data ?? []))
       .catch(() => {});
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSync = async () => {
     setSyncing(true);
-    setSyncResult(null);
     try {
       const res = await syncGmailFailures();
-      setSyncResult({ ok: true, message: `סונכרנו ${res.synced} מיילים` });
+      toast.success(`סונכרנו ${formatNumber(res.synced)} מיילים`);
       load(1);
     } catch (err) {
-      setSyncResult({ ok: false, message: err.message });
+      toast.error(`הסנכרון נכשל: ${err.message}`);
     } finally {
       setSyncing(false);
     }
@@ -119,7 +104,7 @@ export default function PaymentFailures() {
       const updated = await setPaymentFailureResolved(row.id, !row.resolved);
       setData((prev) => prev.map((r) => (r.id === row.id ? updated : r)));
     } catch (err) {
-      setSyncResult({ ok: false, message: err.message });
+      toast.error(`העדכון נכשל: ${err.message}`);
     } finally {
       setResolvingId(null);
     }
@@ -132,137 +117,93 @@ export default function PaymentFailures() {
       const rows = (res.data ?? []).map((row) => toExportRow(row, showCategory));
       if (rows.length) await exportXlsx(rows, `payment-failures-${dateStamp()}.xlsx`, 'סירובים');
     } catch (err) {
-      setSyncResult({ ok: false, message: err.message });
+      toast.error(`הייצוא נכשל: ${err.message}`);
     } finally {
       setExporting(false);
     }
   };
 
-  return (
-    <div className={styles.wrapper}>
-      <div className={styles.toolbar}>
-        <div className={styles.searchWrap}>
-          <svg className={styles.searchIcon} viewBox="0 0 20 20" fill="none">
-            <circle cx="9" cy="9" r="6" stroke="currentColor" strokeWidth="1.8"/>
-            <path d="M14 14l3 3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
-          </svg>
-          <input
-            className={styles.search}
-            placeholder="חיפוש לפי שם, מוסד, מספר הוראה, מייל..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && setQuery(search)}
-          />
-          {search && (
-            <button className={styles.clearBtn} onClick={() => { setSearch(''); setQuery(''); }}>✕</button>
-          )}
-        </div>
+  const filtered = !!(query || instFilter || resolvedFilter || dates.from || dates.to);
+  const th = (label, col) => <SortTh label={label} col={col} sort={sort} onSort={(c) => setSort((p) => toggleSort(p, c, 'desc'))} />;
 
+  return (
+    <Card clip>
+      <Toolbar>
+        <SearchInput className={toolbarSearchClass} value={query} onSearch={setQuery} placeholder="חיפוש לפי שם, מוסד, מספר הוראה, מייל…" />
         {!showCategory && (
-          <select className={styles.select} value={instFilter} onChange={(e) => setInstFilter(e.target.value)}>
+          <Select value={instFilter} onChange={(e) => setInstFilter(e.target.value)} aria-label="מוסד">
             <option value="">כל המוסדות</option>
             {instOptions.map((name) => <option key={name} value={name}>{name}</option>)}
-          </select>
+          </Select>
         )}
-
-        <select className={styles.select} value={resolvedFilter} onChange={(e) => setResolvedFilter(e.target.value)}>
-          <option value="">הכל</option>
+        <Select value={resolvedFilter} onChange={(e) => setResolvedFilter(e.target.value)} aria-label="סטטוס טיפול">
+          <option value="">כל הסטטוסים</option>
           <option value="false">טרם טופל</option>
           <option value="true">טופל</option>
-        </select>
+        </Select>
+        <DateRange from={dates.from} to={dates.to} onChange={setDates} />
+        <ToolbarSpacer />
+        <ToolbarMeta>{formatNumber(total)} סירובים</ToolbarMeta>
+        <Button icon="download" onClick={handleExport} loading={exporting} disabled={!total}>ייצוא לאקסל</Button>
+        {canSync && <Button icon="refresh" onClick={handleSync} loading={syncing}>סנכרון מהמייל</Button>}
+      </Toolbar>
 
-        <div className={styles.dateRange}>
-          <input className={styles.dateInput} type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
-          <span className={styles.dateSep}>—</span>
-          <input className={styles.dateInput} type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
-          {(dateFrom || dateTo) && (
-            <button className={styles.clearBtn} style={{ position: 'static' }} onClick={() => { setDateFrom(''); setDateTo(''); }}>✕</button>
-          )}
-        </div>
-
-        <span className={styles.count}>סה"כ {total.toLocaleString('he-IL')} סירובים</span>
-
-        <div className={styles.syncArea}>
-          {syncResult && (
-            <span className={syncResult.ok ? styles.syncSuccess : styles.syncError}>
-              {syncResult.message}
-            </span>
-          )}
-          <button className={styles.exportBtn} onClick={handleExport} disabled={exporting || !total}>
-            {exporting ? 'מייצא...' : '⬇ ייצוא אקסל'}
-          </button>
-          {canSync && (
-            <button className={styles.syncBtn} onClick={handleSync} disabled={syncing}>
-              {syncing ? 'מסנכרן...' : 'סנכרן'}
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div className={styles.tableWrap}>
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              <th>טופל</th>
-              <SortTh label="תאריך"       col="created_at"         sort={sort} onSort={handleSort} />
-              <SortTh label="מוסד"        col="institution_name"   sort={sort} onSort={handleSort} />
-              <SortTh label="שם לקוח"     col="customer_name"      sort={sort} onSort={handleSort} />
-              <SortTh label='ת"ז'         col="customer_id_number" sort={sort} onSort={handleSort} />
-              <SortTh label="סכום"        col="amount"             sort={sort} onSort={handleSort} />
-              <SortTh label="סיבת סירוב"  col="error_reason"       sort={sort} onSort={handleSort} />
-              <SortTh label="מספר הוראה"  col="order_number"       sort={sort} onSort={handleSort} />
-              <th>4 ספרות</th>
-              <th>טלפון</th>
-              <th>מייל</th>
+      <Table stackOnMobile busy={loading && data.length > 0}>
+        <thead>
+          <tr>
+            <th>טופל</th>
+            {th('תאריך', 'created_at')}
+            {th('מוסד', 'institution_name')}
+            {th('שם לקוח', 'customer_name')}
+            {th('ת"ז', 'customer_id_number')}
+            {th('סכום', 'amount')}
+            {th('סיבת סירוב', 'error_reason')}
+            {th('מספר הוראה', 'order_number')}
+            <th>4 ספרות</th>
+            <th>טלפון</th>
+            <th>מייל</th>
+          </tr>
+        </thead>
+        <tbody>
+          {loading && !data.length ? (
+            <TableMessage colSpan={11} kind="loading" />
+          ) : errorMsg ? (
+            <TableMessage colSpan={11} kind="error" description={errorMsg} action={<Button size="sm" icon="refresh" onClick={() => load(page)}>נסה שוב</Button>} />
+          ) : !data.length ? (
+            <TableMessage colSpan={11} title="לא נמצאו סירובים" description={filtered ? 'נסה לשנות את החיפוש או המסננים' : undefined} />
+          ) : data.map((row) => (
+            <tr key={row.id ?? row.gmail_message_id} className={row.resolved ? t.rowMuted : undefined}>
+              <td data-label="טופל">
+                {canResolve ? (
+                  <label className={styles.resolve}>
+                    <input
+                      type="checkbox"
+                      checked={!!row.resolved}
+                      disabled={resolvingId === row.id}
+                      onChange={() => handleToggleResolved(row)}
+                    />
+                    <span>{row.resolved ? 'טופל' : 'טרם טופל'}</span>
+                  </label>
+                ) : (
+                  <span className={row.resolved ? t.subtle : undefined}>{row.resolved ? 'טופל' : 'טרם טופל'}</span>
+                )}
+              </td>
+              <td data-label="תאריך" className={t.date}>{formatDate(row.created_at)}</td>
+              <td data-label="מוסד">{(showCategory ? row.category : row.institution_name) ?? '—'}</td>
+              <td data-label="שם לקוח" className={t.strong}>{row.customer_name ?? '—'}</td>
+              <td data-label='ת"ז' className={t.num}>{row.customer_id_number ?? '—'}</td>
+              <td data-label="סכום" className={t.num}>{formatCurrency(row.amount)}</td>
+              <td data-label="סיבת סירוב" className={row.resolved ? undefined : t.danger}>{row.error_reason ?? '—'}</td>
+              <td data-label="מספר הוראה" className={t.mono}>{row.order_number ?? '—'}</td>
+              <td data-label="4 ספרות" className={t.mono}>{row.last4 ?? '—'}</td>
+              <td data-label="טלפון" className={t.num}>{row.donor_phone ?? '—'}</td>
+              <td data-label="מייל" className={t.muted}>{row.donor_email ?? '—'}</td>
             </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={11} className={styles.center}>טוען...</td></tr>
-            ) : errorMsg ? (
-              <tr><td colSpan={11} className={styles.errorMsg}>{errorMsg}</td></tr>
-            ) : !data.length ? (
-              <tr><td colSpan={11} className={styles.center}>אין סירובים</td></tr>
-            ) : data.map((row) => (
-              <tr key={row.id ?? row.gmail_message_id} className={row.resolved ? styles.rowResolved : ''}>
-                <td>
-                  {canResolve ? (
-                    <label className={styles.resolveToggle}>
-                      <input
-                        type="checkbox"
-                        checked={!!row.resolved}
-                        disabled={resolvingId === row.id}
-                        onChange={() => handleToggleResolved(row)}
-                      />
-                      {row.resolved ? '✓ טופל' : 'טרם טופל'}
-                    </label>
-                  ) : (
-                    row.resolved ? '✓ טופל' : 'טרם טופל'
-                  )}
-                </td>
-                <td className={styles.date}>{fmtDate(row.created_at)}</td>
-                <td>{(showCategory ? row.category : row.institution_name) ?? '—'}</td>
-                <td className={styles.name}>{row.customer_name ?? '—'}</td>
-                <td className={styles.muted}>{row.customer_id_number ?? '—'}</td>
-                <td className={styles.amount}>{fmt(row.amount)}</td>
-                <td className={styles.error}>{row.error_reason ?? '—'}</td>
-                <td className={styles.muted}>{row.order_number ?? '—'}</td>
-                <td className={styles.muted}>{row.last4 ?? '—'}</td>
-                <td className={styles.muted}>{row.donor_phone ?? '—'}</td>
-                <td className={styles.muted}>{row.donor_email ?? '—'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+          ))}
+        </tbody>
+      </Table>
 
-      <div className={styles.pagination}>
-        <span className={styles.paginationInfo}>עמוד {page} מתוך {totalPages}</span>
-        <div className={styles.paginationBtns}>
-          <button className={styles.pageBtn} disabled={page <= 1} onClick={() => load(page - 1)}>הקודם</button>
-          <button className={styles.pageBtn} disabled={page >= totalPages} onClick={() => load(page + 1)}>הבא</button>
-        </div>
-      </div>
-    </div>
+      <Pagination page={page} totalPages={totalPages} total={total} itemLabel="סירובים" onPageChange={load} disabled={loading} />
+    </Card>
   );
 }

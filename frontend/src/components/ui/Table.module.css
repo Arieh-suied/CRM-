@@ -29,6 +29,9 @@
   vertical-align: middle;
 }
 
+/* Refetching (page change, new filter) with the old rows still shown */
+.busy tbody { opacity: 0.45; pointer-events: none; transition: opacity 0.15s; }
+
 .table tbody tr:last-child td { border-bottom: none; }
 .table tbody tr { transition: background-color 0.12s; }
 .table tbody tr:hover > td { background: var(--color-surface-hover); }
@@ -139,6 +142,7 @@
 
   .stack tbody tr:not(.messageRow) > td::before {
     content: attr(data-label);
+    font-family: var(--font-sans);
     font-size: var(--text-sm);
     font-weight: 500;
     color: var(--color-text-muted);

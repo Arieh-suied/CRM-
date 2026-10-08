@@ -1,33 +1,34 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase.js';
 import ReceiptModal from '../ReceiptModal/ReceiptModal.jsx';
-import styles from './GrowTransactions.module.css';
-import SortThBase from '../shared/SortTh.jsx';
 import { exportXlsx, dateStamp } from '../../lib/exportXlsx.js';
-
-const SortTh = (props) => <SortThBase className={styles.sortable} {...props} />;
+import { formatCurrency, formatDate, formatNumber } from '../../lib/format.js';
+import {
+  Card, Toolbar, ToolbarSpacer, ToolbarMeta, SearchInput, Select, Button, Badge,
+  Table, SortTh, toggleSort, TableMessage, Pagination, tableStyles as t, toolbarSearchClass, useToast,
+} from '../ui';
 
 const PAGE_SIZE = 50;
 
-const fmt = (n) => {
-  try {
-    return new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 2 }).format(n ?? 0);
-  } catch { return `${n ?? 0} ₪`; }
+const STATUS = {
+  received: { label: 'התקבל', tone: 'neutral' },
+  success:  { label: 'הופקה קבלה', tone: 'success' },
+  failed:   { label: 'נכשל', tone: 'danger' },
 };
 
-const STATUS_LABEL = { received: 'התקבל', success: 'הופקה קבלה', failed: 'נכשל' };
-
 function StatusBadge({ status }) {
-  const cls = status === 'success' ? styles.badgeSuccess : status === 'failed' ? styles.badgeFailed : styles.badgeReceived;
-  return <span className={`${styles.badge} ${cls}`}>{STATUS_LABEL[status] ?? status}</span>;
+  const s = STATUS[status];
+  return <Badge tone={s?.tone ?? 'neutral'} dot>{s?.label ?? status}</Badge>;
 }
 
+const paymentDate = (row) => row.payment_date ?? formatDate(row.created_at);
+
 export default function GrowTransactions() {
+  const toast = useToast();
   const [data, setData]       = useState([]);
   const [total, setTotal]     = useState(0);
   const [page, setPage]       = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [search, setSearch]   = useState('');
   const [query, setQuery]     = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [loading, setLoading] = useState(false);
@@ -35,12 +36,6 @@ export default function GrowTransactions() {
   const [exporting, setExporting] = useState(false);
   const [sort, setSort]       = useState({ col: 'created_at', dir: 'desc' });
   const [receipt, setReceipt] = useState(null);
-
-  const handleSort = useCallback((col) => {
-    setSort((prev) => prev.col === col
-      ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
-      : { col, dir: 'asc' });
-  }, []);
 
   const load = useCallback(async (p = 1) => {
     setLoading(true);
@@ -91,122 +86,97 @@ export default function GrowTransactions() {
         if (!rows || rows.length < CHUNK) break;
       }
       const out = all.map((r) => ({
-        'תאריך':     r.payment_date ?? new Date(r.created_at).toLocaleDateString('he-IL'),
+        'תאריך':     paymentDate(r),
         'תורם':      r.full_name ?? '',
         'מייל':      r.payer_email ?? '',
         'סכום':      r.payment_sum ?? '',
         'אסמכתא':    r.asmachta ?? '',
-        'סטטוס':     STATUS_LABEL[r.status] ?? r.status ?? '',
+        'סטטוס':     STATUS[r.status]?.label ?? r.status ?? '',
         'מס\' קבלה': r.ezcount_doc_number ?? '',
       }));
       if (out.length) await exportXlsx(out, `grow-transactions-${dateStamp()}.xlsx`, 'עסקאות Grow');
-    } catch (e) { alert(`שגיאה בייצוא: ${e.message}`); }
+    } catch (e) { toast.error(`הייצוא נכשל: ${e.message}`); }
     finally { setExporting(false); }
   };
 
+  const th = (label, col) => <SortTh label={label} col={col} sort={sort} onSort={(c) => setSort((p) => toggleSort(p, c))} />;
+
   return (
     <>
-    <div className={styles.wrapper}>
-      <div className={styles.toolbar}>
-        <div className={styles.searchWrap}>
-          <svg className={styles.searchIcon} viewBox="0 0 20 20" fill="none">
-            <circle cx="9" cy="9" r="6" stroke="currentColor" strokeWidth="1.8"/>
-            <path d="M14 14l3 3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
-          </svg>
-          <input
-            className={styles.search}
-            placeholder="חיפוש לפי שם, מייל, אסמכתא..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && setQuery(search)}
-          />
-          {search && <button className={styles.clearBtn} onClick={() => { setSearch(''); setQuery(''); }}>✕</button>}
-        </div>
+      <Card clip>
+        <Toolbar>
+          <SearchInput className={toolbarSearchClass} value={query} onSearch={setQuery} placeholder="חיפוש לפי שם, מייל, אסמכתא…" />
+          <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="סטטוס">
+            <option value="">כל הסטטוסים</option>
+            <option value="success">הופקה קבלה</option>
+            <option value="failed">נכשל</option>
+            <option value="received">התקבל</option>
+          </Select>
+          <ToolbarSpacer />
+          <ToolbarMeta>{formatNumber(total)} עסקאות</ToolbarMeta>
+          <Button icon="download" onClick={exportAll} loading={exporting} disabled={!total}>ייצוא לאקסל</Button>
+        </Toolbar>
 
-        <select className={styles.select} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-          <option value="">כל הסטטוסים</option>
-          <option value="success">הופקה קבלה</option>
-          <option value="failed">נכשל</option>
-          <option value="received">התקבל</option>
-        </select>
-
-        <span className={styles.count}>סה"כ {total.toLocaleString('he-IL')} עסקאות</span>
-
-        <button className={styles.exportBtn} onClick={exportAll} disabled={exporting || !total}>
-          {exporting ? 'מייצא...' : '⬇ ייצוא אקסל'}
-        </button>
-      </div>
-
-      <div className={styles.tableWrap}>
-        <table className={styles.table}>
+        <Table stackOnMobile busy={loading && data.length > 0}>
           <thead>
             <tr>
-              <SortTh label="תאריך"  col="created_at"       sort={sort} onSort={handleSort} />
-              <SortTh label="תורם"   col="full_name"         sort={sort} onSort={handleSort} />
-              <SortTh label="מייל"   col="payer_email"       sort={sort} onSort={handleSort} />
-              <SortTh label="סכום"   col="payment_sum"       sort={sort} onSort={handleSort} />
-              <SortTh label="אסמכתא" col="asmachta"          sort={sort} onSort={handleSort} />
-              <SortTh label="סטטוס"  col="status"            sort={sort} onSort={handleSort} />
+              {th('תאריך', 'created_at')}
+              {th('תורם', 'full_name')}
+              {th('מייל', 'payer_email')}
+              {th('סכום', 'payment_sum')}
+              {th('אסמכתא', 'asmachta')}
+              {th('סטטוס', 'status')}
               <th>קבלה</th>
               <th>שגיאה</th>
             </tr>
           </thead>
           <tbody>
-            {loading ? (
-              <tr><td colSpan={8} className={styles.center}>טוען...</td></tr>
+            {loading && !data.length ? (
+              <TableMessage colSpan={8} kind="loading" />
             ) : errorMsg ? (
-              <tr><td colSpan={8} className={styles.errorMsg}>{errorMsg}</td></tr>
+              <TableMessage colSpan={8} kind="error" description={errorMsg} action={<Button size="sm" icon="refresh" onClick={() => load(page)}>נסה שוב</Button>} />
             ) : !data.length ? (
-              <tr><td colSpan={8} className={styles.center}>אין נתונים</td></tr>
-            ) : data.map((row) => (
-              <tr key={row.id}>
-                <td className={styles.date}>{row.payment_date ?? new Date(row.created_at).toLocaleDateString('he-IL')}</td>
-                <td className={styles.name}>{row.full_name ?? '—'}</td>
-                <td className={styles.muted}>{row.payer_email ?? '—'}</td>
-                <td className={styles.amount}>{fmt(row.payment_sum)}</td>
-                <td className={styles.muted}>{row.asmachta ?? '—'}</td>
-                <td><StatusBadge status={row.status} /></td>
-                <td>
-                  {row.ezcount_response?.pdf_link
-                    ? <button
-                        className={styles.receiptLink}
+              <TableMessage colSpan={8} title="לא נמצאו עסקאות" description={query || statusFilter ? 'נסה לשנות את החיפוש או את הסטטוס' : undefined} />
+            ) : data.map((row) => {
+              const failure = row.status === 'failed'
+                ? (row.ezcount_response?.error || row.ezcount_response?.errMsg || 'שגיאה לא ידועה')
+                : null;
+              return (
+                <tr key={row.id}>
+                  <td data-label="תאריך" className={t.date}>{paymentDate(row)}</td>
+                  <td data-label="תורם" className={t.strong}>{row.full_name ?? '—'}</td>
+                  <td data-label="מייל" className={t.muted}>{row.payer_email ?? '—'}</td>
+                  <td data-label="סכום" className={t.amount}>{formatCurrency(row.payment_sum)}</td>
+                  <td data-label="אסמכתא" className={t.mono}>{row.asmachta ?? '—'}</td>
+                  <td data-label="סטטוס"><StatusBadge status={row.status} /></td>
+                  <td data-label="קבלה">
+                    {row.ezcount_response?.pdf_link ? (
+                      <Button
+                        size="sm"
+                        variant="soft"
+                        icon="receipt"
                         onClick={() => setReceipt({
                           url: row.ezcount_response.pdf_link,
                           title: `קבלה ${row.ezcount_doc_number ?? ''} — ${row.full_name ?? ''}`,
                         })}
                       >
-                        קבלה
-                      </button>
-                    : <span className={styles.muted}>—</span>
-                  }
-                </td>
-                <td className={styles.note}>
-                  {row.status === 'failed'
-                    ? (row.ezcount_response?.error || row.ezcount_response?.errMsg || 'שגיאה לא ידועה')
-                    : '—'}
-                </td>
-              </tr>
-            ))}
+                        {row.ezcount_doc_number ?? 'קבלה'}
+                      </Button>
+                    ) : <span className={t.subtle}>—</span>}
+                  </td>
+                  <td data-label="שגיאה" className={failure ? `${t.danger} ${t.truncate}` : t.subtle} title={failure || undefined}>
+                    {failure ?? '—'}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
-        </table>
-      </div>
+        </Table>
 
-      <div className={styles.pagination}>
-        <span className={styles.paginationInfo}>עמוד {page} מתוך {totalPages}</span>
-        <div className={styles.paginationBtns}>
-          <button className={styles.pageBtn} disabled={page <= 1} onClick={() => load(page - 1)}>הקודם</button>
-          <button className={styles.pageBtn} disabled={page >= totalPages} onClick={() => load(page + 1)}>הבא</button>
-        </div>
-      </div>
-    </div>
+        <Pagination page={page} totalPages={totalPages} total={total} itemLabel="עסקאות" onPageChange={load} disabled={loading} />
+      </Card>
 
-    {receipt && (
-      <ReceiptModal
-        url={receipt.url}
-        title={receipt.title}
-        onClose={() => setReceipt(null)}
-      />
-    )}
+      {receipt && <ReceiptModal url={receipt.url} title={receipt.title} onClose={() => setReceipt(null)} />}
     </>
   );
 }

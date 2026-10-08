@@ -1,161 +1,91 @@
 import { useState } from 'react';
-import styles from './TransactionsTable.module.css';
 import ReceiptModal from '../ReceiptModal/ReceiptModal.jsx';
 import SendEmailModal from '../SendEmailModal/SendEmailModal.jsx';
-
-const COLUMNS = [
-  { key: 'transaction_time_iso', label: 'תאריך' },
-  { key: 'client_name',          label: 'שם תורם' },
-  { key: 'amount',               label: 'סכום' },
-  { key: 'transaction_type',     label: 'סוג עסקה' },
-  { key: 'group_name',           label: 'קבוצה' },
-  { key: 'mosad_number',         label: 'מוסד' },
-  { key: null,                   label: 'קבלה' },
-  { key: null,                   label: 'מייל' },
-];
+import { formatCurrency, formatDateTime } from '../../lib/format.js';
+import { Button, Table, SortTh, TableMessage, Pagination, tableStyles as t } from '../ui';
 
 const EMAIL_ROLES = new Set(['admin', 'editor']);
 
-function SortIcon({ active, dir }) {
-  if (!active) return <span className={styles.sortIcon}>⇅</span>;
-  return <span className={`${styles.sortIcon} ${styles.sortActive}`}>{dir === 'asc' ? '↑' : '↓'}</span>;
-}
+const receiptUrl = (data) => `https://files.ezcount.co.il/front/documents/get/${data}`;
 
-function formatDate(raw, iso) {
-  if (raw) return raw;
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('he-IL', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  });
-}
-
-const VALID_CURRENCIES = new Set(['ILS', 'USD', 'EUR', 'GBP']);
-
-function formatAmount(amount, currency) {
-  if (amount == null) return '—';
-  const code = VALID_CURRENCIES.has(currency) ? currency : 'ILS';
-  return new Intl.NumberFormat('he-IL', {
-    style: 'currency',
-    currency: code,
-    maximumFractionDigits: 2,
-  }).format(amount);
-}
-
-function ReceiptBtn({ receiptData, receiptDocNum, clientName, onPreview }) {
-  if (!receiptData) return <span className={styles.muted}>—</span>;
-  const url = `https://files.ezcount.co.il/front/documents/get/${receiptData}`;
-  return (
-    <button
-      className={styles.receiptLink}
-      onClick={() => onPreview({ url, title: `קבלה ${receiptDocNum ?? ''} — ${clientName ?? ''}` })}
-    >
-      {receiptDocNum || 'קבלה'}
-    </button>
-  );
-}
-
-export default function TransactionsTable({ transactions, institutions, loading, pagination, sort, onSort, onPageChange, role }) {
+// Table + pagination for the עסקאות screen (sits under FiltersBar in one card).
+// Sorting is server-side: `sort` is { sort_by, sort_dir }.
+export default function TransactionsTable({ transactions, institutions, loading, error, onRetry, filtered, pagination, sort, onSort, onPageChange, role }) {
   const [receipt, setReceipt] = useState(null);
   const [emailTx, setEmailTx] = useState(null);
   const canEmail = EMAIL_ROLES.has(role);
-  const institutionMap = Object.fromEntries(
-    institutions.map((i) => [i.mosad_number, i.mosad_name])
-  );
+  const institutionMap = Object.fromEntries(institutions.map((i) => [i.mosad_number, i.mosad_name]));
 
-  if (loading) {
-    return <div className={styles.wrapper}><div className={styles.loading}>טוען נתונים...</div></div>;
-  }
-
-  if (!transactions.length) {
-    return <div className={styles.wrapper}><div className={styles.empty}>לא נמצאו עסקאות</div></div>;
-  }
+  const s = { col: sort.sort_by, dir: sort.sort_dir };
+  const th = (label, col) => <SortTh label={label} col={col} sort={s} onSort={onSort} />;
 
   return (
-    <div className={styles.wrapper}>
-      <div className={styles.tableContainer}>
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              {COLUMNS.map(({ key, label }) => (
-                <th
-                  key={label}
-                  className={key ? styles.sortable : ''}
-                  onClick={key ? () => onSort(key) : undefined}
-                >
-                  <span className={styles.thInner}>
-                    {label}
-                    {key && <SortIcon active={sort.sort_by === key} dir={sort.sort_dir} />}
-                  </span>
-                </th>
-              ))}
+    <>
+      <Table stackOnMobile busy={loading && transactions.length > 0}>
+        <thead>
+          <tr>
+            {th('תאריך', 'transaction_time_iso')}
+            {th('שם תורם', 'client_name')}
+            {th('סכום', 'amount')}
+            {th('סוג עסקה', 'transaction_type')}
+            {th('קבוצה', 'group_name')}
+            {th('מוסד', 'mosad_number')}
+            <th>קבלה</th>
+            <th>מייל</th>
+          </tr>
+        </thead>
+        <tbody>
+          {loading && !transactions.length ? (
+            <TableMessage colSpan={8} kind="loading" title="טוען עסקאות…" />
+          ) : error ? (
+            <TableMessage colSpan={8} kind="error" description={error} action={onRetry && <Button size="sm" icon="refresh" onClick={onRetry}>נסה שוב</Button>} />
+          ) : !transactions.length ? (
+            <TableMessage colSpan={8} title="לא נמצאו עסקאות" description={filtered ? 'נסה לשנות את החיפוש או את המסננים' : undefined} />
+          ) : transactions.map((tx) => (
+            <tr key={tx.id}>
+              <td data-label="תאריך" className={t.date}>{formatDateTime(tx.transaction_time_raw || tx.transaction_time_iso)}</td>
+              <td data-label="שם תורם" className={t.strong}>{tx.client_name || '—'}</td>
+              <td data-label="סכום" className={t.amount}>{formatCurrency(tx.amount, tx.currency)}</td>
+              <td data-label="סוג עסקה">{tx.transaction_type || '—'}</td>
+              <td data-label="קבוצה" className={t.muted}>{tx.group_name || '—'}</td>
+              <td data-label="מוסד">{institutionMap[tx.mosad_number] || tx.mosad_number || '—'}</td>
+              <td data-label="קבלה">
+                {tx.receipt_data ? (
+                  <Button
+                    size="sm"
+                    variant="soft"
+                    icon="receipt"
+                    onClick={() => setReceipt({ url: receiptUrl(tx.receipt_data), title: `קבלה ${tx.receipt_doc_num ?? ''} — ${tx.client_name ?? ''}` })}
+                  >
+                    {tx.receipt_doc_num || 'קבלה'}
+                  </Button>
+                ) : <span className={t.subtle}>—</span>}
+              </td>
+              <td data-label="מייל">
+                {canEmail && tx.email ? (
+                  <Button size="sm" variant="ghost" icon="mail" onClick={() => setEmailTx(tx)} title={`שליחת מייל אל ${tx.email}`}>
+                    שליחה
+                  </Button>
+                ) : <span className={t.subtle}>—</span>}
+              </td>
             </tr>
-          </thead>
-          <tbody>
-            {transactions.map((tx) => (
-              <tr key={tx.id}>
-                <td className={styles.date}>{formatDate(tx.transaction_time_raw, tx.transaction_time_iso)}</td>
-                <td className={styles.name}>{tx.client_name || '—'}</td>
-                <td className={styles.amount}>{formatAmount(tx.amount, tx.currency)}</td>
-                <td>{tx.transaction_type || '—'}</td>
-                <td>{tx.group_name || '—'}</td>
-                <td>{institutionMap[tx.mosad_number] || tx.mosad_number || '—'}</td>
-                <td>
-                  <ReceiptBtn
-                    receiptData={tx.receipt_data}
-                    receiptDocNum={tx.receipt_doc_num}
-                    clientName={tx.client_name}
-                    onPreview={setReceipt}
-                  />
-                </td>
-                <td>
-                  {canEmail && tx.email ? (
-                    <button
-                      className={styles.receiptLink}
-                      onClick={() => setEmailTx(tx)}
-                      title={`שלח מייל אל ${tx.email}`}
-                    >
-                      ✉ שלח
-                    </button>
-                  ) : (
-                    <span className={styles.muted}>—</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+          ))}
+        </tbody>
+      </Table>
 
-      <div className={styles.pagination}>
-        <span className={styles.paginationInfo}>
-          עמוד {pagination.page} מתוך {pagination.totalPages} | סה"כ {pagination.total.toLocaleString('he-IL')} עסקאות
-        </span>
-        <div className={styles.paginationButtons}>
-          <button className={styles.pageBtn} disabled={pagination.page <= 1} onClick={() => onPageChange(pagination.page - 1)}>
-            הקודם
-          </button>
-          <button className={styles.pageBtn} disabled={pagination.page >= pagination.totalPages} onClick={() => onPageChange(pagination.page + 1)}>
-            הבא
-          </button>
-        </div>
-      </div>
+      <Pagination
+        page={pagination.page}
+        totalPages={pagination.totalPages}
+        total={pagination.total}
+        itemLabel="עסקאות"
+        onPageChange={onPageChange}
+        disabled={loading}
+      />
 
-      {receipt && (
-        <ReceiptModal
-          url={receipt.url}
-          title={receipt.title}
-          onClose={() => setReceipt(null)}
-        />
-      )}
-
+      {receipt && <ReceiptModal url={receipt.url} title={receipt.title} onClose={() => setReceipt(null)} />}
       {emailTx && (
-        <SendEmailModal
-          tx={emailTx}
-          institutionName={institutionMap[emailTx.mosad_number]}
-          onClose={() => setEmailTx(null)}
-        />
+        <SendEmailModal tx={emailTx} institutionName={institutionMap[emailTx.mosad_number]} onClose={() => setEmailTx(null)} />
       )}
-    </div>
+    </>
   );
 }

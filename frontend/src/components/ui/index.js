@@ -4,7 +4,7 @@ export { Button, IconButton, Spinner, buttonClass } from './Button.jsx';
 export { Field, Input, Select, Textarea, Checkbox, SearchInput, DateRange, formStyles } from './Form.jsx';
 export {
   Card, CardHeader, Stack, Toolbar, ToolbarSpacer, ToolbarDivider, ToolbarMeta, toolbarSearchClass,
-  SegmentedControl, Badge, Alert, StateMessage, SectionTitle, layoutStyles,
+  SegmentedControl, ChipGroup, Badge, Alert, StateMessage, SectionTitle, StatGrid, Stat, InfoGrid, layoutStyles,
 } from './Layout.jsx';
 export { Table, SortTh, sortRows, toggleSort, TableMessage, Pagination, rowActivation, tableStyles } from './Table.jsx';
 export { Modal, ToastProvider, useToast, DialogProvider, useConfirm, usePrompt } from './Overlay.jsx';

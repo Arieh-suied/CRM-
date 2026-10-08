@@ -1,219 +1,132 @@
-import { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
-import { createPortal } from 'react-dom';
+import { useState, useEffect, useCallback } from 'react';
 import styles from './StandingOrders.module.css';
 import { fetchStandingOrders, exportCreditOrders, exportBankOrders, authFetch } from '../../services/api.js';
 import { filterRowsByDateRange, exportAoaXlsx } from '../../lib/exportXlsx.js';
+import { formatCurrency, toInputDate } from '../../lib/format.js';
 import CreditModal from './CreditModal.jsx';
 import BankModal from './BankModal.jsx';
-import SortThBase, { sortRows } from '../shared/SortTh.jsx';
 import { useAuth } from '../../contexts/AuthContext.jsx';
-
-const SortTh = (props) => <SortThBase className={styles.sortable} {...props} />;
-
-const fmt = (n, currency = 'ILS') => {
-  try { return new Intl.NumberFormat('he-IL', { style: 'currency', currency, maximumFractionDigits: 2 }).format(n ?? 0); }
-  catch { return `${n ?? 0} ${currency}`; }
-};
+import {
+  Card, Stack, Toolbar, ToolbarSpacer, SearchInput, Select, SegmentedControl, Button, Badge,
+  StateMessage, StatGrid, Stat, Table, SortTh, sortRows, toggleSort, TableMessage, rowActivation,
+  tableStyles as t, toolbarSearchClass, Popover, MenuItem, MenuCheckbox, MenuLabel, MenuDivider, MenuSection,
+  DateRange, useToast,
+} from '../ui';
 
 function parseExpiry(raw) {
   if (!raw || raw.length < 4) return raw ?? '—';
   return `${raw.slice(0, 2)}/${raw.slice(2, 4)}`;
 }
 
-function SummaryBar({ totalMonth, totalYear }) {
-  return (
-    <div className={styles.summaryBar}>
-      <div className={styles.summaryCard}>
-        <span className={styles.summaryLabel}>סה"כ חודשי (פעיל)</span>
-        <span className={styles.summaryValue}>{fmt(totalMonth)}</span>
-      </div>
-      <div className={styles.summaryCard}>
-        <span className={styles.summaryLabel}>צפי 12 חודשים</span>
-        <span className={styles.summaryValue}>{fmt(totalYear)}</span>
-      </div>
-    </div>
-  );
-}
+const amountOf = (v) => (v ? formatCurrency(parseFloat(v)) : '—');
 
-function CreditTable({ rows, mosadNumber, onRefresh, canOpen }) {
-  const [sort, setSort]           = useState({ col: null, dir: 'asc' });
-  const [selectedId, setSelectedId] = useState(null);
-
-  const handleSort = useCallback((col) => {
-    setSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' });
-  }, []);
-
-  if (!rows?.length) return <p className={styles.empty}>אין הוראות קבע אשראי</p>;
+function CreditTable({ rows, sort, onSort, onOpen }) {
   const sorted = sortRows(rows, sort.col, sort.dir);
-
+  const th = (label, col) => <SortTh label={label} col={col} sort={sort} onSort={onSort} />;
   return (
-    <>
-      <div className={styles.tableWrap}>
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              <SortTh label="#"              col="DT_RowId" sort={sort} onSort={handleSort} />
-              <SortTh label="שם מלא"         col="2"        sort={sort} onSort={handleSort} />
-              <SortTh label="סכום"           col="4"        sort={sort} onSort={handleSort} />
-              <SortTh label="קטגוריה"        col="5"        sort={sort} onSort={handleSort} />
-              <SortTh label="חיוב הבא"       col="9"        sort={sort} onSort={handleSort} />
-              <SortTh label="יתרת חיובים"    col="7"        sort={sort} onSort={handleSort} />
-              <SortTh label="חיובים בוצעו"   col="8"        sort={sort} onSort={handleSort} />
-              <SortTh label="4 ספרות"        col="11"       sort={sort} onSort={handleSort} />
-              <SortTh label="תוקף"           col="12"       sort={sort} onSort={handleSort} />
-              <SortTh label="סטטוס"          col="10"       sort={sort} onSort={handleSort} />
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map(row => (
-              <tr
-                key={row.DT_RowId}
-                className={canOpen ? styles.clickableRow : ''}
-                onClick={canOpen ? () => setSelectedId(row.DT_RowId) : undefined}
-              >
-                <td className={styles.muted}>{row.DT_RowId}</td>
-                <td className={styles.name}>{row['2'] ?? '—'}</td>
-                <td className={styles.amount}>{row['4'] ? fmt(parseFloat(row['4'])) : '—'}</td>
-                <td className={styles.muted}>{row['5'] ?? '—'}</td>
-                <td className={styles.date}>{row['9'] ?? '—'}</td>
-                <td className={styles.muted}>{row['7'] ?? '—'}</td>
-                <td className={styles.muted}>{row['8'] ?? '—'}</td>
-                <td className={styles.muted}>{row['11'] ? `****${row['11']}` : '—'}</td>
-                <td className={styles.muted}>{parseExpiry(row['12'])}</td>
-                <td className={row['10'] ? styles.error : styles.active}>{row['10'] || 'פעיל'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {canOpen && selectedId && (
-        <CreditModal
-          kevaId={selectedId}
-          mosadNumber={mosadNumber}
-          onClose={() => setSelectedId(null)}
-          onRefresh={onRefresh}
-        />
-      )}
-    </>
+    <Table stackOnMobile>
+      <thead>
+        <tr>
+          {th('#', 'DT_RowId')}{th('שם מלא', '2')}{th('סכום', '4')}{th('קטגוריה', '5')}{th('חיוב הבא', '9')}
+          {th('יתרת חיובים', '7')}{th('חיובים בוצעו', '8')}{th('4 ספרות', '11')}{th('תוקף', '12')}{th('סטטוס', '10')}
+        </tr>
+      </thead>
+      <tbody>
+        {!sorted.length ? (
+          <TableMessage colSpan={10} title="אין הוראות קבע באשראי" description="נסה לשנות את החיפוש" />
+        ) : sorted.map((row) => (
+          <tr key={row.DT_RowId} {...(onOpen ? rowActivation(() => onOpen(row.DT_RowId)) : {})}>
+            <td data-label="#" className={t.mono}>{row.DT_RowId}</td>
+            <td data-label="שם" className={t.strong}>{row['2'] ?? '—'}</td>
+            <td data-label="סכום" className={t.amount}>{amountOf(row['4'])}</td>
+            <td data-label="קטגוריה" className={t.muted}>{row['5'] ?? '—'}</td>
+            <td data-label="חיוב הבא" className={t.date}>{row['9'] ?? '—'}</td>
+            <td data-label="יתרת חיובים" className={t.muted}>{row['7'] ?? '—'}</td>
+            <td data-label="חיובים בוצעו" className={t.num}>{row['8'] ?? '—'}</td>
+            <td data-label="4 ספרות" className={t.mono}>{row['11'] ? `****${row['11']}` : '—'}</td>
+            <td data-label="תוקף" className={t.num}>{parseExpiry(row['12'])}</td>
+            <td data-label="סטטוס">
+              {row['10'] ? <Badge tone="danger" title={row['10']}>{row['10']}</Badge> : <Badge tone="success" dot>פעיל</Badge>}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </Table>
   );
 }
 
-function BankTable({ rows, mosadNumber, onRefresh, canOpen }) {
-  const [sort, setSort]           = useState({ col: null, dir: 'asc' });
-  const [selectedId, setSelectedId] = useState(null);
+// Bank rows (GetMasavKevaNew) have no dedicated status column — Nedarim
+// overloads the "חיוב הבא" (next-charge, column 4) field with the status text
+// whenever the order isn't actively charging, e.g. "מוקפא" or "נדחה ע"י הבנק
+// (א) נדחה | פנה ללקוח 28/08/26". A real next-charge value is just a date.
+const isDateLike = (v) => /^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(String(v ?? '').trim());
 
-  const handleSort = useCallback((col) => {
-    setSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' });
-  }, []);
+const BANK_STATUS_RULES = [
+  { key: 'active',             label: 'פעילה',                                            tone: 'success', test: (v) => isDateLike(v) },
+  { key: 'rejected_cancelled', label: 'נדחה ע"י הבנק (א) בוטל ע"י הלקוח | פנה ללקוח',       tone: 'danger',  test: (v) => v.includes('בוטל ע"י הלקוח') },
+  { key: 'rejected',           label: 'נדחה ע"י הבנק (א) נדחה | פנה ללקוח',                 tone: 'danger',  test: (v) => v.startsWith('נדחה ע"י הבנק') },
+  { key: 'sent',               label: 'הטופס נשלח לבנק',                                    tone: 'primary', test: (v) => v.startsWith('הטופס נשלח לבנק') },
+  { key: 'inactive',           label: 'לא פעיל - אין יתרת חיובים',                          tone: 'neutral', test: (v) => v.startsWith('לא פעיל') },
+  { key: 'frozen',             label: 'מוקפא',                                             tone: 'warning', test: (v) => v.startsWith('מוקפא') },
+];
 
-  if (!rows?.length) return <p className={styles.empty}>אין הוראות קבע בנקאיות</p>;
+function classifyBankStatus(rawNextCharge) {
+  const v = String(rawNextCharge ?? '').trim();
+  if (!v) return { key: 'unknown', label: 'לא ידוע', tone: 'neutral' };
+  const rule = BANK_STATUS_RULES.find((r) => r.test(v));
+  return rule ? { key: rule.key, label: rule.label, tone: rule.tone } : { key: 'other', label: v, tone: 'neutral' };
+}
+
+function NextChargeCell({ raw }) {
+  if (!raw) return '—';
+  if (isDateLike(raw)) return raw;
+  const s = classifyBankStatus(raw);
+  return <Badge tone={s.tone} title={raw}>{raw}</Badge>;
+}
+
+function BankTable({ rows, sort, onSort, onOpen }) {
   const sorted = sortRows(rows, sort.col, sort.dir);
-
+  const th = (label, col) => <SortTh label={label} col={col} sort={sort} onSort={onSort} />;
   return (
-    <>
-      <div className={styles.tableWrap}>
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              <SortTh label="#"             col="DT_RowId" sort={sort} onSort={handleSort} />
-              <SortTh label="שם לקוח"       col="2"        sort={sort} onSort={handleSort} />
-              <SortTh label="פרטי חשבון"    col="3"        sort={sort} onSort={handleSort} />
-              <SortTh label="סכום חודשי"    col="6"        sort={sort} onSort={handleSort} />
-              <SortTh label="חיוב הבא"      col="4"        sort={sort} onSort={handleSort} />
-              <SortTh label="יתרת חיובים"   col="5"        sort={sort} onSort={handleSort} />
-              <SortTh label="קטגוריה"       col="7"        sort={sort} onSort={handleSort} />
-              <SortTh label="הערה"          col="8"        sort={sort} onSort={handleSort} />
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map(row => (
-              <tr
-                key={row.DT_RowId}
-                className={canOpen ? styles.clickableRow : ''}
-                onClick={canOpen ? () => setSelectedId(row.DT_RowId) : undefined}
-              >
-                <td className={styles.muted}>{row.DT_RowId}</td>
-                <td className={styles.name}>{row['2'] ?? '—'}</td>
-                <td className={styles.muted}>{row['3'] ?? '—'}</td>
-                <td className={styles.amount}>{row['6'] ? fmt(parseFloat(row['6'])) : '—'}</td>
-                <td className={styles.date}>{row['4'] ?? '—'}</td>
-                <td className={styles.muted}>{row['5'] ?? '—'}</td>
-                <td className={styles.muted}>{row['7'] ?? '—'}</td>
-                <td className={styles.note}>{row['8'] ?? '—'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {canOpen && selectedId && (
-        <BankModal
-          masavId={selectedId}
-          mosadNumber={mosadNumber}
-          onClose={() => setSelectedId(null)}
-          onRefresh={onRefresh}
-        />
-      )}
-    </>
+    <Table stackOnMobile>
+      <thead>
+        <tr>
+          {th('#', 'DT_RowId')}{th('שם לקוח', '2')}{th('פרטי חשבון', '3')}{th('סכום חודשי', '6')}
+          {th('חיוב הבא / סטטוס', '4')}{th('יתרת חיובים', '5')}{th('קטגוריה', '7')}{th('הערה', '8')}
+        </tr>
+      </thead>
+      <tbody>
+        {!sorted.length ? (
+          <TableMessage colSpan={8} title="אין הוראות קבע בנקאיות" description="נסה לשנות את החיפוש או המסננים" />
+        ) : sorted.map((row) => (
+          <tr key={row.DT_RowId} {...(onOpen ? rowActivation(() => onOpen(row.DT_RowId)) : {})}>
+            <td data-label="#" className={t.mono}>{row.DT_RowId}</td>
+            <td data-label="שם" className={t.strong}>{row['2'] ?? '—'}</td>
+            <td data-label="חשבון" className={t.num}>{row['3'] ?? '—'}</td>
+            <td data-label="סכום" className={t.amount}>{amountOf(row['6'])}</td>
+            <td data-label="חיוב הבא" className={t.date}><NextChargeCell raw={row['4']} /></td>
+            <td data-label="יתרת חיובים" className={t.muted}>{row['5'] ?? '—'}</td>
+            <td data-label="קטגוריה" className={t.muted}>{row['7'] ?? '—'}</td>
+            <td data-label="הערה" className={`${t.muted} ${t.truncate}`} title={row['8'] || undefined}>{row['8'] || '—'}</td>
+          </tr>
+        ))}
+      </tbody>
+    </Table>
   );
-}
-
-// Dropdown panels (export menu, filter menus) render into a portal on <body>
-// instead of as a normal descendant — .wrapper has overflow:hidden and clips
-// to its own content height, which shrinks the moment a filter narrows the
-// table underneath, silently cutting the panel off mid-list. Positioning via
-// the toggle button's own screen rect (recomputed on scroll/resize) sidesteps
-// that entirely.
-function useDropdownPanel() {
-  const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState(null);
-  const btnRef = useRef(null);
-  const panelRef = useRef(null);
-
-  useLayoutEffect(() => {
-    if (!open || !btnRef.current) return;
-    const update = () => {
-      const r = btnRef.current.getBoundingClientRect();
-      setPos({ top: r.bottom + 4, right: window.innerWidth - r.right });
-    };
-    update();
-    window.addEventListener('scroll', update, true);
-    window.addEventListener('resize', update);
-    return () => {
-      window.removeEventListener('scroll', update, true);
-      window.removeEventListener('resize', update);
-    };
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onMouseDown = (e) => {
-      if (btnRef.current?.contains(e.target) || panelRef.current?.contains(e.target)) return;
-      setOpen(false);
-    };
-    document.addEventListener('mousedown', onMouseDown);
-    return () => document.removeEventListener('mousedown', onMouseDown);
-  }, [open]);
-
-  return { open, setOpen, pos, btnRef, panelRef };
 }
 
 function monthRange(offset = 0) {
   const now = new Date();
   const first = new Date(now.getFullYear(), now.getMonth() + offset, 1);
   const last  = offset === 0 ? now : new Date(now.getFullYear(), now.getMonth() + offset + 1, 0);
-  const str = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  return { from: str(first), to: str(last) };
+  return { from: toInputDate(first), to: toInputDate(last) };
 }
 
 function ExportMenu({ mosadNumber, type }) {
-  const { open, setOpen, pos, btnRef, panelRef } = useDropdownPanel();
-  const [exporting, setExp]   = useState(false);
-  const [dateFrom, setFrom]   = useState('');
-  const [dateTo, setTo]       = useState('');
-
-  const hasRange = !!(dateFrom || dateTo);
+  const toast = useToast();
+  const [exporting, setExporting] = useState(false);
+  const [range, setRange] = useState({ from: '', to: '' });
+  const hasRange = !!(range.from || range.to);
 
   // Nedarim+ can't filter its credit CSVs by date, so when a range is chosen
   // we download the full CSV, filter the rows locally, and save as Excel.
@@ -235,64 +148,67 @@ function ExportMenu({ mosadNumber, type }) {
       const m = /^="(.*)"$/.exec(String(c ?? '').trim());
       return m ? m[1] : (typeof c === 'string' ? c.trim() : c);
     }));
-    const rows = filterRowsByDateRange(aoa, dateFrom, dateTo);
+    const rows = filterRowsByDateRange(aoa, range.from, range.to);
     if (!rows) throw new Error('לא זוהתה עמודת תאריך בקובץ — ייצא ללא סינון');
     if (rows.length <= 1) throw new Error('אין שורות בטווח התאריכים שנבחר');
-    await exportAoaXlsx(rows, `credit-${exportType}-${mosadNumber}-${dateFrom || 'start'}-${dateTo || 'today'}.xlsx`);
+    await exportAoaXlsx(rows, `credit-${exportType}-${mosadNumber}-${range.from || 'start'}-${range.to || 'today'}.xlsx`);
   };
 
-  const doExport = async (exportType) => {
-    setExp(true);
+  const doExport = async (exportType, close) => {
+    setExporting(true);
+    close();
     try {
       if (type === 'credit') {
         if (hasRange) await exportCreditFiltered(exportType);
         else await exportCreditOrders(mosadNumber, exportType);
+      } else {
+        await exportBankOrders(mosadNumber, exportType, range.from, range.to);
       }
-      else await exportBankOrders(mosadNumber, exportType, dateFrom, dateTo);
-    } catch (e) { alert(`שגיאה: ${e.message}`); }
-    setExp(false); setOpen(false);
+    } catch (e) {
+      toast.error(`הייצוא נכשל: ${e.message}`);
+    }
+    setExporting(false);
   };
 
+  const suffix = hasRange ? 'Excel מסונן' : 'CSV';
+
   return (
-    <div style={{ position: 'relative' }}>
-      <button ref={btnRef} className={styles.typeTab} onClick={() => setOpen(p => !p)} disabled={exporting}>
-        {exporting ? 'מייצא...' : 'ייצוא ▾'}
-      </button>
-      {open && pos && createPortal(
-        <div ref={panelRef} className={styles.exportMenu} style={{ position: 'fixed', top: pos.top, right: pos.right }}>
-          {type === 'credit' ? (
-            <>
-              <div className={styles.exportDateRow}>
-                <span>סינון:</span>
-                <input type="date" value={dateFrom} onChange={e => setFrom(e.target.value)} className={styles.dateInput} />
-                <span>עד</span>
-                <input type="date" value={dateTo} onChange={e => setTo(e.target.value)} className={styles.dateInput} />
-              </div>
-              <div className={styles.exportPresets}>
-                <button onClick={() => { const r = monthRange(0);  setFrom(r.from); setTo(r.to); }}>החודש</button>
-                <button onClick={() => { const r = monthRange(-1); setFrom(r.from); setTo(r.to); }}>חודש שעבר</button>
-                {hasRange && <button onClick={() => { setFrom(''); setTo(''); }}>✕ נקה</button>}
-              </div>
-              <button onClick={() => doExport('orders')}>הוראות קבע {hasRange ? '(Excel מסונן)' : '(CSV)'}</button>
-              <button onClick={() => doExport('business')}>עסקים {hasRange ? '(Excel מסונן)' : '(CSV)'}</button>
-              <button onClick={() => doExport('refusals')}>סירובים {hasRange ? '(Excel מסונן)' : '(CSV)'}</button>
-            </>
-          ) : (
-            <>
-              <button onClick={() => doExport('orders')}>הוראות קבע (CSV)</button>
-              <div className={styles.exportDateRow}>
-                <span>היסטוריה:</span>
-                <input type="date" value={dateFrom} onChange={e => setFrom(e.target.value)} className={styles.dateInput} />
-                <span>עד</span>
-                <input type="date" value={dateTo} onChange={e => setTo(e.target.value)} className={styles.dateInput} />
-                <button onClick={() => doExport('history')} disabled={!dateFrom || !dateTo}>ייצא</button>
-              </div>
-            </>
-          )}
-        </div>,
-        document.body
+    <Popover
+      trigger={({ ref, toggle, open }) => (
+        <Button ref={ref} icon="download" iconEnd="chevronDown" onClick={toggle} loading={exporting} aria-expanded={open}>
+          ייצוא
+        </Button>
       )}
-    </div>
+    >
+      {({ close }) => (type === 'credit' ? (
+        <>
+          <MenuLabel>סינון לפי תאריכים (לא חובה)</MenuLabel>
+          <MenuSection>
+            <DateRange from={range.from} to={range.to} onChange={setRange} />
+            <div className={styles.presets}>
+              <Button size="sm" variant="ghost" onClick={() => setRange(monthRange(0))}>החודש</Button>
+              <Button size="sm" variant="ghost" onClick={() => setRange(monthRange(-1))}>חודש שעבר</Button>
+            </div>
+          </MenuSection>
+          <MenuDivider />
+          <MenuItem icon="sheet" onClick={() => doExport('orders', close)}>הוראות קבע ({suffix})</MenuItem>
+          <MenuItem icon="sheet" onClick={() => doExport('business', close)}>עסקים ({suffix})</MenuItem>
+          <MenuItem icon="sheet" onClick={() => doExport('refusals', close)}>סירובים ({suffix})</MenuItem>
+        </>
+      ) : (
+        <>
+          <MenuItem icon="sheet" onClick={() => doExport('orders', close)}>הוראות קבע (CSV)</MenuItem>
+          <MenuDivider />
+          <MenuLabel>היסטוריית חיובים לפי תאריכים</MenuLabel>
+          <MenuSection>
+            <DateRange from={range.from} to={range.to} onChange={setRange} />
+            <Button size="sm" variant="primary" icon="download" disabled={!range.from || !range.to} onClick={() => doExport('history', close)}>
+              ייצוא היסטוריה
+            </Button>
+          </MenuSection>
+        </>
+      ))}
+    </Popover>
   );
 }
 
@@ -306,56 +222,27 @@ function filterRows(rows, q) {
   );
 }
 
-// Bank rows (GetMasavKevaNew) have no dedicated status column — Nedarim
-// overloads the "חיוב הבא" (next-charge, column 4) field with the status text
-// whenever the order isn't actively charging, e.g. "מוקפא" or "נדחה ע"י הבנק
-// (א) נדחה | פנה ללקוח 28/08/26". A real next-charge value is just a date.
-const isDateLike = (v) => /^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(String(v ?? '').trim());
-
-const BANK_STATUS_RULES = [
-  { key: 'active',             label: 'פעילה',                                            test: (v) => isDateLike(v) },
-  { key: 'rejected_cancelled', label: 'נדחה ע"י הבנק (א) בוטל ע"י הלקוח | פנה ללקוח',       test: (v) => v.includes('בוטל ע"י הלקוח') },
-  { key: 'rejected',           label: 'נדחה ע"י הבנק (א) נדחה | פנה ללקוח',                 test: (v) => v.startsWith('נדחה ע"י הבנק') },
-  { key: 'sent',               label: 'הטופס נשלח לבנק',                                    test: (v) => v.startsWith('הטופס נשלח לבנק') },
-  { key: 'inactive',           label: 'לא פעיל - אין יתרת חיובים',                          test: (v) => v.startsWith('לא פעיל') },
-  { key: 'frozen',             label: 'מוקפא',                                             test: (v) => v.startsWith('מוקפא') },
-];
-
-function classifyBankStatus(rawNextCharge) {
-  const v = String(rawNextCharge ?? '').trim();
-  if (!v) return { key: 'unknown', label: 'לא ידוע' };
-  const rule = BANK_STATUS_RULES.find((r) => r.test(v));
-  return rule ? { key: rule.key, label: rule.label } : { key: 'other', label: v };
-}
-
-// Multi-select checkbox dropdown used for the status / category filters on
-// the bank table — checking an option narrows the list, none checked = show all.
-function FilterDropdown({ label, options, selected, onToggle, onShowAll }) {
-  const { open, setOpen, pos, btnRef, panelRef } = useDropdownPanel();
+// Multi-select checkbox dropdown for the status / category filters on the bank
+// table — checking an option narrows the list, none checked = show all.
+function FilterMenu({ label, options, selected, onToggle, onShowAll }) {
   const activeCount = selected.size;
-
   return (
-    <div style={{ position: 'relative' }}>
-      <button ref={btnRef} className={`${styles.typeTab} ${activeCount ? styles.typeTabActive : ''}`} onClick={() => setOpen((p) => !p)}>
-        {label}{activeCount ? ` (${activeCount})` : ''} ▾
-      </button>
-      {open && pos && createPortal(
-        <div ref={panelRef} className={styles.exportMenu} style={{ position: 'fixed', top: pos.top, right: pos.right, maxHeight: 320, overflowY: 'auto' }}>
-          <label className={`${styles.filterDropdownRow} ${styles.filterDropdownHeader}`}>
-            <span>הצג הכל</span>
-            <input type="checkbox" checked={activeCount === 0} onChange={onShowAll} />
-          </label>
-          {options.map((opt) => (
-            <label key={opt.key} className={styles.filterDropdownRow}>
-              <span>{opt.label} ({opt.count})</span>
-              <input type="checkbox" checked={selected.has(opt.key)} onChange={() => onToggle(opt.key)} />
-            </label>
-          ))}
-          {!options.length && <span style={{ padding: '7px 12px', fontSize: 12, color: 'var(--color-text-muted)' }}>אין נתונים</span>}
-        </div>,
-        document.body
+    <Popover
+      trigger={({ ref, toggle, open }) => (
+        <Button ref={ref} variant={activeCount ? 'soft' : 'secondary'} icon="filter" iconEnd="chevronDown" onClick={toggle} aria-expanded={open}>
+          {label}{activeCount ? ` (${activeCount})` : ''}
+        </Button>
       )}
-    </div>
+    >
+      <MenuCheckbox checked={activeCount === 0} onChange={onShowAll}>הצג הכל</MenuCheckbox>
+      <MenuDivider />
+      {options.map((opt) => (
+        <MenuCheckbox key={opt.key} checked={selected.has(opt.key)} onChange={() => onToggle(opt.key)} count={opt.count}>
+          {opt.label}
+        </MenuCheckbox>
+      ))}
+      {!options.length && <MenuSection>אין נתונים</MenuSection>}
+    </Popover>
   );
 }
 
@@ -371,6 +258,8 @@ function buildFilterOptions(rows, getEntry) {
   return [...counts.values()].sort((a, b) => a.label.localeCompare(b.label, 'he'));
 }
 
+const toggleInSet = (key) => (prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; };
+
 export default function StandingOrders({ institutions }) {
   const { role } = useAuth();
   const canOpen = role !== 'institution'; // detail/edit modals write via server actions that are staff-only anyway
@@ -383,8 +272,12 @@ export default function StandingOrders({ institutions }) {
   const [search, setSearch]           = useState('');
   const [statusFilter, setStatusFilter]     = useState(() => new Set());
   const [categoryFilter, setCategoryFilter] = useState(() => new Set());
+  const [creditSort, setCreditSort]   = useState({ col: null, dir: 'asc' });
+  const [bankSort, setBankSort]       = useState({ col: null, dir: 'asc' });
+  const [openCredit, setOpenCredit]   = useState(null);
+  const [openBank, setOpenBank]       = useState(null);
 
-  const eligibleInstitutions = (institutions ?? []).filter(i => i.has_api_password);
+  const eligibleInstitutions = (institutions ?? []).filter((i) => i.has_api_password);
 
   // Institution role always has exactly one eligible institution (their own,
   // scoped server-side) — pick it automatically instead of making them choose.
@@ -398,8 +291,8 @@ export default function StandingOrders({ institutions }) {
     if (!mosadFilter) { setCreditData(null); setBankData(null); return; }
     setLoading(true); setErrorMsg('');
     fetchStandingOrders(mosadFilter)
-      .then(res => { setCreditData(res.credit ?? null); setBankData(res.bank ?? null); })
-      .catch(e => setErrorMsg(e.message))
+      .then((res) => { setCreditData(res.credit ?? null); setBankData(res.bank ?? null); })
+      .catch((e) => setErrorMsg(e.message))
       .finally(() => setLoading(false));
   }, [mosadFilter]);
 
@@ -408,8 +301,8 @@ export default function StandingOrders({ institutions }) {
   // New institution / dataset — stale filter selections would just hide everything.
   useEffect(() => { setStatusFilter(new Set()); setCategoryFilter(new Set()); }, [mosadFilter]);
 
-  const creditRows   = filterRows(creditData?.data ?? [], search.trim());
-  const bankSearched = filterRows(bankData?.data ?? [], search.trim());
+  const creditRows   = filterRows(creditData?.data ?? [], search);
+  const bankSearched = filterRows(bankData?.data ?? [], search);
 
   const bankStatusOptions   = buildFilterOptions(bankSearched, (row) => classifyBankStatus(row['4']));
   const bankCategoryOptions = buildFilterOptions(bankSearched, (row) => {
@@ -426,91 +319,78 @@ export default function StandingOrders({ institutions }) {
     return true;
   });
 
-  const toggleStatusFilter   = (key) => setStatusFilter((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
-  const toggleCategoryFilter = (key) => setCategoryFilter((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
+  const ready = mosadFilter && !loading && !errorMsg;
+  const typeError = activeType === 'credit' ? creditData?.error : bankData?.error;
 
   return (
-    <div className={styles.wrapper}>
-      <div className={styles.toolbar}>
-        {role !== 'institution' && (
-          <select className={styles.select} value={mosadFilter} onChange={e => setMosadFilter(e.target.value)}>
-            <option value="">בחר מוסד</option>
-            {eligibleInstitutions.map(i => (
-              <option key={i.mosad_number} value={i.mosad_number}>{i.mosad_name}</option>
-            ))}
-          </select>
-        )}
+    <Stack>
+      {ready && activeType === 'credit' && creditData && !creditData.error && (
+        <StatGrid>
+          <Stat label='סה"כ חודשי (הוראות פעילות)' value={formatCurrency(creditData.TotalMonth ?? 0)} tone="success" />
+          <Stat label="צפי ל-12 חודשים" value={formatCurrency(creditData.TotalYear ?? 0)} />
+        </StatGrid>
+      )}
 
-        {mosadFilter && !loading && (
-          <>
-            <div className={styles.searchWrap}>
-              <svg className={styles.searchIcon} viewBox="0 0 20 20" fill="none">
-                <circle cx="9" cy="9" r="6" stroke="currentColor" strokeWidth="1.8"/>
-                <path d="M14 14l3 3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
-              </svg>
-              <input
-                className={styles.search}
-                placeholder="חיפוש בהוראות..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-              {search && <button className={styles.clearBtn} onClick={() => setSearch('')}>✕</button>}
-            </div>
-            <div className={styles.typeTabs}>
-              <button className={`${styles.typeTab} ${activeType === 'credit' ? styles.typeTabActive : ''}`} onClick={() => setActiveType('credit')}>
-                אשראי ({creditRows.length})
-              </button>
-              <button className={`${styles.typeTab} ${activeType === 'bank' ? styles.typeTabActive : ''}`} onClick={() => setActiveType('bank')}>
-                בנקאי ({bankRows.length})
-              </button>
-            </div>
-            {activeType === 'bank' && (
-              <>
-                <FilterDropdown
-                  label="סטטוס"
-                  options={bankStatusOptions}
-                  selected={statusFilter}
-                  onToggle={toggleStatusFilter}
-                  onShowAll={() => setStatusFilter(new Set())}
-                />
-                <FilterDropdown
-                  label="קטגוריה"
-                  options={bankCategoryOptions}
-                  selected={categoryFilter}
-                  onToggle={toggleCategoryFilter}
-                  onShowAll={() => setCategoryFilter(new Set())}
-                />
-              </>
-            )}
-            {role !== 'institution' && <ExportMenu mosadNumber={mosadFilter} type={activeType} />}
-          </>
-        )}
-      </div>
-
-      {!mosadFilter && <p className={styles.placeholder}>בחר מוסד כדי לטעון הוראות קבע</p>}
-      {loading && <p className={styles.placeholder}>טוען...</p>}
-      {errorMsg && <p className={styles.errorMsg}>{errorMsg}</p>}
-
-      {!loading && mosadFilter && activeType === 'credit' && (
-        <>
-          {creditData && !creditData.error && (
-            <SummaryBar totalMonth={creditData.TotalMonth} totalYear={creditData.TotalYear} />
+      <Card clip>
+        <Toolbar>
+          {role !== 'institution' && (
+            <Select value={mosadFilter} onChange={(e) => setMosadFilter(e.target.value)} aria-label="מוסד">
+              <option value="">בחר מוסד…</option>
+              {eligibleInstitutions.map((i) => (
+                <option key={i.mosad_number} value={i.mosad_number}>{i.mosad_name}</option>
+              ))}
+            </Select>
           )}
-          {creditData?.error
-            ? <p className={styles.errorMsg}>{creditData.error}</p>
-            : <CreditTable rows={creditRows} mosadNumber={mosadFilter} onRefresh={load} canOpen={canOpen} />
-          }
-        </>
-      )}
 
-      {!loading && mosadFilter && activeType === 'bank' && (
-        <>
-          {bankData?.error
-            ? <p className={styles.errorMsg}>{bankData.error}</p>
-            : <BankTable rows={bankRows} mosadNumber={mosadFilter} onRefresh={load} canOpen={canOpen} />
-          }
-        </>
+          {ready && (
+            <>
+              <SegmentedControl
+                aria-label="סוג הוראת קבע"
+                value={activeType}
+                onChange={setActiveType}
+                options={[
+                  { value: 'credit', label: 'אשראי', count: creditRows.length },
+                  { value: 'bank', label: 'בנקאי', count: bankRows.length },
+                ]}
+              />
+              <SearchInput className={toolbarSearchClass} value={search} onSearch={setSearch} delay={150} placeholder="חיפוש בהוראות (שם, סכום, קטגוריה…)" />
+              {activeType === 'bank' && (
+                <>
+                  <FilterMenu label="סטטוס" options={bankStatusOptions} selected={statusFilter}
+                    onToggle={(k) => setStatusFilter(toggleInSet(k))} onShowAll={() => setStatusFilter(new Set())} />
+                  <FilterMenu label="קטגוריה" options={bankCategoryOptions} selected={categoryFilter}
+                    onToggle={(k) => setCategoryFilter(toggleInSet(k))} onShowAll={() => setCategoryFilter(new Set())} />
+                </>
+              )}
+              <ToolbarSpacer />
+              {role !== 'institution' && <ExportMenu key={activeType} mosadNumber={mosadFilter} type={activeType} />}
+            </>
+          )}
+        </Toolbar>
+
+        {!mosadFilter && (
+          <StateMessage kind="info" icon="repeat" title="בחר מוסד" description="בחר מוסד כדי לטעון את הוראות הקבע שלו באשראי ובבנק" />
+        )}
+        {mosadFilter && loading && <StateMessage kind="loading" title="טוען הוראות קבע…" />}
+        {mosadFilter && !loading && errorMsg && (
+          <StateMessage kind="error" description={errorMsg} action={<Button size="sm" icon="refresh" onClick={load}>נסה שוב</Button>} />
+        )}
+
+        {ready && (typeError ? (
+          <StateMessage kind="error" description={typeError} action={<Button size="sm" icon="refresh" onClick={load}>נסה שוב</Button>} />
+        ) : activeType === 'credit' ? (
+          <CreditTable rows={creditRows} sort={creditSort} onSort={(c) => setCreditSort((p) => toggleSort(p, c))} onOpen={canOpen ? setOpenCredit : null} />
+        ) : (
+          <BankTable rows={bankRows} sort={bankSort} onSort={(c) => setBankSort((p) => toggleSort(p, c))} onOpen={canOpen ? setOpenBank : null} />
+        ))}
+      </Card>
+
+      {canOpen && openCredit && (
+        <CreditModal kevaId={openCredit} mosadNumber={mosadFilter} onClose={() => setOpenCredit(null)} onRefresh={load} />
       )}
-    </div>
+      {canOpen && openBank && (
+        <BankModal masavId={openBank} mosadNumber={mosadFilter} onClose={() => setOpenBank(null)} onRefresh={load} />
+      )}
+    </Stack>
   );
 }

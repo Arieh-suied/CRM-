@@ -8,10 +8,13 @@ export const tableStyles = styles;
 
 // Horizontal-scroll container + table. `stackOnMobile` turns each row into a
 // label/value card under 640px — give every <td> a data-label for that.
-export function Table({ stackOnMobile = false, className, children }) {
+// `busy` dims the current rows while the next page / filter result loads.
+export function Table({ stackOnMobile = false, busy = false, className, children }) {
   return (
     <div className={styles.wrap}>
-      <table className={cx(styles.table, stackOnMobile && styles.stack, className)}>{children}</table>
+      <table className={cx(styles.table, stackOnMobile && styles.stack, busy && styles.busy, className)} aria-busy={busy || undefined}>
+        {children}
+      </table>
     </div>
   );
 }
@@ -74,18 +77,15 @@ export function rowActivation(onActivate, className) {
   };
 }
 
-// "1–50 מתוך 1,243 עסקאות" + previous/next. In RTL "previous" sits on the
-// right with a right-pointing chevron.
-export function Pagination({ page, totalPages, total, pageSize, onPageChange, itemLabel = 'רשומות', disabled = false }) {
+// "עמוד 2 מתוך 25 · 1,243 עסקאות" + previous/next. In RTL "previous" sits on
+// the right with a right-pointing chevron.
+export function Pagination({ page, totalPages, total, onPageChange, itemLabel = 'רשומות', disabled = false }) {
   const fmt = (n) => Number(n || 0).toLocaleString('he-IL');
-  const from = pageSize ? (page - 1) * pageSize + 1 : null;
-  const to = pageSize ? Math.min(page * pageSize, total) : null;
   return (
     <div className={styles.pagination}>
       <span className={styles.paginationInfo}>
-        {pageSize && total > 0
-          ? <>מציג <strong>{fmt(from)}–{fmt(to)}</strong> מתוך <strong>{fmt(total)}</strong> {itemLabel}</>
-          : <>עמוד <strong>{fmt(page)}</strong> מתוך <strong>{fmt(Math.max(totalPages, 1))}</strong>{total != null && <> · {fmt(total)} {itemLabel}</>}</>}
+        עמוד <strong>{fmt(page)}</strong> מתוך <strong>{fmt(Math.max(totalPages, 1))}</strong>
+        {total != null && <> · {fmt(total)} {itemLabel}</>}
       </span>
       <div className={styles.paginationButtons}>
         <Button size="sm" icon="chevronRight" disabled={disabled || page <= 1} onClick={() => onPageChange(page - 1)}>הקודם</Button>

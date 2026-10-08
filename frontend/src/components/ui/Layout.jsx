@@ -64,6 +64,30 @@ export function SegmentedControl({ options, value, onChange, className, 'aria-la
   );
 }
 
+// Optional single-choice filter chips (e.g. quick date ranges): same look as
+// the segmented control, but nothing has to be selected — clicking the active
+// chip clears it (onChange(null)).
+export function ChipGroup({ options, value, onChange, className, 'aria-label': ariaLabel }) {
+  return (
+    <div className={cx(styles.segmented, className)} role="group" aria-label={ariaLabel}>
+      {options.map((o) => {
+        const active = value === o.value;
+        return (
+          <button
+            key={o.value}
+            type="button"
+            aria-pressed={active}
+            className={cx(styles.segment, active && styles.segmentActive)}
+            onClick={() => onChange(active ? null : o.value)}
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // tone: neutral | primary | success | warning | danger
 export function Badge({ tone = 'neutral', dot = false, className, children, title }) {
   return (
@@ -117,6 +141,37 @@ export function StateMessage({ kind = 'empty', title, description, action, icon,
       {description && <div className={styles.stateDescription}>{description}</div>}
       {action && <div className={styles.stateAction}>{action}</div>}
     </div>
+  );
+}
+
+export function StatGrid({ children, className }) {
+  return <div className={cx(styles.statGrid, className)}>{children}</div>;
+}
+
+// tone colors the value: success | danger | warning | primary
+export function Stat({ label, value, hint, tone }) {
+  return (
+    <div className={styles.stat}>
+      <div className={styles.statLabel}>{label}</div>
+      <div className={cx(styles.statValue, tone && styles[tone])}>{value}</div>
+      {hint && <div className={styles.statHint}>{hint}</div>}
+    </div>
+  );
+}
+
+// Label/value pairs for detail views; empty values are skipped.
+// items: [[label, value], …]
+export function InfoGrid({ items, className }) {
+  const shown = items.filter(([, v]) => v !== null && v !== undefined && v !== '');
+  return (
+    <dl className={cx(styles.info, className)}>
+      {shown.map(([label, value]) => (
+        <div key={label} className={styles.infoItem}>
+          <dt className={styles.infoLabel}>{label}</dt>
+          <dd className={styles.infoValue}>{value}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
